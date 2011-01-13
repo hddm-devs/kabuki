@@ -124,8 +124,6 @@ class Base(object):
         if not mcmc_model:
             mcmc_model = self.mcmc_model
         for param_name, param_inst in params.iteritems():
-            if param_name == 'z' and self.no_bias:
-                continue
             try:
                 if add:
                     param_inst.trace._trace[0] = np.concatenate((param_inst.trace._trace[0],
@@ -168,8 +166,6 @@ class Base(object):
     
     def _gen_stats(self, save_stats_to=None):
         for param_name in self.param_names:
-            if param_name == 'z' and self.no_bias:
-                continue
             self.params_est[param_name] = np.mean(self.mcmc_model.trace(param_name)())
             self.params_est_std[param_name] = np.std(self.mcmc_model.trace(param_name)())
 
@@ -185,18 +181,10 @@ class Base(object):
     def _gen_stats_subjs(self):
         raise NotImplementedError, "Model has no subject capabilites"
 
-    def plot_posteriors(self):
-        """Generate posterior plots for each parameter.
-
-        This is a wrapper for pymc.Matplot.plot()
-        """
-        pm.Matplot.plot(self.mcmc_model)
-
-
 def hierarchical(c):
     """Class decorator."""
     def func(data, **kwargs):
-        return Multi(data, c, **kwargs)
+        return Hierarchical(data, c, **kwargs)
     return func
 
 class Hierarchical(Base):
@@ -216,7 +204,7 @@ class Hierarchical(Base):
         else:
             self.is_subj_model = 'subj_idx' in data.dtype.names
 
-        super(Multi, self).__init__()
+        super(Hierarchical, self).__init__()
 
         self.param_factory = ParamFactory(data=data, **kwargs)
 
@@ -228,6 +216,7 @@ class Hierarchical(Base):
 
         self.param_names = self.param_factory.get_param_names()
         self.group_params = {}
+        self.subj_params = {}
         self.root_params = {}
         self.group_params_tau = {}
         self.root_params_tau = {}
@@ -329,7 +318,11 @@ class Hierarchical(Base):
                 else:
                     params[param_name] = self.group_params[param_name+'_'+str(depend_element)]
                 # Recursive call with one less dependency and the sliced data.
-                data_param = self._get_data_depend_rec(data_dep, depends_on=copy(depends_on), params=copy(params), param_name=param_name+'_'+str(depend_element), get_group_params=get_group_params)
+                data_param = self._get_data_depend_rec(data_dep,
+                                                       depends_on=copy(depends_on),
+                                                       params=copy(params),
+                                                       param_name=param_name+'_'+str(depend_element),
+                                                       get_group_params=get_group_params)
                 data_params += data_param
             return data_params
                 
@@ -355,6 +348,8 @@ class Hierarchical(Base):
         if delimiter is None:
             delimiter = '\n'
 
+        s = ''
+        
         for param, depends_on in self.depends_on.iteritems():
             s+= 'Parameter "%s" depends on: %s%s' %(param, ','.join(depends_on), delimiter)
 
