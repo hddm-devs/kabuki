@@ -4,40 +4,14 @@ import matplotlib.pyplot as plt
 
 import kabuki
 
-def flip_errors(data):
-    """Flip sign for lower boundary responses."""
-    # Check if data is already flipped
-    if np.any(data['rt'] < 0):
-        return data
-    
-    # Copy data
-    data = np.array(data)
-    # Flip sign for lower boundary responses
-    idx = data['response'] == 0
-    data['rt'][idx] = -data['rt'][idx]
-    
-    return data
+def all_pairs(seq):
+    l = len(seq)
+    for i in range(l):
+        for j in range(i+1, l):
+            yield seq[i], seq[j]
 
-def scale(x, max=None, min=None):
-    x = x.astype(np.float)
-    if max is None:
-        max = np.max(x)
-    if min is None:
-        min = np.min(x)
-    return (x-min)/(max-min)
-
-def scale_multi(a1, a2):
-    """Scale two arrays to be in range [0,1].
-    """
-    # Scale appropriately
-    if np.max(a1) > np.max(a2):
-        a1_scaled = scale(a1)
-        a2_scaled = scale(a2, max=np.max(a1), min=np.min(a1))
-    else:
-        a2_scaled = scale(a2)
-        a1_scaled = scale(a1, max=np.max(a2), min=np.min(a2))
-
-    return (a1_scaled, a2_scaled)
+def neg_sum(args):
+    return -np.sum(args)
 
 def difference_prior(delta):
     # See Wagenmakers et al 2010, equation 14

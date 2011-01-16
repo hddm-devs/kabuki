@@ -12,25 +12,25 @@ def scale(x):
 
 # Model classes
 class Base(object):
-    """Base class for the hierarchical bayesian drift diffusion
-    model."""
+    """Base class for MCMC models."""
     def __init__(self):
         self.model = None
         self.mcmc_model = None
         self.map_model = None
         self.params_est = {}
         self.params_est_std = {}
+        self.params_est_perc = {}
         self.stats = {}
 	self.colors = ('r','b','g','y','c')
 
-    def _set_group_params(self):
+    def _set_params(self):
         raise NotImplementedError("This method has to be overloaded")
     
     def _set_model(self):
         raise NotImplementedError("This method has to be overloaded")
 
     def _set_all_params(self):
-        self._set_group_params()
+        self._set_params()
 
 
     def map(self):
@@ -56,14 +56,14 @@ class Base(object):
         if retry:
             while (model_yields_zero_prob):
                 try:
-                    self._set_all_params()
+                    self._set_params()
                     model_yields_zero_prob = False
                 except pm.ZeroProbability:
                     tries += 1
                     if tries > 20:
                         raise pm.ZeroProbability("Model creation failed")
         else:
-            self._set_all_params()
+            self._set_params()
 
         return self
     
@@ -135,9 +135,9 @@ class Base(object):
                     for i, subj_param in enumerate(param_inst):
                         if add:
                             subj_param.trace._trace[0] = np.concatenate((subj_param.trace._trace[0],
-                                                                         mcmc_model.trace('%s_%i'%(param_name,i))()))
+                                                                         mcmc_model.trace('%s%i'%(param_name,i))()))
                         else:
-                            subj_param.trace = mcmc_model.trace('%s_%i'%(param_name,i))
+                            subj_param.trace = mcmc_model.trace('%s%i'%(param_name,i))
 
     def mcmc_load_from_db(self, dbname):
         """Load samples from a database created by an earlier model
@@ -198,6 +198,12 @@ class Hierarchical(Base):
         else:
             self.depends_on = {}
 
+        if kwargs.has_key('effects_on'):
+            self.effects_on = kwargs['effects_on']
+            del kwargs['effects_on']
+        else:
+            self.effects_on = {}
+
         if kwargs.has_key('is_subj_model'):
             self.is_subj_model = kwargs['is_subj_model']
             del kwargs['is_subj_model']
@@ -206,7 +212,7 @@ class Hierarchical(Base):
 
         super(Hierarchical, self).__init__()
 
-        self.param_factory = ParamFactory(data=data, **kwargs)
+        self._param_factory = ParamFactory(data=data, **kwargs)
 
         self.data = data
         
@@ -214,84 +220,16 @@ class Hierarchical(Base):
             self._subjs = np.unique(data['subj_idx'])
             self._num_subjs = self._subjs.shape[0]
 
-        self.param_names = self.param_factory.get_param_names()
+        self.param_names = self._param_factory.get_param_names()
         self.group_params = {}
-        self.subj_params = {}
-        self.root_params = {}
         self.group_params_tau = {}
-        self.root_params_tau = {}
-
-    def _set_all_params(self):
-        self._set_group_params()
-        if self.is_subj_model:
-            self._set_subj_params()
-
-        self._set_model()
-
-        return self
-
-    def _set_dependent_group_param(self, param):
-        """Set group parameters that only depend on individual classes of data."""
-        depends_on = self.depends_on[param]
-        uniq_data_dep = np.unique(self.data[depends_on])
-
-        for uniq_date in uniq_data_dep:
-            tag = str(uniq_date)
-            param_tag = '%s_%s'%(param, tag)
-            self.group_params[param_tag] = self.param_factory.get_root_param(param, tag=tag)
-
-        return self
-
-    def _set_group_params(self):
-        """Set group level distributions. One distribution for each parameter."""
-        for param in self.param_names: # Loop through param names
-            if param in self.depends_on.keys():
-                self._set_dependent_group_param(param)
-            else:
-                # Parameter does not depend on data
-                self.group_params[param] = self.param_factory.get_root_param(param)
-        
-        return self
-
-    def _set_subj_params(self):
-        """Set individual subject distributions. Each subject is
-        assigned one set of parameter distributions which have the
-        group level parameters as their parents"""
-        # For each global param, create n subj_params
+        self.group_params_dep = {}
         self.subj_params = {}
-
-        # Initialize
-        for param_name, param_inst in self.group_params.iteritems():
-            self.subj_params[param_name] = np.empty(self._num_subjs, dtype=object)
-            
-        for param_name, param_inst in self.group_params.iteritems():
-            # Create tau parameter for global param
-            param_inst_tau = self.param_factory.get_tau_param(param_name)
-            self.group_params_tau[param_name] = param_inst_tau
-            # Create num_subjs individual subject parameters
-            for subj_idx,subj in enumerate(self._subjs):
-                self.subj_params[param_name][subj_idx] = self.param_factory.get_subj_param(param_name,
-                                                                                           param_inst,
-                                                                                           param_inst_tau,
-                                                                                           int(subj))
-        return self
-    
-    def _set_model(self):
-        """Create and set up the complete model."""
-        data_dep = self._get_data_depend()
-
-        self.likelihoods = []
-        
-        for i, (data, params, param_name) in enumerate(data_dep):
-            self.likelihoods.append(self._create_model(data, params, i))
-            
-        # Set and return all distributions belonging.
-        self.model = self.likelihoods + self.group_params.values() + self.group_params_tau.values() + self.subj_params.values()
-
-        return self
-        
 
     def _get_data_depend(self, get_group_params=False):
+        """Returns a list of tuples with the data partition according to depends_on and the
+        parameter distributions that go with them."""
+        
         if self.is_subj_model and not get_group_params:
             params = copy(self.subj_params) # use subj parameters to feed into model
         else:
@@ -314,14 +252,14 @@ class Hierarchical(Base):
                 data_dep = data[data[col_name] == depend_element]
                 # Set the appropriate param
                 if self.is_subj_model and not get_group_params:
-                    params[param_name] = self.subj_params[param_name+'_'+str(depend_element)]
+                    params[param_name] = self.subj_params[param_name+str(depend_element)]
                 else:
-                    params[param_name] = self.group_params[param_name+'_'+str(depend_element)]
+                    params[param_name] = self.group_params[param_name+str(depend_element)]
                 # Recursive call with one less dependency and the sliced data.
                 data_param = self._get_data_depend_rec(data_dep,
                                                        depends_on=copy(depends_on),
                                                        params=copy(params),
-                                                       param_name=param_name+'_'+str(depend_element),
+                                                       param_name=param_name+str(depend_element),
                                                        get_group_params=get_group_params)
                 data_params += data_param
             return data_params
@@ -330,6 +268,85 @@ class Hierarchical(Base):
             return [(data, params, param_name)]
 
 
+    def _set_dependent_param(self, param_name):
+        """Set group parameters that only depend on individual classes of data."""
+        depends_on = self.depends_on[param_name]
+        uniq_data_dep = np.unique(self.data[depends_on])
+
+        self.group_params_dep[param_name] = []
+        for pos, uniq_date in enumerate(uniq_data_dep):
+            tag = str(uniq_date)
+            param_tag = '%s%s'%(param_name, tag)
+            pos_abs=(pos,len(uniq_data_dep)-1)
+            self.group_params[param_tag] = self._param_factory.get_root_param(param_name,
+                                                                              self.group_params,
+                                                                              tag=tag,
+                                                                              pos=pos_abs)
+            self.group_params_dep[param_name].append(param_tag)
+            
+            if self.is_subj_model:
+                self._set_subj_params(param_name, tag=tag, pos=pos_abs)
+
+        return self
+
+    def _set_params(self):
+        """Set group level distributions. One distribution for each parameter."""
+        for param_name in self.param_names: # Loop through param names
+            if param_name in self.depends_on.keys():
+                self._set_dependent_param(param_name)
+            else:
+                # Parameter does not depend on data
+                # Set group parameter
+                self.group_params[param_name] = self._param_factory.get_root_param(param_name, self.group_params, tag='')
+
+                if self.is_subj_model:
+                    self._set_subj_params(param_name)
+
+        # Set likelihoods
+        self._set_model()
+
+        return self
+
+    def _set_subj_params(self, param_name, tag=None, pos=None):
+        if tag is None:
+            tag = ''
+
+        param_name_full = '%s%s'%(param_name,tag)
+        #####################
+        # Set subj parameter
+        self.subj_params[param_name_full] = np.empty(self._num_subjs, dtype=object)
+
+        # Generate subj variability parameter
+        param_inst_tau = self._param_factory.get_tau_param(param_name_full, tag='tau')
+        self.group_params_tau[param_name_full] = param_inst_tau
+        param_inst = self.group_params[param_name_full]
+                    
+        for subj_idx,subj in enumerate(self._subjs):
+            self.subj_params[param_name_full][subj_idx] = self._param_factory.get_subj_param(param_name,
+                                                                                             param_inst,
+                                                                                             param_inst_tau,
+                                                                                             int(subj),
+                                                                                             self.subj_params,
+                                                                                             tag=tag,
+                                                                                             pos=pos)
+
+
+        return self
+    
+    def _set_model(self):
+        """Create and set up the complete model."""
+        data_dep = self._get_data_depend()
+
+        self.likelihoods = []
+        
+        for i, (data, params, param_name) in enumerate(data_dep):
+            self.likelihoods.append(self._create_model(data, params, i))
+            
+        # Set and return all distributions belonging.
+        self.model = self.likelihoods + self.group_params.values() + self.group_params_tau.values() + self.subj_params.values()
+
+        return self
+        
     def _create_model(self, data, params, idx):
         """Create and return a model on [data] with [params].
         """
@@ -338,11 +355,12 @@ class Hierarchical(Base):
             for i,subj in enumerate(self._subjs):
                 data_subj = data[data['subj_idx'] == subj] # Select data belonging to subj
 
-                likelihood[i] = self.param_factory.get_model("model_%i_%i"%(idx, i), data_subj, params, idx=i)
+                likelihood[i] = self._param_factory.get_model("model_%i_%i"%(idx, i), data_subj, params, idx=i)
         else: # Do not use subj params, but group ones
-            likelihood = self.param_factory.get_model("model_%i"%idx, data, params)
+            likelihood = self._param_factory.get_model("model_%i"%idx, data, params)
 
         return likelihood
+
     def summary(self, delimiter=None):
         """Return summary statistics of the fit model."""
         if delimiter is None:
@@ -357,14 +375,18 @@ class Hierarchical(Base):
         for name, value in self.stats.iteritems():
             s += '%s: %f%s'%(name, value, delimiter) 
 
-        s += delimiter + 'Group parameter\t\t\t\tMean\t\tStd' + delimiter
+        s += delimiter + 'Group parameter\t\t\t\tMean\tStd\t95%' + delimiter
         for name, value in self.params_est.iteritems():
             # Create appropriate number of tabs for correct displaying
             # if parameter names are longer than one tab space.
             # 5 tabs if name string is smaller than 4 letters.
             num_tabs = int(6-np.ceil((len(name)/8.)))
             tabs = ''.join(['\t' for i in range(num_tabs)])
-            s += '%s%s%f\t%f%s'%(name, tabs, value, self.params_est_std[name], delimiter)
+            s += '%s%s%.2f\t%.2f\t%.2f, %.2f%s'%(name, tabs, value,
+                                        self.params_est_std[name],
+                                        self.params_est_perc[name][0],
+                                        self.params_est_perc[name][1],
+                                        delimiter)
 
         return s
 
@@ -372,38 +394,44 @@ class Hierarchical(Base):
         if delimiter is None:
             delimiter = '\n'
 
-        s = 'Group parameter\t\t\t\tMean\t\tStd' + delimiter
+        s = 'Group parameter\t\t\t\tMean\t\Std' + delimiter
         for subj, params in self.params_est_subj.iteritems():
             s += 'Subject: %i%s' % (subj, delimiter)
             for name,value in params.iteritems():
                 # Create appropriate number of tabs for correct displaying
                 # if parameter names are longer than one tab space.
-                num_tabs = 5-np.ceil((len(name)/4.))
+                num_tabs = 6-np.ceil((len(name)/8.))
                 tabs = ''.join(['\t' for i in range(num_tabs)])
-                s += '%s%s%f\t%f%s'%(name, tabs, value, self.params_est_subj_std[subj][name], delimiter)
+                s += '%s%s%.2f\t%.2f%s'%(name, tabs, value, self.params_est_subj_std[subj][name], delimiter)
             s += delimiter
             
         return s
-    
+
+    def compare_all_pairwise(self):
+        for params in self.group_params_dep.itervalues():
+            for p0,p1 in kabuki.utils.all_pairs(params):
+                diff = self.group_params[p0].trace()-self.group_params[p1].trace()
+                print "%s vs %s: %.3f" %(p0, p1, np.mean(diff))
+                
     def _gen_stats(self):
         """Generate summary statistics of fit model."""
         self.stats['logp'] = self.mcmc_model.logp
         self.stats['dic'] = self.mcmc_model.dic
-
-        self.params_est_subj = {}
-        self.params_est_subj_std = {}
         
         for param_name in self.group_params.iterkeys():
             self.params_est[param_name] = np.mean(self.mcmc_model.trace(param_name)())
             self.params_est_std[param_name] = np.std(self.mcmc_model.trace(param_name)())
-
-        for param_name in self.root_params.iterkeys():
-            self.params_est[param_name] = np.mean(self.mcmc_model.trace(param_name)())
-            self.params_est_std[param_name] = np.std(self.mcmc_model.trace(param_name)())
-
+            sorted_trace = np.sort(self.mcmc_model.trace(param_name)())
+            self.params_est_perc[param_name] = (sorted_trace[int(.05*len(sorted_trace)-1)],
+                                                sorted_trace[int(.95*len(sorted_trace)-1)])
+            
         return self
     
     def _gen_stats_subjs(self):
+        self.params_est_subj = {}
+        self.params_est_subj_std = {}
+        self.params_est_subj_perc = {}
+
         # Initialize params_est_subj arrays
         for subj_idx in range(self._num_subjs):
             if not self.params_est_subj.has_key(subj_idx):
@@ -429,3 +457,90 @@ class Hierarchical(Base):
             fd.write(s)
                 
         return self
+
+
+#@hierarchical
+class Prototype(object):
+    def __init__(self, data):
+        self.data = data
+
+    def get_param_names(self):
+        return ('param1', 'param2')
+    
+    def get_root_param(self, param, tag=None):
+        return None
+
+    def get_tau_param(self, param, tag=None):
+        return None
+    
+    def get_subj_param(self, param_name, parent_mean, parent_tau, subj_idx):
+        return pm.Normal('%s%i'%(param_name, subj_idx), mu=parent_mean, tau=parent_tau)
+
+@hierarchical
+class MANOVA(Prototype):
+    def get_param_names(self):
+        return ('score',)
+
+    
+@hierarchical
+class Regression(Prototype):
+    def get_param_names(self):
+        return ('theta', 'x')
+    
+    def get_root_param(self, param, tag=None):
+        return pm.Uniform('%s%s'%(param,tag), lower=0, upper=50)
+
+    def get_tau_param(self, param, tag=None):
+        return None
+    
+    def get_model(self, name, subj_data, params, idx=None):
+        @deterministic(plot=False)
+        def modelled_y(x=params['x'], theta=params['theta']):
+            """Return y computed from the straight line model, given the
+            inferred true inputs and the model paramters."""
+            slope, intercept = theta
+            return slope*x + intercept
+
+        return (pm.Normal(name, mu=modelled_y, tau=2, value=subj_data['dependent'], observed=True), modelled_y)
+
+@hierarchical        
+class Effect(Prototype):
+    def get_param_names(self):
+        return ('base', 'effect')
+    
+    def get_root_param(self, param, all_params, tag=None, pos=None):
+        if pos is not None:
+            # Check if last element
+            if pos[0] == pos[1]:
+                param_full_name = '%s%s'%(param,tag)
+                # Set parameter so that they sum to zero
+                args = tuple([all_params[p] for p in all_params if p.startswith(param)])
+                return pm.Deterministic(kabuki.utils.neg_sum,
+                                        param_full_name,
+                                        param_full_name,
+                                        parents={'args':args})
+
+        return pm.Uniform('%s%s'%(param,tag), lower=-5, upper=5)
+
+    def get_tau_param(self, param, tag=None):
+        return pm.Uniform('%s%s'%(param,tag), lower=0, upper=800, plot=False)
+    
+    def get_subj_param(self, param_name, parent_mean, parent_tau, subj_idx, all_params, tag=None, pos=None):
+        param_full_name = '%s%s%i'%(param_name,tag,subj_idx)
+        if pos is not None:
+            if pos[0] == pos[1]:
+                # Set parameter so that they sum to zero
+                print all_params
+                args = tuple([all_params[p][subj_idx] for p in all_params if p.startswith(param_name) and all_params[p][subj_idx] is not None])
+                return pm.Deterministic(kabuki.utils.neg_sum,
+                                        param_full_name,
+                                        param_full_name,
+                                        parents={'args':args})
+                                        
+        return pm.Normal(param_full_name, mu=parent_mean, tau=parent_tau, plot=False)
+
+    def get_model(self, name, subj_data, params, idx=None):
+        return pm.Normal(name, value=subj_data['score'], mu=params['base'][idx]+params['effect'][idx], tau=2,
+                         observed=True, plot=False)
+    
+
