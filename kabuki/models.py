@@ -13,7 +13,7 @@ def scale(x):
 # Model classes
 class Base(object):
     """Base class for MCMC models."""
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
         self.model = None
         self.mcmc_model = None
         self.map_model = None
@@ -58,10 +58,16 @@ class Base(object):
                 try:
                     self._set_params()
                     model_yields_zero_prob = False
-                except pm.ZeroProbability:
+                except pm.ZeroProbability as e:
+                    self.group_params = {}
+                    self.group_params_tau = {}
+                    self.group_params_dep = {}
+                    self.subj_params = {}
                     tries += 1
                     if tries > 20:
+                        print e
                         raise pm.ZeroProbability("Model creation failed")
+
         else:
             self._set_params()
 
@@ -94,11 +100,11 @@ class Base(object):
         return self
             
 
-    def mcmc(self, samples=10000, burn=5000, thin=2, verbose=0, dbname=None, map_=True):
+    def mcmc(self, samples=10000, burn=5000, thin=2, verbose=0, dbname=None, map_=True, retry=True):
         """Main method for sampling. Creates and initializes the model and starts sampling.
         """
         # Set and initialize model
-        self._prepare()
+        self._prepare(retry=retry)
 
         # Set model parameter values to MAP estimates
         if map_:
@@ -182,37 +188,32 @@ class Base(object):
         raise NotImplementedError, "Model has no subject capabilites"
 
 def hierarchical(c):
-    """Class decorator."""
-    def func(data, **kwargs):
-        return Hierarchical(data, c, **kwargs)
-    return func
+    class Hierarchical(HierarchicalBase):
+        def __init__(self, data, **kwargs):
+            # Take out parameters for this class
+            if kwargs.has_key('depends_on'):
+                self.depends_on = kwargs['depends_on']
+                del kwargs['depends_on']
+            else:
+                self.depends_on = {}
 
-class Hierarchical(Base):
+            if kwargs.has_key('is_subj_model'):
+                self.is_subj_model = kwargs['is_subj_model']
+                del kwargs['is_subj_model']
+            else:
+                self.is_subj_model = 'subj_idx' in data.dtype.names
+
+            super(self.__class__, self).__init__(data, **kwargs)
+            
+            self._param_factory = c(data, **kwargs)
+            self.param_names = self._param_factory.get_param_names()
+    return Hierarchical
+
+class HierarchicalBase(Base):
     """Class that builds hierarchical bayesian models.
     Use the @hierarchical decorator for you model."""
-    def __init__(self, data, ParamFactory, **kwargs):
-        # Take out parameters for this class
-        if kwargs.has_key('depends_on'):
-            self.depends_on = kwargs['depends_on']
-            del kwargs['depends_on']
-        else:
-            self.depends_on = {}
-
-        if kwargs.has_key('effects_on'):
-            self.effects_on = kwargs['effects_on']
-            del kwargs['effects_on']
-        else:
-            self.effects_on = {}
-
-        if kwargs.has_key('is_subj_model'):
-            self.is_subj_model = kwargs['is_subj_model']
-            del kwargs['is_subj_model']
-        else:
-            self.is_subj_model = 'subj_idx' in data.dtype.names
-
-        super(Hierarchical, self).__init__()
-
-        self._param_factory = ParamFactory(data=data, **kwargs)
+    def __init__(self, data, **kwargs):
+        super(HierarchicalBase, self).__init__()
 
         self.data = data
         
@@ -220,7 +221,7 @@ class Hierarchical(Base):
             self._subjs = np.unique(data['subj_idx'])
             self._num_subjs = self._subjs.shape[0]
 
-        self.param_names = self._param_factory.get_param_names()
+
         self.group_params = {}
         self.group_params_tau = {}
         self.group_params_dep = {}
@@ -285,7 +286,7 @@ class Hierarchical(Base):
             self.group_params_dep[param_name].append(param_tag)
             
             if self.is_subj_model:
-                self._set_subj_params(param_name, tag=tag, pos=pos_abs)
+                self._set_subj_params(param_name, tag=tag, pos=pos)
 
         return self
 
@@ -300,7 +301,7 @@ class Hierarchical(Base):
                 self.group_params[param_name] = self._param_factory.get_root_param(param_name, self.group_params, tag='')
 
                 if self.is_subj_model:
-                    self._set_subj_params(param_name)
+                    self._set_subj_params(param_name, tag='')
 
         # Set likelihoods
         self._set_model()
@@ -308,16 +309,13 @@ class Hierarchical(Base):
         return self
 
     def _set_subj_params(self, param_name, tag=None, pos=None):
-        if tag is None:
-            tag = ''
-
         param_name_full = '%s%s'%(param_name,tag)
         #####################
         # Set subj parameter
         self.subj_params[param_name_full] = np.empty(self._num_subjs, dtype=object)
 
         # Generate subj variability parameter
-        param_inst_tau = self._param_factory.get_tau_param(param_name_full, tag='tau')
+        param_inst_tau = self._param_factory.get_tau_param(param_name_full, self.group_params_tau, tag='tau')
         self.group_params_tau[param_name_full] = param_inst_tau
         param_inst = self.group_params[param_name_full]
                     
@@ -382,7 +380,7 @@ class Hierarchical(Base):
             # 5 tabs if name string is smaller than 4 letters.
             num_tabs = int(6-np.ceil((len(name)/8.)))
             tabs = ''.join(['\t' for i in range(num_tabs)])
-            s += '%s%s%.2f\t%.2f\t%.2f, %.2f%s'%(name, tabs, value,
+            s += '%s%s%.3f\t%.3f\t%.3f, %.3f%s'%(name, tabs, value,
                                         self.params_est_std[name],
                                         self.params_est_perc[name][0],
                                         self.params_est_perc[name][1],
@@ -402,7 +400,7 @@ class Hierarchical(Base):
                 # if parameter names are longer than one tab space.
                 num_tabs = 6-np.ceil((len(name)/8.))
                 tabs = ''.join(['\t' for i in range(num_tabs)])
-                s += '%s%s%.2f\t%.2f%s'%(name, tabs, value, self.params_est_subj_std[subj][name], delimiter)
+                s += '%s%s%.3f\t%.3f%s'%(name, tabs, value, self.params_est_subj_std[subj][name], delimiter)
             s += delimiter
             
         return s
@@ -504,7 +502,7 @@ class Regression(Prototype):
         return (pm.Normal(name, mu=modelled_y, tau=2, value=subj_data['dependent'], observed=True), modelled_y)
 
 @hierarchical        
-class Effect(Prototype):
+class ANOVA(Prototype):
     def get_param_names(self):
         return ('base', 'effect')
     
@@ -522,7 +520,7 @@ class Effect(Prototype):
 
         return pm.Uniform('%s%s'%(param,tag), lower=-5, upper=5)
 
-    def get_tau_param(self, param, tag=None):
+    def get_tau_param(self, param, all_params, tag=None):
         return pm.Uniform('%s%s'%(param,tag), lower=0, upper=800, plot=False)
     
     def get_subj_param(self, param_name, parent_mean, parent_tau, subj_idx, all_params, tag=None, pos=None):
