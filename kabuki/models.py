@@ -187,7 +187,14 @@ class Base(object):
     def _gen_stats_subjs(self):
         raise NotImplementedError, "Model has no subject capabilites"
 
+
 def hierarchical(c):
+    """Decorator for classes.
+    """
+    # This little trick with returning a new Class is so
+    # that decorated classes can do inheritance and call
+    # super(). The pattern was suggested by lrh9 in #python
+    # on irc.freenode.net
     class Hierarchical(HierarchicalBase):
         def __init__(self, data, **kwargs):
             # Take out parameters for this class
@@ -215,8 +222,6 @@ class HierarchicalBase(Base):
     def __init__(self, data, **kwargs):
         super(HierarchicalBase, self).__init__()
 
-        self.data = data
-        
         if self.is_subj_model:
             self._subjs = np.unique(data['subj_idx'])
             self._num_subjs = self._subjs.shape[0]
@@ -238,7 +243,7 @@ class HierarchicalBase(Base):
 
         depends_on = copy(self.depends_on)
 
-        data_dep = self._get_data_depend_rec(self.data, depends_on, params, get_group_params=get_group_params)
+        data_dep = self._get_data_depend_rec(self._param_factory.data, depends_on, params, get_group_params=get_group_params)
 
         return data_dep
     
@@ -272,7 +277,7 @@ class HierarchicalBase(Base):
     def _set_dependent_param(self, param_name):
         """Set group parameters that only depend on individual classes of data."""
         depends_on = self.depends_on[param_name]
-        uniq_data_dep = np.unique(self.data[depends_on])
+        uniq_data_dep = np.unique(self._param_factory.data[depends_on])
 
         self.group_params_dep[param_name] = []
         for pos, uniq_date in enumerate(uniq_data_dep):
@@ -377,8 +382,8 @@ class HierarchicalBase(Base):
         for name, value in self.params_est.iteritems():
             # Create appropriate number of tabs for correct displaying
             # if parameter names are longer than one tab space.
-            # 5 tabs if name string is smaller than 4 letters.
-            num_tabs = int(6-np.ceil((len(name)/8.)))
+            # 5 tabs if name string is smaller than 8 letters.
+            num_tabs = int(6-np.ceil(((len(name)-2)/8.)))
             tabs = ''.join(['\t' for i in range(num_tabs)])
             s += '%s%s%.3f\t%.3f\t%.3f, %.3f%s'%(name, tabs, value,
                                         self.params_est_std[name],
