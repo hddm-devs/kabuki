@@ -7,8 +7,8 @@ import kabuki
 def percentile(x):
     """Return the 5% and 95% percentile of an array."""
     sorted_x = np.sort(x)
-    perc = (sorted_trace[int(.05*len(sorted_trace)-1)],
-            sorted_trace[int(.95*len(sorted_trace)-1)])
+    perc = (sorted_x[int(.05*len(sorted_x)-1)],
+            sorted_x[int(.95*len(sorted_x)-1)])
     return perc
 
 def all_pairs(seq):
