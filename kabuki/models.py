@@ -383,7 +383,7 @@ class HierarchicalBase(Base):
             # Create appropriate number of tabs for correct displaying
             # if parameter names are longer than one tab space.
             # 5 tabs if name string is smaller than 8 letters.
-            num_tabs = int(6-np.ceil(((len(name)-2)/8.)))
+            num_tabs = int(5-np.ceil(((len(name)-1)/8.)))
             tabs = ''.join(['\t' for i in range(num_tabs)])
             s += '%s%s%.3f\t%.3f\t%.3f, %.3f%s'%(name, tabs, value,
                                         self.params_est_std[name],
@@ -414,7 +414,8 @@ class HierarchicalBase(Base):
         for params in self.group_params_dep.itervalues():
             for p0,p1 in kabuki.utils.all_pairs(params):
                 diff = self.group_params[p0].trace()-self.group_params[p1].trace()
-                print "%s vs %s: %.3f" %(p0, p1, np.mean(diff))
+                perc = kabuki.utils.percentile(diff)
+                print "%s vs %s: %.3f; 5%: %f 95%: %f" %(p0, p1, np.mean(diff), perc[0], perc[1])
                 
     def _gen_stats(self):
         """Generate summary statistics of fit model."""
@@ -424,9 +425,7 @@ class HierarchicalBase(Base):
         for param_name in self.group_params.iterkeys():
             self.params_est[param_name] = np.mean(self.mcmc_model.trace(param_name)())
             self.params_est_std[param_name] = np.std(self.mcmc_model.trace(param_name)())
-            sorted_trace = np.sort(self.mcmc_model.trace(param_name)())
-            self.params_est_perc[param_name] = (sorted_trace[int(.05*len(sorted_trace)-1)],
-                                                sorted_trace[int(.95*len(sorted_trace)-1)])
+            self.params_est_perc[param_name] = kabuki.utils.percentile(self.mcmc_model.trace(param_name)())
             
         return self
     

@@ -4,6 +4,13 @@ import matplotlib.pyplot as plt
 
 import kabuki
 
+def percentile(x):
+    """Return the 5% and 95% percentile of an array."""
+    sorted_x = np.sort(x)
+    perc = (sorted_trace[int(.05*len(sorted_trace)-1)],
+            sorted_trace[int(.95*len(sorted_trace)-1)])
+    return perc
+
 def all_pairs(seq):
     l = len(seq)
     for i in range(l):
