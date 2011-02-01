@@ -1,4 +1,3 @@
-import numpy as np
-
-from models import hierarchical
+from hierarchical import *
+from models import *
 import utils

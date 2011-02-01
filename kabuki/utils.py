@@ -5,7 +5,11 @@ import matplotlib.pyplot as plt
 import kabuki
 
 def percentile(x):
-    """Return the 5% and 95% percentile of an array."""
+    """Return the 5% and 95% percentile of an array.
+
+    >>> percentile(np.linspace(0,100,100))
+    (5., 95.)
+    """
     sorted_x = np.sort(x)
     perc = (sorted_x[int(.05*len(sorted_x)-1)],
             sorted_x[int(.95*len(sorted_x)-1)])
