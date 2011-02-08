@@ -370,7 +370,7 @@ class HierarchicalBase(Base):
             self.group_params[param_tag] = self._param_factory.get_root_param(param_name,
                                                                               self.group_params,
                                                                               tag,
-                                                                              pos_abs)
+                                                                              pos=pos_abs)
             self.group_params_dep[param_name].append(param_tag)
             
             if self.is_subj_model:
@@ -382,7 +382,6 @@ class HierarchicalBase(Base):
     def _set_params(self):
         """Set group level distributions. One distribution for each
         parameter."""
-        
         for param_name in self.param_names: # Loop through param names
             # Check if parameter depends on data
             if param_name in self.depends_on.keys():
@@ -390,17 +389,17 @@ class HierarchicalBase(Base):
             else:
                 # Parameter does not depend on data
                 # Set group parameter
-                self.group_params[param_name] = self._param_factory.get_root_param(param_name, self.group_params, '', pos=(0,))
+                self.group_params[param_name] = self._param_factory.get_root_param(param_name, self.group_params, '')
 
                 if self.is_subj_model:
-                    self._set_subj_params(param_name, '', pos=(0,0))
+                    self._set_subj_params(param_name, '')
 
         # Set likelihoods
         self._set_model()
 
         return self
 
-    def _set_subj_params(self, param_name, tag, pos):
+    def _set_subj_params(self, param_name, tag, pos=None):
         param_name_full = '%s%s' % (param_name, tag)
 
         # Init
@@ -420,17 +419,13 @@ class HierarchicalBase(Base):
                                                                                              int(subj),
                                                                                              self.subj_params,
                                                                                              tag,
-                                                                                             pos)
-
-
+                                                                                             pos=pos)
         return self
     
     def _set_model(self):
         """Create and set up the complete model."""
-
-        # Parcel data out according to self.depends_on
+        # Divide data and parameter distributions according to self.depends_on
         data_dep = self._get_data_depend()
-
 
         self.likelihoods = []
         # Loop through parceled data and params and create an observed stochastic

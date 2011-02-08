@@ -2,6 +2,8 @@ from __future__ import division
 import numpy as np
 import matplotlib.pyplot as plt
 
+import pymc as pm
+
 import kabuki
 
 def percentile(x):
@@ -36,6 +38,32 @@ def difference_prior(delta):
         out[delta <= 0] = 1+delta[delta <= 0]
         out[delta > 0] = 1-delta[delta > 0]
         return out
+
+def generate_effect_data(true_mean, true_e1, true_e2, true_e3, subjs, N):
+    tau = 1/(2.**2) # Precision is inverse of variance.
+    tau_subj = 1.
+
+    # Generate subj means
+    true_subj_mean = pm.rnormal(true_mean, tau_subj, size=subjs)
+    true_subj_e1 = pm.rnormal(true_subj_mean+true_e1, 800)
+    true_subj_e2 = pm.rnormal(true_subj_mean+true_e2, 800)
+    true_subj_e3 = pm.rnormal(true_subj_mean+true_e3, 800)
+
+    # Generate data for each subj
+    N=50
+    samples=N*3
+    data = np.empty((subjs*samples), dtype=[('subj_idx','i4'), ('score','f4'), ('cond', 'S4')])
+    for subj in range(subjs):
+        slice = data[subj*samples:(subj+1)*samples]
+        slice['subj_idx'] = subj
+        slice['score'][0:N] = pm.rnormal(true_subj_e1[subj], tau, size=N)
+        slice['score'][N:2*N] = pm.rnormal(true_subj_e2[subj], tau, size=N)
+        slice['score'][2*N:3*N] = pm.rnormal(true_subj_e3[subj], tau, size=N)
+        slice[0:N]['cond'] = 'e1'
+        slice[N:2*N]['cond'] = 'e2'
+        slice[2*N:3*N]['cond'] = 'e3'
+
+    return data
 
 def interpolate_trace(x, trace, range=(-1,1), bins=100):
     import scipy.interpolate
@@ -139,7 +167,7 @@ def combine_chains(models, model_class, data, kwargs):
         m._set_traces(m.subj_params, mcmc_model=model.mcmc_model, add=True)
 
     return m
-        
+
 def run_parallel_chains(model_class, data, tag, load=False, cpus=None, chains=None, **kwargs):
     import multiprocessing
     if cpus is None:
@@ -204,7 +232,7 @@ def save_csv(data, fname, sep=None):
 def load_csv(fname):
     return np.recfromcsv(fname)
 
-def parse_config_file(fname, mcmc=False, load=False):
+def parse_config_file(fname, mcmc=False, load=False, param_names=None):
     import os.path
     if not os.path.isfile(fname):
         raise ValueError("%s could not be found."%fname)
@@ -252,23 +280,15 @@ def parse_config_file(fname, mcmc=False, load=False):
     except ConfigParser.NoOptionError:
         dbname = None
 
-    if model_type == 'simple' or model_type == 'simple_gpu':
-        group_param_names = ['a', 'v', 'z', 't']
-    elif model_type == 'full_mc' or model_type == 'full':
-        group_param_names = ['a', 'v', 'V', 'z', 'Z', 't', 'T']
-    elif model_type == 'lba':
-        group_param_names = ['a', 'v', 'z', 't', 'V']
-    else:
-        raise NotImplementedError('Model type %s not implemented'%model_type)
-
     # Get depends
     depends = {}
-    for param_name in group_param_names:
-        try:
-            # Multiple depends can be listed (separated by a comma)
-            depends[param_name] = config.get('depends', param_name).split(',')
-        except ConfigParser.NoOptionError:
-            pass
+    if param_names is not None:
+        for param_name in param_names:
+            try:
+                # Multiple depends can be listed (separated by a comma)
+                depends[param_name] = config.get('depends', param_name).split(',')
+            except ConfigParser.NoOptionError:
+                pass
 
     # MCMC values
     try:

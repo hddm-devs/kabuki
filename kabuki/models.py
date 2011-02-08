@@ -10,7 +10,10 @@ import kabuki
 #@hierarchical
 class Prototype(object):
     param_names = None
-    
+
+    def __init__(self, data, **kwargs):
+        self.data = data
+
     def get_root_param(self, param, tag):
         return None
 
@@ -45,7 +48,7 @@ class Regression(Prototype):
 class ANOVA(Prototype):
     param_names = ('base', 'effect')
     
-    def get_root_param(self, param, all_params, pos):
+    def get_root_param(self, param, all_params, tag, pos=None):
         if pos is not None:
             # Check if last element
             if pos[0] == pos[1]:
@@ -62,7 +65,7 @@ class ANOVA(Prototype):
     def get_tau_param(self, param, all_params, tag):
         return pm.Uniform('%s%s'%(param,tag), lower=0, upper=800, plot=False)
     
-    def get_subj_param(self, param_name, parent_mean, parent_tau, subj_idx, all_params, tag, pos):
+    def get_subj_param(self, param_name, parent_mean, parent_tau, subj_idx, all_params, tag, pos=None):
         param_full_name = '%s%s%i'%(param_name, tag, subj_idx)
         if pos is not None:
             if pos[0] == pos[1]:
