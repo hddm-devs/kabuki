@@ -116,6 +116,7 @@ class Base(object):
             # Save future samples to database if needed.
             self.mcmc_model = pm.MCMC(self.model, db='sqlite', dbname=dbname, verbose=verbose)
 
+        #self.mcmc_model.use_step_method(pm.Gibbs, self.group_params.values())
         # Start sampling
         self._sample(samples=samples, burn=burn, thin=thin, verbose=verbose, dbname=dbname)
 
@@ -473,7 +474,7 @@ class HierarchicalBase(Base):
             # if parameter names are longer than one tab space.
             # 5 tabs if name string is smaller than 8 letters.
             # TODO: Bugfix offsetting
-            num_tabs = int(5-np.ceil(((len(name)-1)/8.)))
+            num_tabs = int(5-np.ceil(((len(name))/8.)))
             tabs = ''.join(['\t' for i in range(num_tabs)])
             s += '%s%s%.3f\t%.3f\t%.3f\t%.3f%s'%(name, tabs, value,
                                         self.params_est_std[name],
@@ -494,7 +495,7 @@ class HierarchicalBase(Base):
             for name,value in params.iteritems():
                 # Create appropriate number of tabs for correct displaying
                 # if parameter names are longer than one tab space.
-                num_tabs = 6-np.ceil((len(name-1)/8.))
+                num_tabs = 5-np.ceil(((len(name))/8.))
                 tabs = ''.join(['\t' for i in range(num_tabs)])
                 s += '%s%s%.3f\t%.3f%s'%(name, tabs, value, self.params_est_subj_std[subj][name], delimiter)
             s += delimiter
@@ -511,15 +512,37 @@ class HierarchicalBase(Base):
         * Mean difference
         * 5th and 95th percentile
         """
-
+        
+        print "Parameters\tMean difference\t5%\t95%"
         # Loop through dependent parameters and generate stats
         for params in self.group_params_dep.itervalues():
             # Loop through all pairwise combinations
             for p0,p1 in kabuki.utils.all_pairs(params):
                 diff = self.group_params[p0].trace()-self.group_params[p1].trace()
                 perc = kabuki.utils.percentile(diff)
-                print "Parameters\tMean difference\t5%\t95%"
-                print "%s vs %s\t%.3f\t5%\t%.3f\t%.3f" %(p0, p1, np.mean(diff), perc[0], perc[1])
+                print "%s vs %s\t%.3f\t%.3f\t%.3f" %(p0, p1, np.mean(diff), perc[0], perc[1])
+
+    def plot_all_pairwise(self):
+        """Plot all pairwise posteriors to find correlations.
+        """
+        import matplotlib.pyplot as plt
+        import scipy as sp
+        import scipy.stats
+        #size = int(np.ceil(np.sqrt(len(data_deps))))
+        fig = plt.figure()
+        fig.subplots_adjust(wspace=0.4, hspace=0.4)
+        # Loop through all pairwise combinations
+        for i,(p0,p1) in enumerate(kabuki.utils.all_pairs(self.group_params.values())):
+            fig.add_subplot(6,6,i+1)
+            plt.plot(p0.trace(), p1.trace(), '.')
+            (a_s,b_s,r,tt,stderr) = sp.stats.linregress(p0.trace(), p1.trace())
+            reg = sp.polyval((a_s, b_s), (np.min(p0.trace()), np.max(p0.trace())))
+            plt.plot((np.min(p0.trace()), np.max(p0.trace())), reg, '-')
+            plt.xlabel(p0.__name__)
+            plt.ylabel(p1.__name__)
+            
+            #plt.plot
+            
                 
     def _gen_stats(self):
         """Generate and set summary statistics of model and group parameter distributions."""
