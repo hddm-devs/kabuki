@@ -1,11 +1,15 @@
 #!/usr/bin/python
 from __future__ import division
-import numpy as np
-import numpy.lib.recfunctions as rec
-import pymc as pm
 from copy import copy
 
+import numpy as np
+import numpy.lib.recfunctions as rec
+from ordereddict import OrderedDict
+
+import pymc as pm
+
 import kabuki
+
 
 # Model classes
 class Base(object):
@@ -56,10 +60,10 @@ class Base(object):
                     self._set_params()
                     model_yields_zero_prob = False
                 except pm.ZeroProbability as e:
-                    self.group_params = {}
-                    self.group_params_tau = {}
-                    self.group_params_dep = {}
-                    self.subj_params = {}
+                    self.group_params = OrderedDict()
+                    self.group_params_tau = OrderedDict()
+                    self.group_params_dep = OrderedDict()
+                    self.subj_params = OrderedDict()
                     tries += 1
                     if tries > 20:
                         print e
@@ -287,10 +291,10 @@ class HierarchicalBase(Base):
             self._subjs = np.unique(data['subj_idx'])
             self._num_subjs = self._subjs.shape[0]
 
-        self.group_params = {}
-        self.group_params_tau = {}
-        self.group_params_dep = {}
-        self.subj_params = {}
+        self.group_params = OrderedDict()
+        self.group_params_tau = OrderedDict()
+        self.group_params_dep = OrderedDict()
+        self.subj_params = OrderedDict()
 
     def _get_data_depend(self, get_group_params=False):
         """Partition data according to self.depends_on.
@@ -474,7 +478,7 @@ class HierarchicalBase(Base):
             # if parameter names are longer than one tab space.
             # 5 tabs if name string is smaller than 8 letters.
             # TODO: Bugfix offsetting
-            num_tabs = int(5-np.ceil(((len(name))/8.)))
+            num_tabs = int(6-np.ceil(((len(name))/8.)))
             tabs = ''.join(['\t' for i in range(num_tabs)])
             s += '%s%s%.3f\t%.3f\t%.3f\t%.3f%s'%(name, tabs, value,
                                         self.params_est_std[name],
