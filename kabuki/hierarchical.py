@@ -505,7 +505,7 @@ class HierarchicalBase(Base):
                 # Create appropriate number of tabs for correct displaying
                 # if parameter names are longer than one tab space.
                 value = params[name]
-                num_tabs = 5-np.ceil(((len(name))/8.))
+                num_tabs = int(5-np.ceil(((len(name))/8.)))
                 tabs = ''.join(['\t' for i in range(num_tabs)])
                 s += '%s%s%.3f\t%.3f%s'%(name, tabs, value, self.params_est_subj_std[subj][name], delimiter)
             s += delimiter
