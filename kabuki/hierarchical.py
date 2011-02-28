@@ -473,11 +473,14 @@ class HierarchicalBase(Base):
             s += '%s: %f%s'%(name, value, delimiter) 
 
         s += delimiter + 'Group parameter\t\t\t\tMean\tStd\t5%\t95%' + delimiter
-        for name, value in self.params_est.iteritems():
+        # Sort param names for better display
+        param_names = np.sort(self.params_est.keys())
+        for name in param_names:
             # Create appropriate number of tabs for correct displaying
             # if parameter names are longer than one tab space.
             # 5 tabs if name string is smaller than 8 letters.
             # TODO: Bugfix offsetting
+            value = self.params_est[name]
             num_tabs = int(6-np.ceil(((len(name))/8.)))
             tabs = ''.join(['\t' for i in range(num_tabs)])
             s += '%s%s%.3f\t%.3f\t%.3f\t%.3f%s'%(name, tabs, value,
@@ -496,9 +499,12 @@ class HierarchicalBase(Base):
         s = 'Group parameter\t\t\t\tMean\t\Std' + delimiter
         for subj, params in self.params_est_subj.iteritems():
             s += 'Subject: %i%s' % (subj, delimiter)
-            for name,value in params.iteritems():
+            # Sort param names for better display
+            param_names = np.sort(params.keys())
+            for name in param_names:
                 # Create appropriate number of tabs for correct displaying
                 # if parameter names are longer than one tab space.
+                value = params[name]
                 num_tabs = 5-np.ceil(((len(name))/8.))
                 tabs = ''.join(['\t' for i in range(num_tabs)])
                 s += '%s%s%.3f\t%.3f%s'%(name, tabs, value, self.params_est_subj_std[subj][name], delimiter)
