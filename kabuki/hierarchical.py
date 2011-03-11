@@ -561,7 +561,10 @@ class HierarchicalBase(Base):
     def _gen_stats(self):
         """Generate and set summary statistics of model and group parameter distributions."""
         self.stats['logp'] = self.mcmc_model.logp
-        self.stats['dic'] = self.mcmc_model.dic
+        try:
+            self.stats['dic'] = self.mcmc_model.dic
+        except:
+            self.stats['dic'] = 0.
         
         for param_name in self.group_params.iterkeys():
             self.params_est[param_name] = np.mean(self.mcmc_model.trace(param_name)())
