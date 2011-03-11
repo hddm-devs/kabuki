@@ -23,6 +23,75 @@ class Prototype(object):
     def get_subj_param(self, param_name, parent_mean, parent_tau, subj_idx):
         return pm.Normal('%s%i'%(param_name, subj_idx), mu=parent_mean, tau=parent_tau)
 
+
+
+def q_learn(q_mat, lrate, stim, action, reward):
+    q_mat_out=np.copy(q_mat)
+    # Calc Q-value
+    q_val = q_mat[stim,action]
+    q_mat_out[stim,action] = q_val + lrate*(reward-q_val)
+    return q_mat_out
+
+def softmax(q_mat, inv_temp, stim, action):
+    sm = np.exp(inv_temp*q_mat[stim,action]) / (np.sum(np.exp(inv_temp*q_mat[stim,:])))
+    return sm
+
+@kabuki.hierarchical
+class QLearn(object):
+    param_names = ('lrate', 'inv_temp')
+
+    def __init__(self, data, **kwargs):
+        self.data = data
+        self.num_stims = len(np.unique(data['stim']))
+        self.num_actions = len(np.unique(data['action']))
+
+    def get_root_param(self, param, all_params, tag):
+        if param == 'lrate':
+            return pm.Uniform('%s%s'%(param,tag), lower=0, upper=1)
+        elif param == 'inv_temp':
+            return pm.Uniform('%s%s'%(param,tag), lower=0, upper=50)
+
+    def get_tau_param(self, param, all_params, tag):
+        return pm.Uniform('%s%s'%(param,tag), lower=0, upper=100)
+    
+    def get_subj_param(self, param_name, parent_mean, parent_tau, subj_idx, all_params, tag, pos=None):
+        if param_name == 'lrate':
+            return pm.TruncatedNormal('%s%i'%(param_name, subj_idx), mu=parent_mean, tau=parent_tau, a=0, b=np.inf)
+        elif param_name == 'inv_temp':
+            return pm.TruncatedNormal('%s%i'%(param_name, subj_idx), mu=parent_mean, tau=parent_tau, a=0, b=np.inf)
+
+    def get_observed(self, name, subj_data, params, idx=None):
+        q_vals = np.empty(len(subj_data), dtype=object)
+        softmax_probs = np.empty(len(subj_data), dtype=object)
+        choice_probs = np.empty(len(subj_data), dtype=object)
+
+        @pm.deterministic
+        def q_val_init():
+            return .5*np.ones((self.num_stims,self.num_actions))
+
+        for t in range(len(subj_data)-1):
+            if t==0:
+                q_val = q_val_init
+            else:
+                q_val = q_vals[t-1]
+
+            q_vals[t] = pm.Deterministic(q_learn, 'q_learn_%i_%i'%(idx, t), 'q_learn_%i_%i'%(idx, t),
+                                         parents={'q_mat': q_val,
+                                                  'lrate': params['lrate'][idx],
+                                                  'stim': subj_data['stim'][t],
+                                                  'action': subj_data['action'][t],
+                                                  'reward': subj_data['reward'][t]})
+
+            softmax_probs[t] = pm.Deterministic(softmax, 'softmax_%i_%i'%(idx, t+1), 'softmax_%i_%i'%(idx, t+1),
+                                                parents={'q_mat': q_vals[t],
+                                                         'inv_temp': params['inv_temp'][idx],
+                                                         'stim': subj_data['stim'][t+1],
+                                                         'action': subj_data['action'][t+1]})
+            
+            choice_probs[t] = pm.Bernoulli('choice_prob', p=softmax_probs[t], value=subj_data['action'][t+1], observed=True)
+
+        return (q_vals, q_val_init, softmax_probs, choice_probs)
+
     
 @kabuki.hierarchical
 class Regression(Prototype):

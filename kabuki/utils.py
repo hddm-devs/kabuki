@@ -229,8 +229,8 @@ def save_csv(data, fname, sep=None):
             fd.write(sep.join(line_str))
             fd.write('\n')
 
-def load_csv(fname):
-    return np.recfromcsv(fname)
+def load_csv(*args, **kwargs):
+    return np.recfromcsv(*args, **kwargs)
 
 def parse_config_file(fname, mcmc=False, load=False, param_names=None):
     import os.path

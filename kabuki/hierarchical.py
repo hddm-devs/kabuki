@@ -101,7 +101,7 @@ class Base(object):
         return self
             
 
-    def mcmc(self, samples=10000, burn=5000, thin=2, verbose=0, dbname=None, map_=True, retry=True):
+    def mcmc(self, samples=10000, burn=5000, thin=2, verbose=0, step_method=None, dbname=None, map_=True, retry=True):
         """Main method for sampling. Creates and initializes the model
         and starts sampling.
         """
@@ -120,6 +120,9 @@ class Base(object):
             # Save future samples to database if needed.
             self.mcmc_model = pm.MCMC(self.model, db='sqlite', dbname=dbname, verbose=verbose)
 
+        if step_method is not None:
+            self.mcmc_model.use_step_method(step_method, self.group_params.values() + self.group_params_tau.values() + [j for i in self.subj_params.values() for j in i])
+            
         #self.mcmc_model.use_step_method(pm.Gibbs, self.group_params.values())
         # Start sampling
         self._sample(samples=samples, burn=burn, thin=thin, verbose=verbose, dbname=dbname)
@@ -481,7 +484,8 @@ class HierarchicalBase(Base):
             # 5 tabs if name string is smaller than 8 letters.
             # TODO: Bugfix offsetting
             value = self.params_est[name]
-            num_tabs = int(6-np.ceil(((len(name))/8.)))
+            num_tabs = int(6-np.floor(((len(name))/7.)))
+            print num_tabs
             tabs = ''.join(['\t' for i in range(num_tabs)])
             s += '%s%s%.3f\t%.3f\t%.3f\t%.3f%s'%(name, tabs, value,
                                         self.params_est_std[name],
@@ -505,7 +509,7 @@ class HierarchicalBase(Base):
                 # Create appropriate number of tabs for correct displaying
                 # if parameter names are longer than one tab space.
                 value = params[name]
-                num_tabs = int(5-np.ceil(((len(name))/8.)))
+                num_tabs = int(6-np.floor(((len(name))/7.)))
                 tabs = ''.join(['\t' for i in range(num_tabs)])
                 s += '%s%s%.3f\t%.3f%s'%(name, tabs, value, self.params_est_subj_std[subj][name], delimiter)
             s += delimiter
