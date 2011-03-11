@@ -101,7 +101,7 @@ class Base(object):
         return self
             
 
-    def mcmc(self, samples=10000, burn=5000, thin=2, verbose=0, step_method=None, dbname=None, map_=True, retry=True):
+    def mcmc(self, samples=10000, burn=5000, thin=2, verbose=0, step_method=None, dbname=None, map_=True, retry=True, sample=True):
         """Main method for sampling. Creates and initializes the model
         and starts sampling.
         """
@@ -125,7 +125,8 @@ class Base(object):
             
         #self.mcmc_model.use_step_method(pm.Gibbs, self.group_params.values())
         # Start sampling
-        self._sample(samples=samples, burn=burn, thin=thin, verbose=verbose, dbname=dbname)
+        if sample:
+            self._sample(samples=samples, burn=burn, thin=thin, verbose=verbose, dbname=dbname)
 
         return self
     
