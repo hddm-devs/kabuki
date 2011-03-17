@@ -156,7 +156,7 @@ class Base(object):
                         else:
                             subj_param.trace = mcmc_model.trace('%s%i'%(param_name,i))
 
-    def mcmc_load_from_db(self, dbname):
+    def mcmc_load_from_db(self, dbname, verbose=0):
         """Load samples from a database created by an earlier model
         run (e.g. by calling .mcmc(dbname='test'))
         """
