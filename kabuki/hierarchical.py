@@ -300,6 +300,12 @@ class HierarchicalBase(Base):
         self.group_params_dep = OrderedDict()
         self.subj_params = OrderedDict()
 
+    def __getattr__(self, name):
+        if name in dir(self._param_factory):
+            return self._param_factory.__getattribute__(name)
+        else:
+            raise AttributeError, "hierarchical nor param_factory object have attribute '%s'" % name
+
     def _get_data_depend(self, get_group_params=False):
         """Partition data according to self.depends_on.
 
