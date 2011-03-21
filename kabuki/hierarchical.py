@@ -246,7 +246,9 @@ def hierarchical(c):
 
             # Link to the decorated object
             self._param_factory = c(data, **kwargs)
-            
+            # Provide param factory with a reference to self
+            self._param_factory._reference = self
+
             self.param_names = self._param_factory.param_names
             
     return Hierarchical
