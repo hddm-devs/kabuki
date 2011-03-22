@@ -152,9 +152,9 @@ class Base(object):
                     for i, subj_param in enumerate(param_inst):
                         if add:
                             subj_param.trace._trace[0] = np.concatenate((subj_param.trace._trace[0],
-                                                                         mcmc_model.trace('%s%i'%(param_name,i))()))
+                                                                         mcmc_model.trace(subj_param.__name__))())
                         else:
-                            subj_param.trace = mcmc_model.trace('%s%i'%(param_name,i))
+                            subj_param.trace = mcmc_model.trace(subj_param.__name__)
 
     def mcmc_load_from_db(self, dbname, verbose=0):
         """Load samples from a database created by an earlier model
@@ -494,7 +494,7 @@ class HierarchicalBase(Base):
             # TODO: Bugfix offsetting
             value = self.params_est[name]
             num_tabs = int(6-np.floor(((len(name))/7.)))
-            print num_tabs
+            #print num_tabs
             tabs = ''.join(['\t' for i in range(num_tabs)])
             s += '%s%s%.3f\t%.3f\t%.3f\t%.3f%s'%(name, tabs, value,
                                         self.params_est_std[name],
