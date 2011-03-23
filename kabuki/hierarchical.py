@@ -493,7 +493,7 @@ class HierarchicalBase(Base):
             # 5 tabs if name string is smaller than 8 letters.
             # TODO: Bugfix offsetting
             value = self.params_est[name]
-            num_tabs = int(6-np.floor(((len(name))/7.)))
+            num_tabs = int(5-np.floor(((len(name))/8.)))
             #print num_tabs
             tabs = ''.join(['\t' for i in range(num_tabs)])
             s += '%s%s%.3f\t%.3f\t%.3f\t%.3f%s'%(name, tabs, value,
@@ -518,7 +518,7 @@ class HierarchicalBase(Base):
                 # Create appropriate number of tabs for correct displaying
                 # if parameter names are longer than one tab space.
                 value = params[name]
-                num_tabs = int(6-np.floor(((len(name))/7.)))
+                num_tabs = int(5-np.floor(((len(name))/8.)))
                 tabs = ''.join(['\t' for i in range(num_tabs)])
                 s += '%s%s%.3f\t%.3f%s'%(name, tabs, value, self.params_est_subj_std[subj][name], delimiter)
             s += delimiter
