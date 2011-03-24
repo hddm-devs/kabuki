@@ -433,7 +433,7 @@ class HierarchicalBase(Base):
             self.subj_params[param_name_full][subj_idx] = self._param_factory.get_subj_param(param_name,
                                                                                              param_inst,
                                                                                              param_inst_tau,
-                                                                                             int(subj),
+                                                                                             subj_idx,
                                                                                              self.subj_params,
                                                                                              tag,
                                                                                              pos=pos)
