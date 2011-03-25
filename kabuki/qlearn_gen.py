@@ -5,7 +5,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-def gen_qlearn(trials=50, lrate=.1, rew_prob=.7, inv_temp=20., plot=False, subjs=2):
+def qlearn_generate(trials=50, lrate=.1, rew_prob=.7, inv_temp=20., plot=False, subjs=2):
     Q = .5*np.ones((2,2))
     out = np.empty(trials*subjs, dtype=[('subj_idx',np.int), ('stim', np.int), ('action', np.int), ('reward', np.float)])
     Q1 = []
