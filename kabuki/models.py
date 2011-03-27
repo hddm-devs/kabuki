@@ -26,7 +26,9 @@ class Prototype(object):
 
 
 
-def q_learn(q_mat, lrate, stim, action, reward):
+def q_learn(q_mat, lrate_logi, stim, action, reward):
+    # lrate is [-inf, inf]. Logistic transform
+    lrate = 1. / 1 + np.exp(-lrate_logi)
     q_mat_out=np.copy(q_mat)
     # Calc Q-value
     q_val = q_mat[stim,action]
@@ -48,18 +50,18 @@ class QLearn(object):
 
     def get_root_param(self, param, all_params, tag):
         if param == 'lrate':
-            return pm.Uniform('%s%s'%(param,tag), lower=0, upper=1)
+            return pm.Uniform('%s%s'%(param,tag), lower=-6, upper=6)
         elif param == 'inv_temp':
             return pm.Uniform('%s%s'%(param,tag), lower=0, upper=10)
 
     def get_tau_param(self, param, all_params, tag):
-        return pm.Uniform('%s%s'%(param,tag), lower=0, upper=100)
+        return pm.Uniform('%s%s'%(param,tag), lower=0, upper=1.5)
     
     def get_subj_param(self, param_name, parent_mean, parent_tau, subj_idx, all_params, tag, pos=None):
         if param_name == 'lrate':
-            return pm.TruncatedNormal('%s%i'%(param_name, subj_idx), mu=parent_mean, tau=parent_tau, a=0, b=1)
+            return pm.Normal('%s%i'%(param_name, subj_idx), mu=parent_mean, tau=(1/parent_tau**2))
         elif param_name == 'inv_temp':
-            return pm.TruncatedNormal('%s%i'%(param_name, subj_idx), mu=parent_mean, tau=parent_tau, a=0, b=10)
+            return pm.Normal('%s%i'%(param_name, subj_idx), mu=parent_mean, tau=(1/parent_tau**2))
 
     def get_observed(self, name, subj_data, params, idx=None):
         q_vals = np.empty(len(subj_data), dtype=object)
@@ -87,7 +89,7 @@ class QLearn(object):
 
             q_vals[t] = pm.Deterministic(q_learn, 'q_learn_%i_%i'%(idx, t), 'q_learn_%i_%i'%(idx, t),
                                          parents={'q_mat': q_val,
-                                                  'lrate': params['lrate'][idx],
+                                                  'lrate_logi': params['lrate'][idx],
                                                   'stim': subj_data['stim'][t],
                                                   'action': subj_data['action'][t],
                                                   'reward': subj_data['reward'][t]})
