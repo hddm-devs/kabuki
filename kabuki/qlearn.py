@@ -28,9 +28,9 @@ stoch_where = deterministic_from_funcs('where',
 def q_learn(q_mat, lrate_logi, stim, action, reward):
     # lrate is [-inf, inf]. Logistic transform
     lrate = 1. / 1 + pm.exp(-lrate_logi)
-    if type(q_mat) is not np.ndarray:
-        q_mat = q_mat.parents['x']
-    select_action = np.zeros_like(q_mat)
+    #if type(q_mat) is not np.ndarray:
+    #    q_mat = q_mat.parents['x']
+    select_action = np.zeros_like(q_mat.value)
     select_action[stim,action] = 1
 
     return stoch_where(select_action, q_mat, q_mat + lrate*(reward-q_mat))
@@ -84,21 +84,12 @@ class QLearn(object):
             else:
                 q_val = q_vals[t-1]
 
-            softmax_probs[t] = pm.Deterministic(softmax, 'softmax_%i_%i'%(idx, t), 'softmax_%i_%i'%(idx, t),
-                                                parents={'q_mat': q_val,
-                                                         'inv_temp': params['inv_temp'][idx],
-                                                         'stim': subj_data['stim'][t],
-                                                         'action': subj_data['action'][t]})
+            softmax_probs[t] = softmax(q_val, params['inv_temp'][idx], subj_data['stim'][t], subj_data['action'][t])
             
             choice_probs[t] = pm.Bernoulli('choice_prob_%i_%i'%(idx,t), p=softmax_probs[t], value=1, observed=True)#subj_data['action'][t]
 
 
-            q_vals[t] = pm.Deterministic(q_learn, 'q_learn_%i_%i'%(idx, t), 'q_learn_%i_%i'%(idx, t),
-                                         parents={'q_mat': q_val,
-                                                  'lrate_logi': params['lrate'][idx],
-                                                  'stim': subj_data['stim'][t],
-                                                  'action': subj_data['action'][t],
-                                                  'reward': subj_data['reward'][t]})
+            q_vals[t] = q_learn(q_val, params['lrate'][idx], subj_data['stim'][t], subj_data['action'][t], subj_data['reward'][t])
                                                   
         return choice_probs
 
