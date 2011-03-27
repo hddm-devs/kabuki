@@ -36,7 +36,7 @@ def q_learn(q_mat, lrate_logi, stim, action, reward):
     return q_mat_out
 
 def softmax(q_mat, inv_temp, stim, action):
-    sm = np.exp(inv_temp*q_mat[stim,action]) / (np.sum(np.exp(inv_temp*q_mat[stim,:])))
+    sm = np.exp(np.exp(inv_temp)*q_mat[stim,action]) / (np.sum(np.exp(np.exp(inv_temp)*q_mat[stim,:])))
     return sm
 
 @kabuki.hierarchical
@@ -52,7 +52,7 @@ class QLearn(object):
         if param == 'lrate':
             return pm.Uniform('%s%s'%(param,tag), lower=-6, upper=6)
         elif param == 'inv_temp':
-            return pm.Uniform('%s%s'%(param,tag), lower=0, upper=10)
+            return pm.Uniform('%s%s'%(param,tag), lower=-6, upper=6)
 
     def get_tau_param(self, param, all_params, tag):
         return pm.Uniform('%s%s'%(param,tag), lower=0, upper=1.5)
