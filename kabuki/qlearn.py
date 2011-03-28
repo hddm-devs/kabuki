@@ -84,12 +84,14 @@ class QLearn(object):
             else:
                 q_val = q_vals[t-1]
 
-            softmax_probs[t] = softmax(q_val, params['inv_temp'][idx], subj_data['stim'][t], subj_data['action'][t])
+            softmax_probs[t] = softmax(q_val, self._reference.group_params['inv_temp'], subj_data['stim'][t], subj_data['action'][t])
             
             choice_probs[t] = pm.Bernoulli('choice_prob_%i_%i'%(idx,t), p=softmax_probs[t], value=1, observed=True)#subj_data['action'][t]
 
 
-            q_vals[t] = q_learn(q_val, params['lrate'][idx], subj_data['stim'][t], subj_data['action'][t], subj_data['reward'][t])
+            #q_vals[t] = q_learn(q_val, self._reference.group_params['inv_temp'], subj_data['stim'][t], subj_data['action'][t], subj_data['reward'][t])
+
+            q_vals[t] = q_learn(q_val, 0., subj_data['stim'][t], subj_data['action'][t], subj_data['reward'][t])
                                                   
         return choice_probs
 

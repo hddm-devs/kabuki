@@ -127,6 +127,9 @@ class Base(object):
         # Start sampling
         if sample:
             self._sample(samples=samples, burn=burn, thin=thin, verbose=verbose, dbname=dbname)
+            
+            if dbname is not None:
+                self.mcmc_model.db.close()
 
         return self
     
