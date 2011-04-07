@@ -231,23 +231,10 @@ def hierarchical(c):
     # on irc.freenode.net
     class Hierarchical(HierarchicalBase):
         def __init__(self, data, **kwargs):
-            # Take out parameters for this class
-            if kwargs.has_key('depends_on'):
-                self.depends_on = kwargs['depends_on']
-                del kwargs['depends_on']
-            else:
-                self.depends_on = {}
-                
-            if kwargs.has_key('is_subj_model'):
-                self.is_subj_model = kwargs['is_subj_model']
-                del kwargs['is_subj_model']
-            else:
-                self.is_subj_model = 'subj_idx' in data.dtype.names
-
             # Call parent's __init__
             super(self.__class__, self).__init__(data, **kwargs)
 
-            # Link to the decorated object
+            # Link to the decorated object (overwrite)
             self._param_factory = c(data, **kwargs)
             # Provide param factory with a reference to self
             self._param_factory._reference = self
@@ -295,6 +282,17 @@ class HierarchicalBase(Base):
         # Call parent's class __init__
         super(HierarchicalBase, self).__init__()
 
+        # Take out parameters for this class
+        if kwargs.has_key('depends_on'):
+            self.depends_on = kwargs['depends_on']
+        else:
+            self.depends_on = {}
+                
+        if kwargs.has_key('is_subj_model'):
+            self.is_subj_model = kwargs['is_subj_model']
+        else:
+            self.is_subj_model = 'subj_idx' in data.dtype.names
+
         # Should the model incorporate multiple subjects
         if self.is_subj_model:
             self._subjs = np.unique(data['subj_idx'])
@@ -304,6 +302,12 @@ class HierarchicalBase(Base):
         self.group_params_tau = OrderedDict()
         self.group_params_dep = OrderedDict()
         self.subj_params = OrderedDict()
+
+        # Set this to self so that the class can be inherited from, but also used
+        # as a decorator via hierarchical() which will overwrite this and replace
+        # it with the user defined class.
+
+        self._param_factory = self
 
     def __getattr__(self, name):
         if name in dir(self._param_factory):
