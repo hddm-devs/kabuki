@@ -8,6 +8,22 @@ import pymc as pm
 class TestClass(kabuki.Prototype):
     param_names = ('test',)
         
+    def get_root_param(self, param, all_params, tag, pos=None):
+        return pm.Uniform('%s%s'% (param,tag), lower=0, upper=1)
+
+    def get_tau_param(self, param, all_params, tag):
+        return pm.Uniform('%s%s'% (param,tag), lower=0, upper=10)
+    
+    def get_subj_param(self, param_name, parent_mean, parent_tau, subj_idx, all_params, tag, pos):
+        return pm.Normal('%s%s%i'%(param_name, tag, subj_idx), mu=parent_mean, tau=parent_tau)
+
+    def get_observed(self, name, subj_data, params, idx=None, pos=None):
+        return pm.Normal('%s%i' % (name,idx), mu=params['test'][idx], tau=1, value=subj_data['score'], observed=True)
+
+
+class TestClassInherit(kabuki.HierarchicalBase):
+    param_names = ('test',)
+        
     def get_root_param(self, param, all_params, tag, pos):
         return pm.Uniform('%s%s'% (param,tag), lower=0, upper=1)
 
@@ -40,19 +56,26 @@ class TestHierarchical(unittest.TestCase):
             self.data['dep'][subj*pts_per_subj+pts_per_subj/2:(subj+1)*pts_per_subj] = 'dep2'
 
     def setUp(self):
-        self.test_model = TestClass(data=self.data)
+        self.test_model = TestClass(self.data)
         self.test_model_dep = TestClass(self.data, depends_on={'test':['dep']})
+        self.test_model_inherit = TestClassInherit(self.data)
+        self.test_model_dep_inherit = TestClassInherit(self.data, depends_on={'test':['dep']})
 
     def test_passing_depends_on(self):
         self.assertEqual(self.test_model_dep.depends_on, {'test':['dep']})
-        
+        self.assertEqual(self.test_model_dep_inherit.depends_on, {'test':['dep']})
+
     def test_get_data_depend(self):
-        self.test_model_dep._set_params()
+        self.tst_get_data_depend(self.test_model_dep)
+        self.tst_get_data_depend(self.test_model_dep_inherit)
+
+    def tst_get_data_depend(self, model):
+        model._set_params()
         
         subj = 0
         dep = ('dep1','dep2')
         i = 0
-        data_dep = self.test_model_dep._get_data_depend()
+        data_dep = model._get_data_depend()
         for (data, param, param_name) in data_dep:
             np.testing.assert_equal(np.unique(data['subj_idx']), self.subjs)
             #self.assertTrue(np.all(data['score'] == subj))
@@ -74,56 +97,61 @@ class TestHierarchical(unittest.TestCase):
 
         # Test if parents of subj_params are the correct objects
         for parent_params in self.test_model.subj_params['test']:
-            np.testing.assert_equal(parent_params.parents['mu'], self.test_model.group_params['test'])
-            np.testing.assert_equal(parent_params.parents['tau'], self.test_model.group_params_tau['test'])
-            
+            assert parent_params.parents['mu'] is self.test_model.group_params['test']
+            assert parent_params.parents['tau'] is self.test_model.group_params_tau['test']
+        
     def test_set_params_dep(self):
-        self.test_model_dep._set_params()
+        self.tst_set_params_dep(self.test_model_dep)
+        self.tst_set_params_dep(self.test_model_dep_inherit)
 
-        self.assertEqual(self.test_model_dep.param_names, ('test',))
-        self.assertEqual(self.test_model_dep.group_params.keys(), ["test('dep1',)", "test('dep2',)"])
-        np.testing.assert_equal([param.__name__ for param in self.test_model_dep.subj_params["test('dep1',)"]], ["test('dep1',)%i"%i for i in self.subjs])
-        np.testing.assert_equal([param.__name__ for param in self.test_model_dep.subj_params["test('dep2',)"]], ["test('dep2',)%i"%i for i in self.subjs])
+    def tst_set_params_dep(self, model):
+        model._set_params()
+
+        self.assertEqual(model.param_names, ('test',))
+        self.assertEqual(model.group_params.keys(), ["test('dep1',)", "test('dep2',)"])
+        np.testing.assert_equal([param.__name__ for param in model.subj_params["test('dep1',)"]], ["test('dep1',)%i"%i for i in self.subjs])
+        np.testing.assert_equal([param.__name__ for param in model.subj_params["test('dep2',)"]], ["test('dep2',)%i"%i for i in self.subjs])
 
         # Test if parents of subj_params have the correct name
-        for parent_params in [param.parents.values() for param in self.test_model_dep.subj_params["test('dep1',)"]]:
+        for parent_params in [param.parents.values() for param in model.subj_params["test('dep1',)"]]:
             np.testing.assert_equal([parent_param.__name__ for parent_param in parent_params], ["test('dep1',)", "test('dep1',)tau"])
         # Test if parents of subj_params are the correct objects
-        for parent_params in self.test_model_dep.subj_params["test('dep1',)"]:
-            np.testing.assert_equal(parent_params.parents['mu'], self.test_model_dep.group_params["test('dep1',)"])
-            np.testing.assert_equal(parent_params.parents['tau'], self.test_model_dep.group_params_tau["test('dep1',)"])
+        for parent_params in model.subj_params["test('dep1',)"]:
+            assert parent_params.parents['mu'] is model.group_params["test('dep1',)"]
+            assert parent_params.parents['tau'] is model.group_params_tau["test('dep1',)"]
             
         # Test if parents of subj_params have the correct name
-        for parent_params in [param.parents.values() for param in self.test_model_dep.subj_params["test('dep2',)"]]:
+        for parent_params in [param.parents.values() for param in model.subj_params["test('dep2',)"]]:
             np.testing.assert_equal([parent_param.__name__ for parent_param in parent_params], ["test('dep2',)", "test('dep2',)tau"])
         # Test if parents of subj_params are the correct objects
-        for parent_params in self.test_model_dep.subj_params["test('dep2',)"]:
-            np.testing.assert_equal(parent_params.parents['mu'], self.test_model_dep.group_params["test('dep2',)"])
-            np.testing.assert_equal(parent_params.parents['tau'], self.test_model_dep.group_params_tau["test('dep2',)"])
+        for parent_params in model.subj_params["test('dep2',)"]:
+            assert parent_params.parents['mu'] is model.group_params["test('dep2',)"]
+            assert parent_params.parents['tau'] is model.group_params_tau["test('dep2',)"]
 
-    def test_create_observed(self):
-        self.test_model_dep._set_params()
+    def tst_create_observed(self, model):
+        model._set_params()
 
-        likelihoods = [likelihood for likelihood in self.test_model_dep.likelihoods]
+        likelihoods = [likelihood for likelihood in model.likelihoods]
         for i,dep in enumerate(["test('dep1',)", "test('dep2',)"]):
             for j in self.subjs:
-                np.testing.assert_equal(self.test_model_dep.likelihoods[i][j].parents['mu'],
-                                        self.test_model_dep.subj_params[dep][j])
-                np.testing.assert_equal(self.test_model_dep.likelihoods[i][j].parents['mu'],
-                                        self.test_model_dep.subj_params[dep][j])
+                np.testing.assert_equal(model.likelihoods[i][j].parents['mu'],
+                                        model.subj_params[dep][j])
+                np.testing.assert_equal(model.likelihoods[i][j].parents['mu'],
+                                        model.subj_params[dep][j])
 
-class TestBayesianANOVA(unittest.TestCase):
-    def __init__(self, *args, **kwargs):
-        super(TestBayesianANOVA, self).__init__(*args, **kwargs)
+# class TestBayesianANOVA(unittest.TestCase):
+#     def __init__(self, *args, **kwargs):
+#         return
+#         super(TestBayesianANOVA, self).__init__(*args, **kwargs)
         
-        np.random.seed(31337)
+#         np.random.seed(31337)
 
-        params = {'
-        self.data = kabuki.utils.generate_effect_data(2, 1, .5, -1.5, 15, 50)
+#         params = {}
+#         self.data = kabuki.utils.generate_effect_data(2, 1, .5, -1.5, 15, 50)
 
-        # Generate model
-        self.model = kabuki.ANOVA(data, is_subj_model=True, depends_on={'effect':['cond']})
-        self.model.mcmc(map_=False)
+#         # Generate model
+#         self.model = kabuki.ANOVA(data, is_subj_model=True, depends_on={'effect':['cond']})
+#         self.model.mcmc(map_=False)
 
-    def testEstimates(self):
-        
+#     def testEstimates(self):
+#         pass

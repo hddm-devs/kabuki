@@ -282,6 +282,8 @@ class HierarchicalBase(Base):
         # Call parent's class __init__
         super(HierarchicalBase, self).__init__()
 
+        self.data = data
+
         # Take out parameters for this class
         if kwargs.has_key('depends_on'):
             self.depends_on = kwargs['depends_on']
@@ -306,10 +308,14 @@ class HierarchicalBase(Base):
         # Set this to self so that the class can be inherited from, but also used
         # as a decorator via hierarchical() which will overwrite this and replace
         # it with the user defined class.
-
         self._param_factory = self
 
     def __getattr__(self, name):
+        # Do not try to fetch the function if param_factory points to
+        # self, results in endless loop
+        if self._param_factory is self:
+            raise AttributeError, "hierarchical nor param_factory object have attribute '%s'" % name
+
         if name in dir(self._param_factory):
             return self._param_factory.__getattribute__(name)
         else:
