@@ -195,9 +195,9 @@ class Base(object):
         # Loop through params and generate statistics
         for param_name in self.param_names:
             # Mean
-            self.params_est[param_name] = np.mean(self.mcmc_model.trace(param_name)())
+            self.params_est[param_name] = np.mean(self.mcmc_model.trace(param_name)[:])
             # Std
-            self.params_est_std[param_name] = np.std(self.mcmc_model.trace(param_name)())
+            self.params_est_std[param_name] = np.std(self.mcmc_model.trace(param_name)[:])
 
         # Save stats to output file
         if save_stats_to is not None:
