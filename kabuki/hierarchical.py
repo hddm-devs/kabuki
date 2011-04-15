@@ -234,8 +234,17 @@ def hierarchical(c):
             # Call parent's __init__
             super(self.__class__, self).__init__(data, **kwargs)
 
+            # This sucks really bad and is just a hack. We have to
+            # remove these so that c() does not confused by these
+            # keyword arguments. This is an issue that would re
+            # resolved if we removed the decorator thingy alltogether.
+            if kwargs.has_key('depends_on'):
+                del kwargs['depends_on']
+            if kwargs.has_key('is_subj_model'):
+                del kwargs['is_subj_model']
             # Link to the decorated object (overwrite)
             self._param_factory = c(data, **kwargs)
+
             # Provide param factory with a reference to self
             self._param_factory._reference = self
 
@@ -287,11 +296,13 @@ class HierarchicalBase(Base):
         # Take out parameters for this class
         if kwargs.has_key('depends_on'):
             self.depends_on = kwargs['depends_on']
+            del kwargs['depends_on']
         else:
             self.depends_on = {}
                 
         if kwargs.has_key('is_subj_model'):
             self.is_subj_model = kwargs['is_subj_model']
+            del kwargs['is_subj_model']
         else:
             self.is_subj_model = 'subj_idx' in data.dtype.names
 
