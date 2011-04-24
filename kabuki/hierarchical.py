@@ -395,12 +395,16 @@ class HierarchicalBase(Base):
         # Get column names for provided param_name
         depends_on = self.depends_on[param_name]
         # Get unique elements from the columns
-        uniq_data_dep = np.unique(self._param_factory.data[depends_on])
+        data_dep = self._param_factory.data[depends_on]
+        uniq_data_dep = np.unique(data_dep)
 
         self.group_params_dep[param_name] = []
 
         # Loop through unique elements
         for pos, uniq_date in enumerate(uniq_data_dep):
+            # Select data
+            data_dep_select = data_dep[(data_dep == uniq_date)]
+
             # Create name for parameter
             tag = str(uniq_date)
             param_tag = '%s%s'%(param_name, tag)
@@ -411,12 +415,13 @@ class HierarchicalBase(Base):
             self.group_params[param_tag] = self._param_factory.get_root_param(param_name,
                                                                               self.group_params,
                                                                               tag,
+                                                                              data_dep_select,
                                                                               pos=pos_abs)
             self.group_params_dep[param_name].append(param_tag)
             
             if self.is_subj_model:
                 # Create appropriate subj parameter
-                self._set_subj_params(param_name, tag, pos)
+                self._set_subj_params(param_name, tag, pos, data_dep_select)
 
         return self
 
@@ -430,17 +435,17 @@ class HierarchicalBase(Base):
             else:
                 # Parameter does not depend on data
                 # Set group parameter
-                self.group_params[param_name] = self._param_factory.get_root_param(param_name, self.group_params, '')
+                self.group_params[param_name] = self._param_factory.get_root_param(param_name, self.group_params, '', self._param_factory.data)
 
                 if self.is_subj_model:
-                    self._set_subj_params(param_name, '')
+                    self._set_subj_params(param_name, '', self._param_factory.data)
 
         # Set likelihoods
         self._set_model()
 
         return self
 
-    def _set_subj_params(self, param_name, tag, pos=None):
+    def _set_subj_params(self, param_name, tag, data, pos=None):
         param_name_full = '%s%s' % (param_name, tag)
 
         # Init
@@ -454,12 +459,14 @@ class HierarchicalBase(Base):
 
         # Create subj parameter distribution for each subject
         for subj_idx,subj in enumerate(self._subjs):
+            data_subj = data[data['subj_idx']==subj_idx]
             self.subj_params[param_name_full][subj_idx] = self._param_factory.get_subj_param(param_name,
                                                                                              param_inst,
                                                                                              param_inst_tau,
                                                                                              subj_idx,
                                                                                              self.subj_params,
                                                                                              tag,
+                                                                                             data_subj,
                                                                                              pos=pos)
         return self
     
@@ -486,9 +493,14 @@ class HierarchicalBase(Base):
             # Create observed stochastic for each subject
             observed = np.empty(self._num_subjs, dtype=object)
             for i,subj in enumerate(self._subjs):
-                data_subj = data[data['subj_idx'] == subj] # Select data belonging to subj
+                # Select data belonging to subj
+                data_subj = data[data['subj_idx'] == subj] 
+                # Select params belonging to subject
+                params_subj = {}
+                for param_name, params in self.subj_params.iteritems():
+                    params_subj[param_name] = params[i]
                 # Call to the user-defined param_factory!
-                observed[i] = self._param_factory.get_observed("observed_%i_%i"%(idx, i), data_subj, params, idx=i)
+                observed[i] = self._param_factory.get_observed("observed_%i_%i"%(idx, i), data_subj, params_subj, idx=i)
         else: # Do not use subj params, but group ones
             observed = self._param_factory.get_observed("observed_%i"%idx, data, params)
 
