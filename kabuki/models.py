@@ -9,24 +9,24 @@ from copy import copy
 import kabuki
 
 #@hierarchical
-class Prototype(object):
+class Prototype(kabuki.Hierarchical):
     param_names = None
 
     def __init__(self, data, **kwargs):
         self.data = data
 
-    def get_root_param(self, param, tag):
+    def get_root_param(self, param, tag, pos=None):
         return None
 
     def get_tau_param(self, param, tag):
         return None
     
-    def get_subj_param(self, param_name, parent_mean, parent_tau, subj_idx):
+    def get_subj_param(self, param_name, parent_mean, parent_tau, subj_idx, pos=None):
         return pm.Normal('%s%i'%(param_name, subj_idx), mu=parent_mean, tau=parent_tau)
 
 
     
-@kabuki.hierarchical
+#@kabuki.hierarchical
 class Regression(Prototype):
     param_names = ('theta', 'x')
     
@@ -46,7 +46,7 @@ class Regression(Prototype):
 
         return (pm.Normal(name, mu=modelled_y, tau=2, value=subj_data['dependent'], observed=True), modelled_y)
 
-@kabuki.hierarchical        
+#@kabuki.hierarchical
 class ANOVA(Prototype):
     param_names = ('base', 'effect')
     

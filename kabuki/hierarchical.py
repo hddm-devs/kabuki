@@ -24,16 +24,6 @@ class Base(object):
         self.stats = {}
 	self.colors = ('r','b','g','y','c')
 
-    def _set_params(self):
-        raise NotImplementedError("This method has to be overloaded")
-    
-    def _set_model(self):
-        raise NotImplementedError("This method has to be overloaded")
-
-    def _set_all_params(self):
-        self._set_params()
-
-
     def map(self):
         """Compute Maximum A Posterior estimates."""
         # Prepare and fit MAP
@@ -212,47 +202,7 @@ class Base(object):
         raise NotImplementedError, "Model has no subject capabilites"
 
 
-def hierarchical(c):
-    """Hierarchical decorator for classes.
-
-    Use this decorator for your class that returns
-    the model parameter distributions and likelihoods.
-
-    E.g.:
-
-    @hierarchical
-    class MyClass(object):
-        # Class definition
-        ...
-    """
-    # This little trick with returning a new Class is so
-    # that decorated classes can do inheritance and call
-    # super(). The pattern was suggested by lrh9 in #python
-    # on irc.freenode.net
-    class Hierarchical(HierarchicalBase):
-        def __init__(self, data, **kwargs):
-            # Call parent's __init__
-            super(self.__class__, self).__init__(data, **kwargs)
-
-            # This sucks really bad and is just a hack. We have to
-            # remove these so that c() does not confused by these
-            # keyword arguments. This is an issue that would re
-            # resolved if we removed the decorator thingy alltogether.
-            if kwargs.has_key('depends_on'):
-                del kwargs['depends_on']
-            if kwargs.has_key('is_subj_model'):
-                del kwargs['is_subj_model']
-            # Link to the decorated object (overwrite)
-            self._param_factory = c(data, **kwargs)
-
-            # Provide param factory with a reference to self
-            self._param_factory._reference = self
-
-            self.param_names = self._param_factory.param_names
-            
-    return Hierarchical
-
-class HierarchicalBase(Base):
+class Hierarchical(Base):
     """Class that builds hierarchical bayesian models.
 
     This class can best be used with the @hierarchical decorator
@@ -289,7 +239,7 @@ class HierarchicalBase(Base):
         user-specified method get_liklihood().
         """
         # Call parent's class __init__
-        super(HierarchicalBase, self).__init__()
+        super(Hierarchical, self).__init__()
 
         self.data = data
 
@@ -321,17 +271,6 @@ class HierarchicalBase(Base):
         # it with the user defined class.
         self._param_factory = self
 
-    def __getattr__(self, name):
-        # Do not try to fetch the function if param_factory points to
-        # self, results in endless loop
-        if self._param_factory is self:
-            raise AttributeError, "hierarchical nor param_factory object have attribute '%s'" % name
-
-        if name in dir(self._param_factory):
-            return self._param_factory.__getattribute__(name)
-        else:
-            raise AttributeError, "hierarchical nor param_factory object have attribute '%s'" % name
-
     def _get_data_depend(self, get_group_params=False):
         """Partition data according to self.depends_on.
 
@@ -358,14 +297,19 @@ class HierarchicalBase(Base):
         to depends_on."""
         if len(depends_on) != 0: # If depends are present
             data_params = []
-            param_name = depends_on.keys()[0] # Get first param from depends_on
+            # Get first param from depends_on
+            param_name = depends_on.keys()[0]
             col_name = depends_on.pop(param_name) # Take out param
             depend_elements = np.unique(data[col_name])
             # Loop through unique elements
             for depend_element in depend_elements:
                 # Extract rows containing unique element
                 data_dep = data[data[col_name] == depend_element]
-                # Set the appropriate parameter
+                # Add a key that is only the col_name that links to
+                # the correct dependent nodes. This is the central
+                # trick so that later on the get_observed can use
+                # params[col_name] and the observed will get linked to
+                # the correct nodes automatically.
                 if self.is_subj_model and not get_group_params:
                     params[param_name] = self.subj_params[param_name+str(depend_element)]
                 else:
@@ -374,7 +318,7 @@ class HierarchicalBase(Base):
                 data_param = self._get_data_depend_rec(data_dep,
                                                        depends_on=copy(depends_on),
                                                        params=copy(params),
-                                                       param_name=param_name+str(depend_element),
+                                                       param_name=param_name,
                                                        get_group_params=get_group_params)
                 data_params += data_param
             return data_params
@@ -397,13 +341,12 @@ class HierarchicalBase(Base):
         # Get unique elements from the columns
         data_dep = self._param_factory.data[depends_on]
         uniq_data_dep = np.unique(data_dep)
-
         self.group_params_dep[param_name] = []
 
         # Loop through unique elements
         for pos, uniq_date in enumerate(uniq_data_dep):
             # Select data
-            data_dep_select = data_dep[(data_dep == uniq_date)]
+            data_dep_select = self.data[(data_dep == uniq_date)]
 
             # Create name for parameter
             tag = str(uniq_date)
@@ -421,7 +364,7 @@ class HierarchicalBase(Base):
             
             if self.is_subj_model:
                 # Create appropriate subj parameter
-                self._set_subj_params(param_name, tag, pos, data_dep_select)
+                self._set_subj_params(param_name, tag, data_dep_select, pos)
 
         return self
 
@@ -447,7 +390,6 @@ class HierarchicalBase(Base):
 
     def _set_subj_params(self, param_name, tag, data, pos=None):
         param_name_full = '%s%s' % (param_name, tag)
-
         # Init
         self.subj_params[param_name_full] = np.empty(self._num_subjs, dtype=object)
 
@@ -474,18 +416,17 @@ class HierarchicalBase(Base):
         """Create and set up the complete model."""
         # Divide data and parameter distributions according to self.depends_on
         data_dep = self._get_data_depend()
-
         self.likelihoods = []
         # Loop through parceled data and params and create an observed stochastic
         for i, (data, params, param_name) in enumerate(data_dep):
-            self.likelihoods.append(self._create_observed(data, params, i))
+            self.likelihoods.append(self._create_observed(data, params, param_name, i))
             
         # Create list with the full model distributions, likelihoods and data
         self.model = self.likelihoods + self.group_params.values() + self.group_params_tau.values() + self.subj_params.values()
 
         return self
         
-    def _create_observed(self, data, params, idx):
+    def _create_observed(self, data, params, param_dep_name, idx):
         """Create and return observed distribution where data depends
         on params.
         """
@@ -499,6 +440,7 @@ class HierarchicalBase(Base):
                 params_subj = {}
                 for param_name, params in self.subj_params.iteritems():
                     params_subj[param_name] = params[i]
+                params_subj[param_dep_name] = params[i] # We have to overwrite the dependent one separately
                 # Call to the user-defined param_factory!
                 observed[i] = self._param_factory.get_observed("observed_%i_%i"%(idx, i), data_subj, params_subj, idx=i)
         else: # Do not use subj params, but group ones
@@ -530,7 +472,6 @@ class HierarchicalBase(Base):
             # TODO: Bugfix offsetting
             value = self.params_est[name]
             num_tabs = int(5-np.floor(((len(name))/8.)))
-            #print num_tabs
             tabs = ''.join(['\t' for i in range(num_tabs)])
             s += '%s%s%.3f\t%.3f\t%.3f\t%.3f%s'%(name, tabs, value,
                                         self.params_est_std[name],

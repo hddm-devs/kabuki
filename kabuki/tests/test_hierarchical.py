@@ -3,38 +3,35 @@ import numpy as np
 import unittest
 import pymc as pm
 
-
-@kabuki.hierarchical
-class TestClass(kabuki.Prototype):
+class TestClassOneParam(kabuki.Hierarchical):
     param_names = ('test',)
         
-    def get_root_param(self, param, all_params, tag, pos=None):
+    def get_root_param(self, param, all_params, tag, data, pos=None):
         return pm.Uniform('%s%s'% (param,tag), lower=0, upper=1)
 
     def get_tau_param(self, param, all_params, tag):
         return pm.Uniform('%s%s'% (param,tag), lower=0, upper=10)
     
-    def get_subj_param(self, param_name, parent_mean, parent_tau, subj_idx, all_params, tag, pos):
+    def get_subj_param(self, param_name, parent_mean, parent_tau, subj_idx, all_params, tag, data, pos=None):
         return pm.Normal('%s%s%i'%(param_name, tag, subj_idx), mu=parent_mean, tau=parent_tau)
 
     def get_observed(self, name, subj_data, params, idx=None, pos=None):
-        return pm.Normal('%s%i' % (name,idx), mu=params['test'][idx], tau=1, value=subj_data['score'], observed=True)
+        return pm.Normal('%s%i' % (name,idx), mu=params['test'], tau=1, value=subj_data['score'], observed=True)
 
-
-class TestClassInherit(kabuki.HierarchicalBase):
-    param_names = ('test',)
+class TestClassTwoParam(kabuki.Hierarchical):
+    param_names = ('test','test2')
         
-    def get_root_param(self, param, all_params, tag, pos):
+    def get_root_param(self, param, all_params, tag, data, pos=None):
         return pm.Uniform('%s%s'% (param,tag), lower=0, upper=1)
 
     def get_tau_param(self, param, all_params, tag):
         return pm.Uniform('%s%s'% (param,tag), lower=0, upper=10)
     
-    def get_subj_param(self, param_name, parent_mean, parent_tau, subj_idx, all_params, tag, pos):
+    def get_subj_param(self, param_name, parent_mean, parent_tau, subj_idx, all_params, tag, data, pos=None):
         return pm.Normal('%s%s%i'%(param_name, tag, subj_idx), mu=parent_mean, tau=parent_tau)
 
     def get_observed(self, name, subj_data, params, idx=None, pos=None):
-        return pm.Normal('%s%i' % (name,idx), mu=params['test'][idx], tau=1, value=subj_data['score'], observed=True)
+        return pm.Normal('%s%i' % (name,idx), mu=params['test'], tau=params['test2'], value=subj_data['score'], observed=True)
     
 class TestHierarchical(unittest.TestCase):
     def runTest(self):
@@ -56,18 +53,19 @@ class TestHierarchical(unittest.TestCase):
             self.data['dep'][subj*pts_per_subj+pts_per_subj/2:(subj+1)*pts_per_subj] = 'dep2'
 
     def setUp(self):
-        self.test_model = TestClass(self.data)
-        self.test_model_dep = TestClass(self.data, depends_on={'test':['dep']})
-        self.test_model_inherit = TestClassInherit(self.data)
-        self.test_model_dep_inherit = TestClassInherit(self.data, depends_on={'test':['dep']})
+        self.test_model_one_param = TestClassOneParam(self.data)
+        self.test_model_one_param_dep = TestClassOneParam(self.data, depends_on={'test':['dep']})
+
+        self.test_model_two_param = TestClassTwoParam(self.data)
+        self.test_model_two_param_dep = TestClassTwoParam(self.data, depends_on={'test':['dep']})
 
     def test_passing_depends_on(self):
-        self.assertEqual(self.test_model_dep.depends_on, {'test':['dep']})
-        self.assertEqual(self.test_model_dep_inherit.depends_on, {'test':['dep']})
+        self.assertEqual(self.test_model_one_param_dep.depends_on, {'test':['dep']})
+        self.assertEqual(self.test_model_two_param_dep.depends_on, {'test':['dep']})
 
     def test_get_data_depend(self):
-        self.tst_get_data_depend(self.test_model_dep)
-        self.tst_get_data_depend(self.test_model_dep_inherit)
+        self.tst_get_data_depend(self.test_model_one_param_dep)
+        self.tst_get_data_depend(self.test_model_two_param_dep)
 
     def tst_get_data_depend(self, model):
         model._set_params()
@@ -85,24 +83,49 @@ class TestHierarchical(unittest.TestCase):
             i = 1 if i == 0 else 0
 
     def test_set_params(self):
-        self.test_model._set_params()
+        self.test_model_one_param._set_params()
 
-        self.assertEqual(self.test_model.param_names, ('test',))
-        self.assertEqual(self.test_model.group_params.keys(), ['test'])
-        np.testing.assert_equal([param.__name__ for param in self.test_model.subj_params['test']], ['test%i'%i for i in self.subjs])
+        self.assertEqual(self.test_model_one_param.param_names, ('test',))
+        self.assertEqual(self.test_model_one_param.group_params.keys(), ['test'])
+        np.testing.assert_equal([param.__name__ for param in self.test_model_one_param.subj_params['test']], ['test%i'%i for i in self.subjs])
 
         # Test if parents of subj_params have the correct name
-        for parent_params in [param.parents.values() for param in self.test_model.subj_params['test']]:
+        for parent_params in [param.parents.values() for param in self.test_model_one_param.subj_params['test']]:
             np.testing.assert_equal([parent_param.__name__ for parent_param in parent_params], ['test', 'testtau'])
 
         # Test if parents of subj_params are the correct objects
-        for parent_params in self.test_model.subj_params['test']:
-            assert parent_params.parents['mu'] is self.test_model.group_params['test']
-            assert parent_params.parents['tau'] is self.test_model.group_params_tau['test']
+        for parent_params in self.test_model_one_param.subj_params['test']:
+            assert parent_params.parents['mu'] is self.test_model_one_param.group_params['test']
+            assert parent_params.parents['tau'] is self.test_model_one_param.group_params_tau['test']
         
     def test_set_params_dep(self):
-        self.tst_set_params_dep(self.test_model_dep)
-        self.tst_set_params_dep(self.test_model_dep_inherit)
+        self.tst_set_params_dep(self.test_model_one_param_dep)
+        self.tst_set_params_dep_two(self.test_model_two_param_dep)
+
+    def tst_set_params_dep_two(self, model):
+        model._set_params()
+
+        self.assertEqual(model.param_names, ('test','test2'))
+        self.assertEqual(model.group_params.keys(), ["test('dep1',)", "test('dep2',)", "test2"])
+        np.testing.assert_equal([param.__name__ for param in model.subj_params["test('dep1',)"]], ["test('dep1',)%i"%i for i in self.subjs])
+        np.testing.assert_equal([param.__name__ for param in model.subj_params["test('dep2',)"]], ["test('dep2',)%i"%i for i in self.subjs])
+
+        # Test if parents of subj_params have the correct name
+        for parent_params in [param.parents.values() for param in model.subj_params["test('dep1',)"]]:
+            np.testing.assert_equal([parent_param.__name__ for parent_param in parent_params], ["test('dep1',)", "test('dep1',)tau"])
+        # Test if parents of subj_params are the correct objects
+        for parent_params in model.subj_params["test('dep1',)"]:
+            assert parent_params.parents['mu'] is model.group_params["test('dep1',)"]
+            assert parent_params.parents['tau'] is model.group_params_tau["test('dep1',)"]
+            
+        # Test if parents of subj_params have the correct name
+        for parent_params in [param.parents.values() for param in model.subj_params["test('dep2',)"]]:
+            np.testing.assert_equal([parent_param.__name__ for parent_param in parent_params], ["test('dep2',)", "test('dep2',)tau"])
+        # Test if parents of subj_params are the correct objects
+        for parent_params in model.subj_params["test('dep2',)"]:
+            assert parent_params.parents['mu'] is model.group_params["test('dep2',)"]
+            assert parent_params.parents['tau'] is model.group_params_tau["test('dep2',)"]
+
 
     def tst_set_params_dep(self, model):
         model._set_params()

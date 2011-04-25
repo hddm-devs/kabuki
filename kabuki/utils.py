@@ -115,7 +115,6 @@ def savage_dickey(post_trace, range=(-1,1), bins=100, plot=False, title=None, sa
             plt.savefig('plots/'+savefig+'.png')
 
     return sav_dick #, prior, posterior, prior0, posterior0
-    
 
 def call_mcmc((model_class, data, dbname, rnd, kwargs)):
     # Randomize seed
