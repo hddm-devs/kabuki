@@ -419,6 +419,7 @@ class Hierarchical(Base):
         self.likelihoods = []
         # Loop through parceled data and params and create an observed stochastic
         for i, (data, params, param_name) in enumerate(data_dep):
+            print params
             self.likelihoods.append(self._create_observed(data, params, param_name, i))
             
         # Create list with the full model distributions, likelihoods and data
@@ -438,10 +439,10 @@ class Hierarchical(Base):
                 data_subj = data[data['subj_idx'] == subj] 
                 # Select params belonging to subject
                 params_subj = {}
-                for param_name, params in self.subj_params.iteritems():
-                    params_subj[param_name] = params[i]
+                for param_name, param_nodes in self.subj_params.iteritems():
+                    params_subj[param_name] = param_nodes[i]
                 if param_dep_name is not None:
-                    params_subj[param_dep_name] = params[i] # We have to overwrite the dependent one separately
+                    params_subj[param_dep_name] = params[param_dep_name][i] # We have to overwrite the dependent one separately
                 # Call to the user-defined param_factory!
                 observed[i] = self._param_factory.get_observed("observed_%i_%i"%(idx, i), data_subj, params_subj, idx=i)
         else: # Do not use subj params, but group ones

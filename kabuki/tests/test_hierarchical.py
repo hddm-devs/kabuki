@@ -22,7 +22,7 @@ class TestClassTwoParam(kabuki.Hierarchical):
     param_names = ('test','test2')
         
     def get_root_param(self, param, all_params, tag, data, pos=None):
-        return pm.Uniform('%s%s'% (param,tag), lower=0, upper=1)
+        return pm.Uniform('%s%s'% (param,tag), lower=0.1, upper=1)
 
     def get_tau_param(self, param, all_params, tag):
         return pm.Uniform('%s%s'% (param,tag), lower=0, upper=10)
@@ -31,7 +31,9 @@ class TestClassTwoParam(kabuki.Hierarchical):
         return pm.Normal('%s%s%i'%(param_name, tag, subj_idx), mu=parent_mean, tau=parent_tau)
 
     def get_observed(self, name, subj_data, params, idx=None, pos=None):
-        return pm.Normal('%s%i' % (name,idx), mu=params['test'], tau=params['test2'], value=subj_data['score'], observed=True)
+        a = pm.Normal('%s%i' % (name,idx), mu=params['test'], tau=1., value=subj_data['score'], observed=True)
+        b = pm.Normal('%s%i' % (name,idx), mu=params['test2'], tau=1., value=subj_data['score'], observed=True)
+        return [a,b]
     
 class TestHierarchical(unittest.TestCase):
     def runTest(self):
@@ -59,13 +61,17 @@ class TestHierarchical(unittest.TestCase):
         self.test_model_two_param = TestClassTwoParam(self.data)
         self.test_model_two_param_dep = TestClassTwoParam(self.data, depends_on={'test':['dep']})
 
+        self.test_model_two_param_dep2 = TestClassTwoParam(self.data, depends_on={'test2':['dep']})
+
     def test_passing_depends_on(self):
         self.assertEqual(self.test_model_one_param_dep.depends_on, {'test':['dep']})
         self.assertEqual(self.test_model_two_param_dep.depends_on, {'test':['dep']})
+        self.assertEqual(self.test_model_two_param_dep2.depends_on, {'test2':['dep']})
 
     def test_get_data_depend(self):
         self.tst_get_data_depend(self.test_model_one_param_dep)
         self.tst_get_data_depend(self.test_model_two_param_dep)
+        self.tst_get_data_depend(self.test_model_two_param_dep2)
 
     def tst_get_data_depend(self, model):
         model._set_params()
@@ -101,6 +107,31 @@ class TestHierarchical(unittest.TestCase):
     def test_set_params_dep(self):
         self.tst_set_params_dep(self.test_model_one_param_dep)
         self.tst_set_params_dep_two(self.test_model_two_param_dep)
+        self.tst_set_params_dep_two2(self.test_model_two_param_dep2)
+
+    def tst_set_params_dep_two2(self, model):
+        model._set_params()
+
+        self.assertEqual(model.param_names, ('test','test2'))
+        self.assertEqual(model.group_params.keys(), ["test", "test2('dep1',)", "test2('dep2',)"])
+        np.testing.assert_equal([param.__name__ for param in model.subj_params["test2('dep1',)"]], ["test2('dep1',)%i"%i for i in self.subjs])
+        np.testing.assert_equal([param.__name__ for param in model.subj_params["test2('dep2',)"]], ["test2('dep2',)%i"%i for i in self.subjs])
+
+        # Test if parents of subj_params have the correct name
+        for parent_params in [param.parents.values() for param in model.subj_params["test2('dep1',)"]]:
+            np.testing.assert_equal([parent_param.__name__ for parent_param in parent_params], ["test2('dep1',)", "test2('dep1',)tau"])
+        # Test if parents of subj_params are the correct objects
+        for parent_params in model.subj_params["test2('dep1',)"]:
+            assert parent_params.parents['mu'] is model.group_params["test2('dep1',)"]
+            assert parent_params.parents['tau'] is model.group_params_tau["test2('dep1',)"]
+            
+        # Test if parents of subj_params have the correct name
+        for parent_params in [param.parents.values() for param in model.subj_params["test2('dep2',)"]]:
+            np.testing.assert_equal([parent_param.__name__ for parent_param in parent_params], ["test2('dep2',)", "test2('dep2',)tau"])
+        # Test if parents of subj_params are the correct objects
+        for parent_params in model.subj_params["test2('dep2',)"]:
+            assert parent_params.parents['mu'] is model.group_params["test2('dep2',)"]
+            assert parent_params.parents['tau'] is model.group_params_tau["test2('dep2',)"]
 
     def tst_set_params_dep_two(self, model):
         model._set_params()
