@@ -440,7 +440,8 @@ class Hierarchical(Base):
                 params_subj = {}
                 for param_name, params in self.subj_params.iteritems():
                     params_subj[param_name] = params[i]
-                params_subj[param_dep_name] = params[i] # We have to overwrite the dependent one separately
+                if param_dep_name is not None:
+                    params_subj[param_dep_name] = params[i] # We have to overwrite the dependent one separately
                 # Call to the user-defined param_factory!
                 observed[i] = self._param_factory.get_observed("observed_%i_%i"%(idx, i), data_subj, params_subj, idx=i)
         else: # Do not use subj params, but group ones
