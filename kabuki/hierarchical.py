@@ -419,7 +419,7 @@ class Hierarchical(Base):
         self.likelihoods = []
         # Loop through parceled data and params and create an observed stochastic
         for i, (data, params, param_name) in enumerate(data_dep):
-            print params
+#            print params
             self.likelihoods.append(self._create_observed(data, params, param_name, i))
             
         # Create list with the full model distributions, likelihoods and data
