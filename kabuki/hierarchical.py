@@ -1,4 +1,4 @@
-#!/usr/bin/python
+ #!/usr/bin/python
 from __future__ import division
 from copy import copy
 
@@ -10,205 +10,13 @@ import pymc as pm
 
 import kabuki
 
-
-# Model classes
-class Base(object):
-    """Base class for MCMC models."""
-    def __init__(self, *args, **kwargs):
-        self.model = None
-        self.mcmc_model = None
-        self.map_model = None
-        self.params_est = {}
-        self.params_est_std = {}
-        self.params_est_perc = {}
-        self.stats = {}
-	self.colors = ('r','b','g','y','c')
-
-    def map(self):
-        """Compute Maximum A Posterior estimates."""
-        # Prepare and fit MAP
-        self._prepare(map_=True)
-
-        # Write estimates to params_est.
-        for param_name in self.param_names:
-            self.params_est[param_name] = self.group_params[param_name].value
-
-        return self
-
-    def _prepare(self, retry=True):
-        """Create model."""
-
-        ############################################################
-        # Try multiple times to create model. Sometimes bad initial
-        # parameters are chosen randomly that yield -Inf
-        # log-likelihood which causes PyMC to choke.
-        model_yields_zero_prob = True
-        tries = 0
-        if retry:
-            while (model_yields_zero_prob):
-                try:
-                    self._set_params()
-                    model_yields_zero_prob = False
-                except pm.ZeroProbability as e:
-                    self.group_params = OrderedDict()
-                    self.group_params_tau = OrderedDict()
-                    self.group_params_dep = OrderedDict()
-                    self.subj_params = OrderedDict()
-                    tries += 1
-                    if tries > 20:
-                        print e
-                        raise pm.ZeroProbability("Model creation failed")
-
-        else:
-            self._set_params()
-
-        return self
-    
-    def _sample(self, samples=10000, burn=5000, thin=2, verbose=0, dbname=None):
-        """Draw posterior samples. Requires self.model to be set.
-        """
-        try:
-            self.mcmc_model.sample(samples, burn=burn, thin=thin, verbose=verbose)
-        except NameError:
-            raise NameError("mcmc_model not set, call ._prepare()")
-
-        self._gen_stats()
-        if self.is_subj_model:
-            self._gen_stats_subjs()
-            
-        if dbname is not None:
-            self.mcmc_model.db.commit()
-
-        return self
-
-    def norm_approx(self):
-        # Set model parameter values to Normal Approximations
-        self._prepare()
-        
-        self.norm_approx_model = pm.NormApprox(self.model)
-        self.norm_approx_model.fit()
-
-        return self
-            
-
-    def mcmc(self, samples=10000, burn=5000, thin=2, verbose=0, step_method=None, dbname=None, map_=True, retry=True, sample=True):
-        """Main method for sampling. Creates and initializes the model
-        and starts sampling.
-        """
-        # Set and initialize model
-        self._prepare(retry=retry)
-
-        # Set model parameter values to MAP estimates
-        if map_:
-            self.map_model = pm.MAP(self.model)
-            self.map_model.fit()
-
-        # Create MCMC instance
-        if dbname is None:
-            self.mcmc_model = pm.MCMC(self.model, verbose=verbose)
-        else:
-            # Save future samples to database if needed.
-            self.mcmc_model = pm.MCMC(self.model, db='sqlite', dbname=dbname, verbose=verbose)
-
-        if step_method is not None:
-            self.mcmc_model.use_step_method(step_method, self.group_params.values() + self.group_params_tau.values() + [j for i in self.subj_params.values() for j in i])
-            
-        #self.mcmc_model.use_step_method(pm.Gibbs, self.group_params.values())
-        # Start sampling
-        if sample:
-            self._sample(samples=samples, burn=burn, thin=thin, verbose=verbose, dbname=dbname)
-            
-            if dbname is not None:
-                self.mcmc_model.db.close()
-
-        return self
-    
-    def _set_traces(self, params, mcmc_model=None, add=False):
-        """Externally set the traces of group_params. This is needed
-        when loading a model from a previous sampling run saved to a
-        database.
-        """
-        if not mcmc_model:
-            mcmc_model = self.mcmc_model
-
-        # Loop through parameters and set traces
-        for param_name, param_inst in params.iteritems():
-            try:
-                if add:
-                    # Append trace
-                    param_inst.trace._trace[0] = np.concatenate((param_inst.trace._trace[0],
-                                                                 mcmc_model.trace(param_name)()))
-                else:
-                    param_inst.trace = mcmc_model.trace(param_name)
-            except AttributeError: # param_inst is an array
-                if self.trace_subjs:
-                    for i, subj_param in enumerate(param_inst):
-                        if add:
-                            subj_param.trace._trace[0] = np.concatenate((subj_param.trace._trace[0],
-                                                                         mcmc_model.trace(subj_param.__name__))())
-                        else:
-                            subj_param.trace = mcmc_model.trace(subj_param.__name__)
-
-    def mcmc_load_from_db(self, dbname, verbose=0):
-        """Load samples from a database created by an earlier model
-        run (e.g. by calling .mcmc(dbname='test'))
-        """
-        # Set up model
-        self._prepare()
-        
-        # Open database
-        db = pm.database.sqlite.load(dbname)
-
-        # Create mcmc instance reading from the opened database
-        self.mcmc_model = pm.MCMC(self.model, db=db, verbose=verbose)
-
-        # Take the traces from the database and feed them into our
-        # distribution variables (needed for _gen_stats())
-        self._set_traces(self.group_params)
-        self._gen_stats()
-
-        if self.is_subj_model:
-            self._set_traces(self.group_params_tau)
-            self._set_traces(self.subj_params)
-            self._gen_stats_subjs()
-
-        return self
-    
-    def _gen_stats(self, save_stats_to=None):
-        """Generate mean and std statistics of each distributions and
-        save to params_est.
-
-        Arguments:
-        ==========
-        
-        save_stats_to <string>: filename to save stats to."""
-        # Loop through params and generate statistics
-        for param_name in self.param_names:
-            # Mean
-            self.params_est[param_name] = np.mean(self.mcmc_model.trace(param_name)[:])
-            # Std
-            self.params_est_std[param_name] = np.std(self.mcmc_model.trace(param_name)[:])
-
-        # Save stats to output file
-        if save_stats_to is not None:
-            print "Saving stats to %s" % save_stats_to
-            with open(save_stats_to, 'w') as fd:
-                for name, value in self.params_est.iteritems():
-                    fd.write('%s: %f\n'%(name, value))
-                    
-        return self
-
-    def _gen_stats_subjs(self):
-        raise NotImplementedError, "Model has no subject capabilites"
-
-
-class Hierarchical(Base):
+class Hierarchical(object):
     """Class that builds hierarchical bayesian models.
 
     This class can best be used with the @hierarchical decorator
     applied to a user-defined class providing parameter creation
     functions (e.g. see models.ANOVA)."""
-    def __init__(self, data, **kwargs):
+    def __init__(self, data, is_hierarchical=None, depends_on=None):
         """Initialize hierarchical model.
 
         Arguments:
@@ -219,7 +27,7 @@ class Hierarchical(Base):
         Keyword arguments:
         ==================
 
-        is_subj_model <bool>: Model is a subject model. This results
+        is_hierarchical <bool>: Model is a subject model. This results
         in a hierarchical model with distributions for each parameter
         for each subject whose parameters are themselves distributed
         according to a group parameter distribution.
@@ -238,38 +46,32 @@ class Hierarchical(Base):
         parameter distribution and data will be provided to the
         user-specified method get_liklihood().
         """
-        # Call parent's class __init__
-        super(Hierarchical, self).__init__()
+        self.params_est = {}
+        self.params_est_std = {}
+        self.params_est_perc = {}
+        self.stats = {}
 
         self.data = data
 
-        # Take out parameters for this class
-        if kwargs.has_key('depends_on'):
-            self.depends_on = kwargs['depends_on']
-            del kwargs['depends_on']
-        else:
+        if depends_on is None:
             self.depends_on = {}
-                
-        if kwargs.has_key('is_subj_model'):
-            self.is_subj_model = kwargs['is_subj_model']
-            del kwargs['is_subj_model']
         else:
-            self.is_subj_model = 'subj_idx' in data.dtype.names
+            self.depends_on = depends_on
+
+        if is_hierarchical is None:
+            self.is_hierarchical = 'subj_idx' in data.dtype.names
+        else:
+            self.is_hierarchical = is_hierarchical
 
         # Should the model incorporate multiple subjects
-        if self.is_subj_model:
+        if self.is_hierarchical:
             self._subjs = np.unique(data['subj_idx'])
             self._num_subjs = self._subjs.shape[0]
 
-        self.group_params = OrderedDict()
-        self.group_params_tau = OrderedDict()
-        self.group_params_dep = OrderedDict()
-        self.subj_params = OrderedDict()
-
-        # Set this to self so that the class can be inherited from, but also used
-        # as a decorator via hierarchical() which will overwrite this and replace
-        # it with the user defined class.
-        self._param_factory = self
+        self.root_nodes = OrderedDict()
+        self.root_nodes_tau = OrderedDict()
+        self.root_nodes_dep = OrderedDict()
+        self.child_nodes = OrderedDict()
 
     def _get_data_depend(self, get_group_params=False):
         """Partition data according to self.depends_on.
@@ -280,15 +82,15 @@ class Hierarchical(Base):
         List of tuples with the data, the corresponding parameter
         distribution and the parameter name."""
         
-        if self.is_subj_model and not get_group_params:
-            params = copy(self.subj_params) # use subj parameters to feed into model
+        if self.is_hierarchical and not get_group_params:
+            params = copy(self.child_nodes) # use subj parameters to feed into model
         else:
-            params = copy(self.group_params) # use group parameters to feed into model
+            params = copy(self.root_nodes) # use group parameters to feed into model
 
         depends_on = copy(self.depends_on)
 
         # Make call to recursive function that does the partitioning
-        data_dep = self._get_data_depend_rec(self._param_factory.data, depends_on, params, get_group_params=get_group_params)
+        data_dep = self._get_data_depend_rec(self.data, depends_on, params, get_group_params=get_group_params)
 
         return data_dep
     
@@ -310,10 +112,10 @@ class Hierarchical(Base):
                 # trick so that later on the get_observed can use
                 # params[col_name] and the observed will get linked to
                 # the correct nodes automatically.
-                if self.is_subj_model and not get_group_params:
-                    params[param_name] = self.subj_params[param_name+str(depend_element)]
+                if self.is_hierarchical and not get_group_params:
+                    params[param_name] = self.child_nodes[param_name+str(depend_element)]
                 else:
-                    params[param_name] = self.group_params[param_name+str(depend_element)]
+                    params[param_name] = self.root_nodes[param_name+str(depend_element)]
                 # Recursive call with one less dependency and the selected data.
                 data_param = self._get_data_depend_rec(data_dep,
                                                        depends_on=copy(depends_on),
@@ -325,7 +127,6 @@ class Hierarchical(Base):
                 
         else: # Data does not depend on anything (anymore)
             return [(data, params, param_name)]
-
 
     def _set_dependent_param(self, param_name):
         """Set parameter that depends on data.
@@ -339,36 +140,43 @@ class Hierarchical(Base):
         # Get column names for provided param_name
         depends_on = self.depends_on[param_name]
         # Get unique elements from the columns
-        data_dep = self._param_factory.data[depends_on]
+        data_dep = self.data[depends_on]
         uniq_data_dep = np.unique(data_dep)
-        self.group_params_dep[param_name] = []
+        self.root_nodes_dep[param_name] = []
 
         # Loop through unique elements
-        for pos, uniq_date in enumerate(uniq_data_dep):
+        for uniq_date in uniq_data_dep:
             # Select data
             data_dep_select = self.data[(data_dep == uniq_date)]
 
             # Create name for parameter
             tag = str(uniq_date)
             param_tag = '%s%s'%(param_name, tag)
-            # The how maniest element is it
-            pos_abs=(pos,len(uniq_data_dep)-1)
 
             # Create parameter distribution from factory
-            self.group_params[param_tag] = self._param_factory.get_root_param(param_name,
-                                                                              self.group_params,
-                                                                              tag,
-                                                                              data_dep_select,
-                                                                              pos=pos_abs)
-            self.group_params_dep[param_name].append(param_tag)
+            self.root_nodes[param_tag] = self.get_root_node(param_name,
+                                                             self.root_nodes,
+                                                             tag,
+                                                             data_dep_select)
+            self.root_nodes_dep[param_name].append(param_tag)
             
-            if self.is_subj_model:
+            if self.is_hierarchical:
                 # Create appropriate subj parameter
-                self._set_subj_params(param_name, tag, data_dep_select, pos)
+                self._set_child_nodes(param_name, tag, data_dep_select)
 
         return self
 
-    def _set_params(self):
+    def _set_independet_param(self, param_name):
+        # Parameter does not depend on data
+        # Set group parameter
+        self.root_nodes[param_name] = self.get_root_node(param_name, self.root_nodes, '', self.data)
+
+        if self.is_hierarchical:
+            self._set_child_nodes(param_name, '', self.data)
+        
+        return self
+
+    def create(self):
         """Set group level distributions. One distribution for each
         parameter."""
         for param_name in self.param_names: # Loop through param names
@@ -376,62 +184,67 @@ class Hierarchical(Base):
             if param_name in self.depends_on.keys():
                 self._set_dependent_param(param_name)
             else:
-                # Parameter does not depend on data
-                # Set group parameter
-                self.group_params[param_name] = self._param_factory.get_root_param(param_name, self.group_params, '', self._param_factory.data)
+                self._set_independet_param(param_name)
 
-                if self.is_subj_model:
-                    self._set_subj_params(param_name, '', self._param_factory.data)
+        self._set_observeds()
 
-        # Set likelihoods
-        self._set_model()
+        # Create model dictionary
+        nodes = {}
+        for name,node in self.root_nodes.iteritems():
+            nodes[name] = node
 
-        return self
+        if self.is_hierarchical:
+            for name,node in self.child_nodes.iteritems():
+                nodes[name] = node
+            for name,node in self.root_nodes_tau.iteritems():
+                nodes[name] = node
 
-    def _set_subj_params(self, param_name, tag, data, pos=None):
+        for name,node in self.observeds.iteritems():
+            nodes[name] = node
+            
+        return nodes
+
+    def _set_child_nodes(self, param_name, tag, data):
         param_name_full = '%s%s' % (param_name, tag)
         # Init
-        self.subj_params[param_name_full] = np.empty(self._num_subjs, dtype=object)
+        self.child_nodes[param_name_full] = np.empty(self._num_subjs, dtype=object)
 
         # Generate subj variability parameter tau
-        param_inst_tau = self._param_factory.get_tau_param(param_name_full, self.group_params_tau, 'tau')
-        self.group_params_tau[param_name_full] = param_inst_tau
+        param_inst_tau = self.get_tau_node(param_name_full, self.root_nodes_tau, 'tau')
+        self.root_nodes_tau[param_name_full] = param_inst_tau
 
-        param_inst = self.group_params[param_name_full]
+        param_inst = self.root_nodes[param_name_full]
 
         # Create subj parameter distribution for each subject
         for subj_idx,subj in enumerate(self._subjs):
             data_subj = data[data['subj_idx']==subj_idx]
-            self.subj_params[param_name_full][subj_idx] = self._param_factory.get_subj_param(param_name,
-                                                                                             param_inst,
-                                                                                             param_inst_tau,
-                                                                                             subj_idx,
-                                                                                             self.subj_params,
-                                                                                             tag,
-                                                                                             data_subj,
-                                                                                             pos=pos)
+            self.child_nodes[param_name_full][subj_idx] = self.get_child_node(param_name,
+                                                                              param_inst,
+                                                                              param_inst_tau,
+                                                                              subj_idx,
+                                                                              self.child_nodes,
+                                                                              tag,
+                                                                              data_subj)                                                       
         return self
     
-    def _set_model(self):
+    def _set_observeds(self):
         """Create and set up the complete model."""
         # Divide data and parameter distributions according to self.depends_on
         data_dep = self._get_data_depend()
-        self.likelihoods = []
+        self.observeds = {}
         # Loop through parceled data and params and create an observed stochastic
         for i, (data, params, param_name) in enumerate(data_dep):
-#            print params
-            self.likelihoods.append(self._create_observed(data, params, param_name, i))
+            if param_name is None:
+                param_name = ''
+            self.observeds['observed_%s%i'%(param_name,i)] = self._create_observed(data, params, param_name, i)
             
-        # Create list with the full model distributions, likelihoods and data
-        self.model = self.likelihoods + self.group_params.values() + self.group_params_tau.values() + self.subj_params.values()
-
         return self
         
     def _create_observed(self, data, params, param_dep_name, idx):
         """Create and return observed distribution where data depends
         on params.
         """
-        if self.is_subj_model:
+        if self.is_hierarchical:
             # Create observed stochastic for each subject
             observed = np.empty(self._num_subjs, dtype=object)
             for i,subj in enumerate(self._subjs):
@@ -439,14 +252,14 @@ class Hierarchical(Base):
                 data_subj = data[data['subj_idx'] == subj] 
                 # Select params belonging to subject
                 params_subj = {}
-                for param_name, param_nodes in self.subj_params.iteritems():
+                for param_name, param_nodes in self.child_nodes.iteritems():
                     params_subj[param_name] = param_nodes[i]
-                if param_dep_name is not None:
+                if param_dep_name == '':
                     params_subj[param_dep_name] = params[param_dep_name][i] # We have to overwrite the dependent one separately
-                # Call to the user-defined param_factory!
-                observed[i] = self._param_factory.get_observed("observed_%i_%i"%(idx, i), data_subj, params_subj, idx=i)
+                # Call to the user-defined function!
+                observed[i] = self.get_observed("observed_%s%i_%i"%(param_dep_name, idx, i), data_subj, params_subj, idx=i)
         else: # Do not use subj params, but group ones
-            observed = self._param_factory.get_observed("observed_%i"%idx, data, params)
+            observed = self.get_observed("observed_%s%i"%(param_dep_name, idx), data, params)
 
         return observed
 
@@ -471,7 +284,6 @@ class Hierarchical(Base):
             # Create appropriate number of tabs for correct displaying
             # if parameter names are longer than one tab space.
             # 5 tabs if name string is smaller than 8 letters.
-            # TODO: Bugfix offsetting
             value = self.params_est[name]
             num_tabs = int(5-np.floor(((len(name))/8.)))
             tabs = ''.join(['\t' for i in range(num_tabs)])
@@ -517,10 +329,10 @@ class Hierarchical(Base):
         
         print "Parameters\tMean difference\t5%\t95%"
         # Loop through dependent parameters and generate stats
-        for params in self.group_params_dep.itervalues():
+        for params in self.root_nodes_dep.itervalues():
             # Loop through all pairwise combinations
             for p0,p1 in kabuki.utils.all_pairs(params):
-                diff = self.group_params[p0].trace()-self.group_params[p1].trace()
+                diff = self.root_nodes[p0].trace()-self.root_nodes[p1].trace()
                 perc = kabuki.utils.percentile(diff)
                 print "%s vs %s\t%.3f\t%.3f\t%.3f" %(p0, p1, np.mean(diff), perc[0], perc[1])
 
@@ -534,7 +346,7 @@ class Hierarchical(Base):
         fig = plt.figure()
         fig.subplots_adjust(wspace=0.4, hspace=0.4)
         # Loop through all pairwise combinations
-        for i,(p0,p1) in enumerate(kabuki.utils.all_pairs(self.group_params.values())):
+        for i,(p0,p1) in enumerate(kabuki.utils.all_pairs(self.root_nodes.values())):
             fig.add_subplot(6,6,i+1)
             plt.plot(p0.trace(), p1.trace(), '.')
             (a_s,b_s,r,tt,stderr) = sp.stats.linregress(p0.trace(), p1.trace())
@@ -554,7 +366,7 @@ class Hierarchical(Base):
         except:
             self.stats['dic'] = 0.
         
-        for param_name in self.group_params.iterkeys():
+        for param_name in self.root_nodes.iterkeys():
             self.params_est[param_name] = np.mean(self.mcmc_model.trace(param_name)())
             self.params_est_std[param_name] = np.std(self.mcmc_model.trace(param_name)())
             self.params_est_perc[param_name] = kabuki.utils.percentile(self.mcmc_model.trace(param_name)())
@@ -575,7 +387,7 @@ class Hierarchical(Base):
                 self.params_est_subj_perc[subj_idx] = {}
                 
         # Generate stats
-        for name,params in self.subj_params.iteritems():
+        for name,params in self.child_nodes.iteritems():
             for subj_idx,subj_dist in enumerate(params):
                 self.params_est_subj[subj_idx][name] = np.mean(subj_dist.trace())
                 self.params_est_subj_std[subj_idx][name] = np.std(subj_dist.trace())

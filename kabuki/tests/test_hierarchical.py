@@ -46,13 +46,15 @@ class TestHierarchical(unittest.TestCase):
         self.num_subjs = 5
         self.subjs = range(self.num_subjs)
         pts_per_subj = 100
-        self.data = np.empty(self.num_subjs*pts_per_subj, dtype=([('subj_idx',np.int), ('score',np.float), ('dep', 'S8')]))
+        self.data = np.empty(self.num_subjs*pts_per_subj, dtype=([('subj_idx',np.int), ('score',np.float), ('dep', 'S8'), ('foo','S8')]))
 
         for subj in self.subjs:
             self.data['subj_idx'][subj*pts_per_subj:(subj+1)*pts_per_subj] = subj
             self.data['score'][subj*pts_per_subj:(subj+1)*pts_per_subj] = subj
             self.data['dep'][subj*pts_per_subj:(subj+1)*pts_per_subj] = 'dep1'
             self.data['dep'][subj*pts_per_subj+pts_per_subj/2:(subj+1)*pts_per_subj] = 'dep2'
+            self.data['foo'][subj*pts_per_subj:(subj+1)*pts_per_subj] = 'bar1'
+            self.data['foo'][subj*pts_per_subj+pts_per_subj/2:(subj+1)*pts_per_subj] = 'bar2'
 
     def setUp(self):
         self.test_model_one_param = TestClassOneParam(self.data)
@@ -63,16 +65,20 @@ class TestHierarchical(unittest.TestCase):
 
         self.test_model_two_param_dep2 = TestClassTwoParam(self.data, depends_on={'test2':['dep']})
 
+        self.test_model_two_param_dep_dual = TestClassTwoParam(self.data, depends_on={'test2':['dep','foo']})
+
     def test_passing_depends_on(self):
         self.assertEqual(self.test_model_one_param_dep.depends_on, {'test':['dep']})
         self.assertEqual(self.test_model_two_param_dep.depends_on, {'test':['dep']})
         self.assertEqual(self.test_model_two_param_dep2.depends_on, {'test2':['dep']})
-
+        self.assertEqual(self.test_model_two_param_dep_dual.depends_on, {'test2':['dep', 'foo']})
+        
     def test_get_data_depend(self):
         self.tst_get_data_depend(self.test_model_one_param_dep)
         self.tst_get_data_depend(self.test_model_two_param_dep)
         self.tst_get_data_depend(self.test_model_two_param_dep2)
-
+        self.tst_get_data_depend(self.test_model_two_param_dep_dual)
+        
     def tst_get_data_depend(self, model):
         model._set_params()
         
