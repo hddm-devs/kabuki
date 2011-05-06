@@ -16,7 +16,7 @@ class Hierarchical(object):
     This class can best be used with the @hierarchical decorator
     applied to a user-defined class providing parameter creation
     functions (e.g. see models.ANOVA)."""
-    def __init__(self, data, is_hierarchical=None, depends_on=None):
+    def __init__(self, data, is_group_model=None, depends_on=None):
         """Initialize hierarchical model.
 
         Arguments:
@@ -27,7 +27,7 @@ class Hierarchical(object):
         Keyword arguments:
         ==================
 
-        is_hierarchical <bool>: Model is a subject model. This results
+        is_group_model <bool>: Model is a subject model. This results
         in a hierarchical model with distributions for each parameter
         for each subject whose parameters are themselves distributed
         according to a group parameter distribution.
@@ -58,13 +58,13 @@ class Hierarchical(object):
         else:
             self.depends_on = depends_on
 
-        if is_hierarchical is None:
-            self.is_hierarchical = 'subj_idx' in data.dtype.names
+        if is_group_model is None:
+            self.is_group_model = 'subj_idx' in data.dtype.names
         else:
-            self.is_hierarchical = is_hierarchical
+            self.is_group_model = is_group_model
 
         # Should the model incorporate multiple subjects
-        if self.is_hierarchical:
+        if self.is_group_model:
             self._subjs = np.unique(data['subj_idx'])
             self._num_subjs = self._subjs.shape[0]
 
@@ -82,7 +82,7 @@ class Hierarchical(object):
         List of tuples with the data, the corresponding parameter
         distribution and the parameter name."""
         
-        if self.is_hierarchical and not get_group_params:
+        if self.is_group_model and not get_group_params:
             params = copy(self.child_nodes) # use subj parameters to feed into model
         else:
             params = copy(self.root_nodes) # use group parameters to feed into model
@@ -109,10 +109,10 @@ class Hierarchical(object):
                 data_dep = data[data[col_name] == depend_element]
                 # Add a key that is only the col_name that links to
                 # the correct dependent nodes. This is the central
-                # trick so that later on the get_observed can use
+                # trick so that later on the get_rootless_child can use
                 # params[col_name] and the observed will get linked to
                 # the correct nodes automatically.
-                if self.is_hierarchical and not get_group_params:
+                if self.is_group_model and not get_group_params:
                     params[param_name] = self.child_nodes[param_name+str(depend_element)]
                 else:
                     params[param_name] = self.root_nodes[param_name+str(depend_element)]
@@ -128,6 +128,32 @@ class Hierarchical(object):
         else: # Data does not depend on anything (anymore)
             return [(data, params, param_name)]
 
+    def create(self):
+        """Set group level distributions. One distribution for each
+        parameter."""
+        for param_name, has_root in self.param_names: # Loop through param names
+            if has_root:
+                # Check if parameter depends on data
+                if param_name in self.depends_on.keys():
+                    self._set_dependent_param(param_name)
+                else:
+                    self._set_independet_param(param_name)
+            else:
+                self._set_rootless_child_nodes(param_name)
+
+        # Create model dictionary
+        nodes = {}
+        for name,node in self.root_nodes.iteritems():
+            nodes[name] = node
+
+        for name,node in self.child_nodes.iteritems():
+            nodes[name] = node
+        for name,node in self.root_nodes_tau.iteritems():
+            nodes[name] = node
+
+        return nodes
+
+    
     def _set_dependent_param(self, param_name):
         """Set parameter that depends on data.
 
@@ -154,13 +180,10 @@ class Hierarchical(object):
             param_tag = '%s%s'%(param_name, tag)
 
             # Create parameter distribution from factory
-            self.root_nodes[param_tag] = self.get_root_node(param_name,
-                                                             self.root_nodes,
-                                                             tag,
-                                                             data_dep_select)
+            self.root_nodes[param_tag] = self.get_root_node(param_name, self.root_nodes, tag, data_dep_select)
             self.root_nodes_dep[param_name].append(param_tag)
             
-            if self.is_hierarchical:
+            if self.is_group_model:
                 # Create appropriate subj parameter
                 self._set_child_nodes(param_name, tag, data_dep_select)
 
@@ -171,38 +194,10 @@ class Hierarchical(object):
         # Set group parameter
         self.root_nodes[param_name] = self.get_root_node(param_name, self.root_nodes, '', self.data)
 
-        if self.is_hierarchical:
+        if self.is_group_model:
             self._set_child_nodes(param_name, '', self.data)
         
         return self
-
-    def create(self):
-        """Set group level distributions. One distribution for each
-        parameter."""
-        for param_name in self.param_names: # Loop through param names
-            # Check if parameter depends on data
-            if param_name in self.depends_on.keys():
-                self._set_dependent_param(param_name)
-            else:
-                self._set_independet_param(param_name)
-
-        self._set_observeds()
-
-        # Create model dictionary
-        nodes = {}
-        for name,node in self.root_nodes.iteritems():
-            nodes[name] = node
-
-        if self.is_hierarchical:
-            for name,node in self.child_nodes.iteritems():
-                nodes[name] = node
-            for name,node in self.root_nodes_tau.iteritems():
-                nodes[name] = node
-
-        for name,node in self.observeds.iteritems():
-            nodes[name] = node
-            
-        return nodes
 
     def _set_child_nodes(self, param_name, tag, data):
         param_name_full = '%s%s' % (param_name, tag)
@@ -218,50 +213,47 @@ class Hierarchical(object):
         # Create subj parameter distribution for each subject
         for subj_idx,subj in enumerate(self._subjs):
             data_subj = data[data['subj_idx']==subj_idx]
-            self.child_nodes[param_name_full][subj_idx] = self.get_child_node(param_name,
-                                                                              param_inst,
-                                                                              param_inst_tau,
-                                                                              subj_idx,
-                                                                              self.child_nodes,
-                                                                              tag,
-                                                                              data_subj)                                                       
+            self.child_nodes[param_name_full][subj_idx] = self.get_child_node(param_name, param_inst, param_inst_tau, subj_idx,
+                                                                              self.child_nodes, tag, data_subj)
         return self
     
-    def _set_observeds(self):
+    def _set_rootless_child_nodes(self, param_name):
         """Create and set up the complete model."""
         # Divide data and parameter distributions according to self.depends_on
         data_dep = self._get_data_depend()
         self.observeds = {}
         # Loop through parceled data and params and create an observed stochastic
-        for i, (data, params, param_name) in enumerate(data_dep):
+        for i, (data, params_dep, param_dep_name) in enumerate(data_dep):
             if param_name is None:
                 param_name = ''
-            self.observeds['observed_%s%i'%(param_name,i)] = self._create_observed(data, params, param_name, i)
+            self.child_nodes['%s%i'%(param_name,i)] = self._create_rootless_child_node(param_name, data, params_dep, param_dep_name, i)
             
         return self
         
-    def _create_observed(self, data, params, param_dep_name, idx):
+    def _create_rootless_child_node(self, param_name, data, params, child_depends_on, idx):
         """Create and return observed distribution where data depends
         on params.
         """
-        if self.is_hierarchical:
+        if self.is_group_model:
             # Create observed stochastic for each subject
-            observed = np.empty(self._num_subjs, dtype=object)
+            rootless_child_node = np.empty(self._num_subjs, dtype=object)
             for i,subj in enumerate(self._subjs):
                 # Select data belonging to subj
-                data_subj = data[data['subj_idx'] == subj] 
+                data_subj = data[data['subj_idx'] == subj]
                 # Select params belonging to subject
-                params_subj = {}
-                for param_name, param_nodes in self.child_nodes.iteritems():
-                    params_subj[param_name] = param_nodes[i]
-                if param_dep_name == '':
-                    params_subj[param_dep_name] = params[param_dep_name][i] # We have to overwrite the dependent one separately
+                selected_child_nodes = {}
+                # Create new params dict and copy over nodes
+                for name, nodes in self.child_nodes.iteritems():
+                    selected_child_nodes[name] = nodes[i]
+                if child_depends_on != '':
+                    selected_child_nodes[child_depends_on] = params[child_depends_on][i] # We have to overwrite the dependent one separately
                 # Call to the user-defined function!
-                observed[i] = self.get_observed("observed_%s%i_%i"%(param_dep_name, idx, i), data_subj, params_subj, idx=i)
+                rootless_child_node[i] = self.get_rootless_child(param_name, "%s%i_%i"%(child_depends_on, idx, i), data_subj, selected_child_nodes, idx=i)
         else: # Do not use subj params, but group ones
-            observed = self.get_observed("observed_%s%i"%(param_dep_name, idx), data, params)
+            rootless_child_node = self.get_rootless_child(param_name, "%s%i"%(child_depends_on, idx), data, params)
+            print rootless_child_node
 
-        return observed
+        return rootless_child_node
 
     def summary(self, delimiter=None):
         """Return summary statistics of the group parameter distributions."""
