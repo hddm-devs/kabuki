@@ -224,7 +224,7 @@ class Hierarchical(object):
         for i, (data, params_dep, param_dep_name) in enumerate(data_dep):
             if param_dep_name is None:
                 param_dep_name = ''
-            self.child_nodes['%s%i'%(param_name,i)] = self._create_rootless_child_node(param_name, data, params_dep, param_dep_name, i)
+            self.child_nodes[param_name] = self._create_rootless_child_node(param_name, data, params_dep, param_dep_name, i)
             
         return self
         
