@@ -245,13 +245,12 @@ class Hierarchical(object):
                 # Create new params dict and copy over nodes
                 for name, nodes in self.child_nodes.iteritems():
                     selected_child_nodes[name] = nodes[i]
-                if child_depends_on != '':
+                if child_depends_on != None:
                     selected_child_nodes[child_depends_on] = params[child_depends_on][i] # We have to overwrite the dependent one separately
                 # Call to the user-defined function!
                 rootless_child_node[i] = self.get_rootless_child(param_name, "%s%i_%i"%(child_depends_on, idx, i), data_subj, selected_child_nodes, idx=i)
         else: # Do not use subj params, but group ones
             rootless_child_node = self.get_rootless_child(param_name, "%s%i"%(child_depends_on, idx), data, params)
-            print rootless_child_node
 
         return rootless_child_node
 
