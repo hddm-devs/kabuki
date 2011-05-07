@@ -144,12 +144,11 @@ class Hierarchical(object):
         # Create model dictionary
         nodes = {}
         for name,node in self.root_nodes.iteritems():
-            nodes[name] = node
-
+            nodes[name+'_root'] = node
         for name,node in self.child_nodes.iteritems():
-            nodes[name] = node
+            nodes[name+'_childs'] = node
         for name,node in self.root_nodes_tau.iteritems():
-            nodes[name] = node
+            nodes[name+'_tau'] = node
 
         return nodes
 
@@ -201,15 +200,14 @@ class Hierarchical(object):
 
     def _set_child_nodes(self, param_name, tag, data):
         param_name_full = '%s%s' % (param_name, tag)
-        # Init
-        self.child_nodes[param_name_full] = np.empty(self._num_subjs, dtype=object)
-
         # Generate subj variability parameter tau
         param_inst_tau = self.get_tau_node(param_name_full, self.root_nodes_tau, 'tau')
         self.root_nodes_tau[param_name_full] = param_inst_tau
 
         param_inst = self.root_nodes[param_name_full]
 
+        # Init
+        self.child_nodes[param_name_full] = np.empty(self._num_subjs, dtype=object)
         # Create subj parameter distribution for each subject
         for subj_idx,subj in enumerate(self._subjs):
             data_subj = data[data['subj_idx']==subj_idx]
@@ -224,8 +222,8 @@ class Hierarchical(object):
         self.observeds = {}
         # Loop through parceled data and params and create an observed stochastic
         for i, (data, params_dep, param_dep_name) in enumerate(data_dep):
-            if param_name is None:
-                param_name = ''
+            if param_dep_name is None:
+                param_dep_name = ''
             self.child_nodes['%s%i'%(param_name,i)] = self._create_rootless_child_node(param_name, data, params_dep, param_dep_name, i)
             
         return self
@@ -245,12 +243,12 @@ class Hierarchical(object):
                 # Create new params dict and copy over nodes
                 for name, nodes in self.child_nodes.iteritems():
                     selected_child_nodes[name] = nodes[i]
-                if child_depends_on != None:
+                if child_depends_on != '':
                     selected_child_nodes[child_depends_on] = params[child_depends_on][i] # We have to overwrite the dependent one separately
                 # Call to the user-defined function!
                 rootless_child_node[i] = self.get_rootless_child(param_name, "%s%i_%i"%(child_depends_on, idx, i), data_subj, selected_child_nodes, idx=i)
         else: # Do not use subj params, but group ones
-            rootless_child_node = self.get_rootless_child(param_name, "%s%i"%(child_depends_on, idx), data, params)
+            rootless_child_node = self.get_rootless_child(param_name, "%s"%child_depends_on, data, params)
 
         return rootless_child_node
 
