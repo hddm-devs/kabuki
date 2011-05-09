@@ -56,6 +56,11 @@ class Hierarchical(object):
         if depends_on is None:
             self.depends_on = {}
         else:
+            # Check if column names exist in data
+            for depend_on in depends_on.itervalues():
+                for elem in depend_on:
+                    if elem not in self.data.dtype.names:
+                        raise KeyError, "Column named %s not found in data." % depend_on
             self.depends_on = depends_on
 
         if is_group_model is None:
@@ -90,7 +95,7 @@ class Hierarchical(object):
         depends_on = copy(self.depends_on)
 
         # Make call to recursive function that does the partitioning
-        data_dep = self._get_data_depend_rec(self.data, depends_on, params, '', get_group_params=get_group_params)
+        data_dep = self._get_data_depend_rec(self.data, depends_on, params, [], get_group_params=get_group_params)
 
         return data_dep
     
@@ -105,6 +110,8 @@ class Hierarchical(object):
             depend_elements = np.unique(data[col_name])
             # Loop through unique elements
             for depend_element in depend_elements:
+                # Append dependent element name.
+                dep_name.append(depend_element)
                 # Extract rows containing unique element
                 data_dep = data[data[col_name] == depend_element]
                 # Add a key that is only the col_name that links to
@@ -120,14 +127,17 @@ class Hierarchical(object):
                 data_param = self._get_data_depend_rec(data_dep,
                                                        depends_on=copy(depends_on),
                                                        params=copy(params),
-                                                       dep_name = str(depend_element),
+                                                       dep_name = copy(dep_name),
                                                        param_name=param_name,
                                                        get_group_params=get_group_params)
                 data_params += data_param
+                # Remove last item (otherwise we would always keep
+                # adding the dep elems of in one column)
+                dep_name.pop()
             return data_params
                 
         else: # Data does not depend on anything (anymore)
-            return [(data, params, param_name, dep_name)]
+            return [(data, params, dep_name)]
 
     def create(self):
         """Set group level distributions. One distribution for each
@@ -164,6 +174,7 @@ class Hierarchical(object):
 
         # Get column names for provided param_name
         depends_on = self.depends_on[param_name]
+
         # Get unique elements from the columns
         data_dep = self.data[depends_on]
         uniq_data_dep = np.unique(data_dep)
@@ -220,15 +231,13 @@ class Hierarchical(object):
         # Divide data and parameter distributions according to self.depends_on
         data_dep = self._get_data_depend()
         # Loop through parceled data and params and create an observed stochastic
-        for i, (data, params_dep, param_dep_name, dep_name) in enumerate(data_dep):
-            kabuki.debug_here()
-            if param_dep_name is None:
-                param_dep_name = ''
-            self.child_nodes[param_name+dep_name] = self._create_rootless_child_node(param_name, data, params_dep, param_dep_name, dep_name, i)
+        for i, (data, params_dep, dep_name) in enumerate(data_dep):
+            dep_name = str(dep_name)
+            self.child_nodes[param_name+dep_name] = self._create_rootless_child_node(param_name, data, params_dep, dep_name, i)
             
         return self
         
-    def _create_rootless_child_node(self, param_name, data, params, child_depends_on, dep_name, idx):
+    def _create_rootless_child_node(self, param_name, data, params, dep_name, idx):
         """Create and return observed distribution where data depends
         on params.
         """
@@ -242,12 +251,29 @@ class Hierarchical(object):
                 selected_child_nodes = {}
                 # Create new params dict and copy over nodes
                 for name, nodes in self.child_nodes.iteritems():
+                    # Since rootless nodes are not created in this function we
+                    # have to search for the correct node and include it in
+                    # the params.
+                    for model_param_name, has_root in self.param_names:
+                        if has_root:
+                            continue
+                        if name == model_param_name + dep_name:
+                            selected_child_nodes[model_param_name] = nodes[i]
+                    
                     selected_child_nodes[name] = nodes[i]
-                if child_depends_on != '':
-                    selected_child_nodes[child_depends_on] = params[child_depends_on][i] # We have to overwrite the dependent one separately
                 # Call to the user-defined function!
                 rootless_child_node[i] = self.get_rootless_child(param_name, "%s%i"%(dep_name, idx), data_subj, selected_child_nodes, idx=i)
         else: # Do not use subj params, but group ones
+            # Since rootless nodes are not created in this function we
+            # have to search for the correct node and include it in
+            # the params
+            for name, nodes in self.child_nodes.iteritems():
+                for model_param_name, has_root in self.param_names:
+                    if has_root:
+                        continue
+                    if name == model_param_name + dep_name:
+                        params[model_param_name] = nodes
+
             rootless_child_node = self.get_rootless_child(param_name, "%s"%dep_name, data, params)
 
         return rootless_child_node
