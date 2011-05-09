@@ -90,11 +90,11 @@ class Hierarchical(object):
         depends_on = copy(self.depends_on)
 
         # Make call to recursive function that does the partitioning
-        data_dep = self._get_data_depend_rec(self.data, depends_on, params, get_group_params=get_group_params)
+        data_dep = self._get_data_depend_rec(self.data, depends_on, params, '', get_group_params=get_group_params)
 
         return data_dep
     
-    def _get_data_depend_rec(self, data, depends_on, params, param_name=None, get_group_params=False):
+    def _get_data_depend_rec(self, data, depends_on, params, dep_name, param_name=None, get_group_params=False):
         """Recursive function to partition data and params according
         to depends_on."""
         if len(depends_on) != 0: # If depends are present
@@ -120,13 +120,14 @@ class Hierarchical(object):
                 data_param = self._get_data_depend_rec(data_dep,
                                                        depends_on=copy(depends_on),
                                                        params=copy(params),
+                                                       dep_name = str(depend_element),
                                                        param_name=param_name,
                                                        get_group_params=get_group_params)
                 data_params += data_param
             return data_params
                 
         else: # Data does not depend on anything (anymore)
-            return [(data, params, param_name)]
+            return [(data, params, param_name, dep_name)]
 
     def create(self):
         """Set group level distributions. One distribution for each
@@ -151,7 +152,6 @@ class Hierarchical(object):
             nodes[name+'_tau'] = node
 
         return nodes
-
     
     def _set_dependent_param(self, param_name):
         """Set parameter that depends on data.
@@ -211,24 +211,24 @@ class Hierarchical(object):
         # Create subj parameter distribution for each subject
         for subj_idx,subj in enumerate(self._subjs):
             data_subj = data[data['subj_idx']==subj_idx]
-            self.child_nodes[param_name_full][subj_idx] = self.get_child_node(param_name, param_inst, param_inst_tau, subj_idx,
-                                                                              self.child_nodes, tag, data_subj)
+            self.child_nodes[param_name_full][subj_idx] = self.get_child_node(param_name, param_inst, param_inst_tau, 
+                                                                              subj_idx, self.child_nodes, tag, data_subj)
         return self
     
     def _set_rootless_child_nodes(self, param_name):
         """Create and set up the complete model."""
         # Divide data and parameter distributions according to self.depends_on
         data_dep = self._get_data_depend()
-        self.observeds = {}
         # Loop through parceled data and params and create an observed stochastic
-        for i, (data, params_dep, param_dep_name) in enumerate(data_dep):
+        for i, (data, params_dep, param_dep_name, dep_name) in enumerate(data_dep):
+            kabuki.debug_here()
             if param_dep_name is None:
                 param_dep_name = ''
-            self.child_nodes[param_name+param_dep_name] = self._create_rootless_child_node(param_name, data, params_dep, param_dep_name, i)
+            self.child_nodes[param_name+dep_name] = self._create_rootless_child_node(param_name, data, params_dep, param_dep_name, dep_name, i)
             
         return self
         
-    def _create_rootless_child_node(self, param_name, data, params, child_depends_on, idx):
+    def _create_rootless_child_node(self, param_name, data, params, child_depends_on, dep_name, idx):
         """Create and return observed distribution where data depends
         on params.
         """
@@ -246,9 +246,9 @@ class Hierarchical(object):
                 if child_depends_on != '':
                     selected_child_nodes[child_depends_on] = params[child_depends_on][i] # We have to overwrite the dependent one separately
                 # Call to the user-defined function!
-                rootless_child_node[i] = self.get_rootless_child(param_name, "%s%i_%i"%(child_depends_on, idx, i), data_subj, selected_child_nodes, idx=i)
+                rootless_child_node[i] = self.get_rootless_child(param_name, "%s%i"%(dep_name, idx), data_subj, selected_child_nodes, idx=i)
         else: # Do not use subj params, but group ones
-            rootless_child_node = self.get_rootless_child(param_name, "%s"%child_depends_on, data, params)
+            rootless_child_node = self.get_rootless_child(param_name, "%s"%dep_name, data, params)
 
         return rootless_child_node
 
