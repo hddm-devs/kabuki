@@ -10,8 +10,6 @@ import kabuki
 
 #@hierarchical
 class Prototype(kabuki.Hierarchical):
-    param_names = None
-
     def __init__(self, data, **kwargs):
         self.data = data
 

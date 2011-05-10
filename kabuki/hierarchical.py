@@ -16,22 +16,13 @@ class Parameter(object):
         self.has_root = has_root
         self.tags = []
 
-        if self.has_root:
-            self.root_nodes = OrderedDict()
-
+        self.root_nodes = OrderedDict()
         self.tau_nodes = OrderedDict()
         self.child_nodes = OrderedDict()
-
-    def get_full_name(self):
-        return 
-        
-    def add_tag(self, tag):
-        self.tags.append(tag)
 
     def __repr__(self):
         return object.__repr__(self).replace(' object ', " '%s' "%self.name)
 
-    full_name = property(get_full_name)
     
 class Hierarchical(object):
     """Class that builds hierarchical bayesian models."""
@@ -93,7 +84,7 @@ class Hierarchical(object):
             self._subjs = np.unique(data['subj_idx'])
             self._num_subjs = self._subjs.shape[0]
         
-    def _get_data_depend(self, get_root_nodes=False):
+    def _get_data_depend(self):
         """Partition data according to self.depends_on.
 
         Returns:
@@ -105,19 +96,21 @@ class Hierarchical(object):
         params = {} # use subj parameters to feed into model
         # Create new params dict and copy over nodes
         for param in self.params:
-            if param.name in self.depends_on:
+            if param.name in self.depends_on or not param.has_root:
                 continue
-            if get_root_nodes or not self.is_group_model:
-                params[param.name] = param.root_nodes['']
-            else:
+            if self.is_group_model:
                 params[param.name] = param.child_nodes['']
+            else:
+                params[param.name] = param.root_nodes['']
+
+        depends_on = copy(self.depends_on)
 
         # Make call to recursive function that does the partitioning
-        data_dep = self._get_data_depend_rec(self.data, depends_on, params, [], get_group_params=get_group_params)
+        data_dep = self._get_data_depend_rec(self.data, depends_on, params, [], get_root_nodes=self.is_group_model)
 
         return data_dep
     
-    def _get_data_depend_rec(self, data, depends_on, params, dep_name, param_name=None, get_group_params=False):
+    def _get_data_depend_rec(self, data, depends_on, params, dep_name, param=None, get_root_nodes=False):
         """Recursive function to partition data and params according
         to depends_on."""
         if len(depends_on) != 0: # If depends are present
@@ -138,17 +131,21 @@ class Hierarchical(object):
                 # trick so that later on the get_rootless_child can use
                 # params[col_name] and the observed will get linked to
                 # the correct nodes automatically.
+                # Find param
+                for param in self.params:
+                    if param.name == param_name:
+                        break
                 if self.is_group_model and not get_group_params:
-                    params[param_name] = self.params[param_name].child_nodes[str(depend_element)]
+                    params[param_name] = param.child_nodes[str(depend_element)]
                 else:
-                    params[param_name] = self.params[param_name].root_nodes[str(depend_element)]
+                    params[param_name] = param.root_nodes[str(depend_element)]
                 # Recursive call with one less dependency and the selected data.
                 data_param = self._get_data_depend_rec(data_dep,
                                                        depends_on=copy(depends_on),
                                                        params=copy(params),
                                                        dep_name = copy(dep_name),
-                                                       param_name=param_name,
-                                                       get_group_params=get_group_params)
+                                                       param = param,
+                                                       get_root_nodes=get_root_nodes)
                 data_params += data_param
                 # Remove last item (otherwise we would always keep
                 # adding the dep elems of in one column)
@@ -162,7 +159,7 @@ class Hierarchical(object):
         """Set group level distributions. One distribution for each
         parameter."""
         for param in self.params: # Loop through param names
-            kabuki.debug_here()
+            #kabuki.debug_here()
             if param.has_root:
                 # Check if parameter depends on data
                 if param.name in self.depends_on.keys():
@@ -174,12 +171,13 @@ class Hierarchical(object):
 
         # Create model dictionary
         nodes = {}
-        for name,node in self.root_nodes.iteritems():
-            nodes[name+'_root'] = node
-        for name,node in self.child_nodes.iteritems():
-            nodes[name+'_childs'] = node
-        for name,node in self.root_nodes_tau.iteritems():
-            nodes[name+'_tau'] = node
+        for param in self.params:
+            for node in param.root_nodes.itervalues():
+                nodes[node.__name__+'_root'] = node
+            for node in param.child_nodes.itervalues():
+                nodes[node.__name__+'_child'] = node
+            for node in param.tau_nodes.iteritems():
+                nodes[node.__name__+'_tau'] = node
 
         return nodes
     
@@ -280,14 +278,13 @@ class Hierarchical(object):
             # Since rootless nodes are not created in this function we
             # have to search for the correct node and include it in
             # the params
-            for name, nodes in self.child_nodes.iteritems():
-                for model_param_name, has_root in self.param_names:
-                    if has_root:
-                        continue
-                    if name == model_param_name + dep_name:
-                        params[model_param_name] = nodes
+            for param in self.params:
+                if param.has_root:
+                    continue
+                if param.child_nodes.has_key(dep_name):
+                    params[param.name] = param.child_nodes[dep_name]
 
-            rootless_child_node = self.get_rootless_child(param_name, "%s"%dep_name, data, params)
+            rootless_child_node = self.get_rootless_child(param.name, "%s"%dep_name, data, params)
 
         return rootless_child_node
 
