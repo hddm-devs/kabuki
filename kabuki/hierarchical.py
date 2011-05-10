@@ -14,7 +14,6 @@ class Parameter(object):
     def __init__(self, name, has_root=True):
         self.name = name
         self.has_root = has_root
-        self.tags = []
 
         self.root_nodes = OrderedDict()
         self.tau_nodes = OrderedDict()
@@ -159,22 +158,25 @@ class Hierarchical(object):
         """Set group level distributions. One distribution for each
         parameter."""
         for param in self.params: # Loop through param names
-            if param.has_root:
-                # Check if parameter depends on data
-                if param.name in self.depends_on.keys():
-                    self._set_dependent_param(param)
-                else:
-                    self._set_independet_param(param)
+            if not param.has_root:
+                continue
+            # Check if parameter depends on data
+            if param.name in self.depends_on.keys():
+                self._set_dependent_param(param)
+            else:
+                self._set_independet_param(param)
 
         # Init rootless nodes
         for param in self.params:
-            if not param.has_root:
-                self._set_rootless_child_nodes(param, init=True)
+            if param.has_root:
+                continue
+            self._set_rootless_child_nodes(param, init=True)
 
         # Create rootless nodes
         for param in self.params:
-            if not param.has_root:
-                self._set_rootless_child_nodes(param, init=False)
+            if param.has_root:
+                continue
+            self._set_rootless_child_nodes(param, init=False)
 
         # Create model dictionary
         nodes = {}
@@ -213,7 +215,7 @@ class Hierarchical(object):
             tag = str(uniq_date)
 
             # Create parameter distribution from factory
-            param.root_nodes[tag] = self.get_root_node(param.name, self.params, tag, data_dep_select)
+            param.root_nodes[tag] = self.get_root_node(param, tag, data_dep_select)
             
             if self.is_group_model:
                 # Create appropriate subj parameter
@@ -224,7 +226,7 @@ class Hierarchical(object):
     def _set_independet_param(self, param):
         # Parameter does not depend on data
         # Set group parameter
-        param.root_nodes[''] = self.get_root_node(param.name, self.params, '', self.data)
+        param.root_nodes[''] = self.get_root_node(param, '', self.data)
 
         if self.is_group_model:
             self._set_child_nodes(param, '', self.data)
@@ -233,15 +235,16 @@ class Hierarchical(object):
 
     def _set_child_nodes(self, param, tag, data):
         # Generate subj variability parameter tau
-        param.tau_nodes[tag] = self.get_tau_node(param.name, self.params, 'tau')
+        param.tau_nodes[tag] = self.get_tau_node(param, 'tau')
 
         # Init
         param.child_nodes[tag] = np.empty(self._num_subjs, dtype=object)
         # Create subj parameter distribution for each subject
         for subj_idx,subj in enumerate(self._subjs):
             data_subj = data[data['subj_idx']==subj_idx]
-            param.child_nodes[tag][subj_idx] = self.get_child_node(param.name, param.root_nodes[tag], param.tau_nodes[tag], 
-                                                                   subj_idx, self.params, tag, data_subj)
+            param.child_nodes[tag][subj_idx] = self.get_child_node(param, param.root_nodes[tag],
+                                                                   param.tau_nodes[tag], subj_idx, tag,
+                                                                   data_subj)
         return self
     
     def _set_rootless_child_nodes(self, param, init=False):
@@ -283,7 +286,7 @@ class Hierarchical(object):
                         selected_child_nodes[selected_param.name] = params[selected_param.name][i]
 
                 # Call to the user-defined function!
-                param.child_nodes[dep_name][i] = self.get_rootless_child(param.name, "%s%i"%(dep_name, i), data_subj, selected_child_nodes, idx=i)
+                param.child_nodes[dep_name][i] = self.get_rootless_child(param, "%s%i"%(dep_name, i), data_subj, selected_child_nodes, idx=i)
         else: # Do not use subj params, but group ones
             # Since rootless nodes are not created in this function we
             # have to search for the correct node and include it in
@@ -292,7 +295,7 @@ class Hierarchical(object):
                 if selected_param.child_nodes.has_key(dep_name):
                     params[selected_param.name] = selected_param.child_nodes[dep_name]
 
-            param.child_nodes[dep_name] = self.get_rootless_child(param.name, "%s"%dep_name, data, params)
+            param.child_nodes[dep_name] = self.get_rootless_child(param, "%s"%dep_name, data, params)
 
         return self
 
