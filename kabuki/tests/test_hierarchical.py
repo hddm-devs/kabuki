@@ -1,21 +1,23 @@
 import kabuki
+from kabuki.hierarchical import Parameter
 import numpy as np
 import unittest
 import pymc as pm
 
 class TestClassOneParam(kabuki.Hierarchical):
-    param_names = ('test',)
+    params = (Parameter('test', True), 
+              Parameter('observed', False))
         
-    def get_root_param(self, param, all_params, tag, data, pos=None):
+    def get_root_node(self, param, all_params, tag, data):
         return pm.Uniform('%s%s'% (param,tag), lower=0, upper=1)
 
-    def get_tau_param(self, param, all_params, tag):
+    def get_tau_node(self, param, all_params, tag):
         return pm.Uniform('%s%s'% (param,tag), lower=0, upper=10)
     
-    def get_subj_param(self, param_name, parent_mean, parent_tau, subj_idx, all_params, tag, data, pos=None):
+    def get_child_node(self, param_name, parent_mean, parent_tau, subj_idx, all_params, tag, data, pos=None):
         return pm.Normal('%s%s%i'%(param_name, tag, subj_idx), mu=parent_mean, tau=parent_tau)
 
-    def get_observed(self, name, subj_data, params, idx=None, pos=None):
+    def get_rootless_child(self, name, subj_data, params, idx=None):
         return pm.Normal('%s%i' % (name,idx), mu=params['test'], tau=1, value=subj_data['score'], observed=True)
 
 class TestClassTwoParam(kabuki.Hierarchical):
