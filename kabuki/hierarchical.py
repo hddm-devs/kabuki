@@ -159,25 +159,32 @@ class Hierarchical(object):
         """Set group level distributions. One distribution for each
         parameter."""
         for param in self.params: # Loop through param names
-            #kabuki.debug_here()
             if param.has_root:
                 # Check if parameter depends on data
                 if param.name in self.depends_on.keys():
                     self._set_dependent_param(param)
                 else:
                     self._set_independet_param(param)
-            else:
-                self._set_rootless_child_nodes(param)
+
+        # Init rootless nodes
+        for param in self.params:
+            if not param.has_root:
+                self._set_rootless_child_nodes(param, init=True)
+
+        # Create rootless nodes
+        for param in self.params:
+            if not param.has_root:
+                self._set_rootless_child_nodes(param, init=False)
 
         # Create model dictionary
         nodes = {}
         for param in self.params:
-            for node in param.root_nodes.itervalues():
-                nodes[node.__name__+'_root'] = node
-            for node in param.child_nodes.itervalues():
-                nodes[node.__name__+'_child'] = node
-            for node in param.tau_nodes.iteritems():
-                nodes[node.__name__+'_tau'] = node
+            for tag, node in param.root_nodes.iteritems():
+                nodes[param.name+tag+'_root'] = node
+            for tag, node in param.child_nodes.iteritems():
+                nodes[param.name+tag+'_child'] = node
+            for tag, node in param.tau_nodes.iteritems():
+                nodes[param.name+tag+'_tau'] = node
 
         return nodes
     
@@ -226,25 +233,32 @@ class Hierarchical(object):
 
     def _set_child_nodes(self, param, tag, data):
         # Generate subj variability parameter tau
-        param.tau_nodes[tag] = self.get_tau_node(param.name, self.root_nodes_tau, 'tau')
+        param.tau_nodes[tag] = self.get_tau_node(param.name, self.params, 'tau')
 
         # Init
         param.child_nodes[tag] = np.empty(self._num_subjs, dtype=object)
         # Create subj parameter distribution for each subject
         for subj_idx,subj in enumerate(self._subjs):
             data_subj = data[data['subj_idx']==subj_idx]
-            param.child_nodes[subj_idx] = self.get_child_node(param.name, param.root_nodes[tag], param.tau_nodes[tag], 
-                                                              subj_idx, self.child_nodes, tag, data_subj)
+            param.child_nodes[tag][subj_idx] = self.get_child_node(param.name, param.root_nodes[tag], param.tau_nodes[tag], 
+                                                                   subj_idx, self.params, tag, data_subj)
         return self
     
-    def _set_rootless_child_nodes(self, param):
+    def _set_rootless_child_nodes(self, param, init=False):
         """Create and set up the complete model."""
         # Divide data and parameter distributions according to self.depends_on
         data_dep = self._get_data_depend()
+
         # Loop through parceled data and params and create an observed stochastic
         for i, (data, params_dep, dep_name) in enumerate(data_dep):
             dep_name = str(dep_name)
-            param.child_nodes[dep_name] = self._create_rootless_child_node(param.name, data, params_dep, dep_name, i)
+            if init:
+                if self.is_group_model:
+                    param.child_nodes[dep_name] = np.empty(self._num_subjs, dtype=object)
+                else:
+                    param.child_nodes[dep_name] = None
+            else:
+                self._create_rootless_child_node(param, data, params_dep, dep_name, i)
             
         return self
         
@@ -253,40 +267,34 @@ class Hierarchical(object):
         on params.
         """
         if self.is_group_model:
-            # Create observed stochastic for each subject
-            rootless_child_node = np.empty(self._num_subjs, dtype=object)
             for i,subj in enumerate(self._subjs):
                 # Select data belonging to subj
                 data_subj = data[data['subj_idx'] == subj]
                 # Select params belonging to subject
                 selected_child_nodes = {}
                 # Create new params dict and copy over nodes
-                for name, nodes in self.child_nodes.iteritems():
+                for selected_param in self.params:
                     # Since rootless nodes are not created in this function we
                     # have to search for the correct node and include it in
                     # the params.
-                    for model_param_name, has_root in self.param_names:
-                        if has_root:
-                            continue
-                        if name == model_param_name + dep_name:
-                            selected_child_nodes[model_param_name] = nodes[i]
-                    
-                    selected_child_nodes[name] = nodes[i]
+                    if selected_param.child_nodes.has_key(dep_name):
+                        selected_child_nodes[selected_param.name] = selected_param.child_nodes[dep_name][i]
+                    else:
+                        selected_child_nodes[selected_param.name] = params[selected_param.name][i]
+
                 # Call to the user-defined function!
-                rootless_child_node[i] = self.get_rootless_child(param_name, "%s%i"%(dep_name, idx), data_subj, selected_child_nodes, idx=i)
+                param.child_nodes[dep_name][i] = self.get_rootless_child(param.name, "%s%i"%(dep_name, i), data_subj, selected_child_nodes, idx=i)
         else: # Do not use subj params, but group ones
             # Since rootless nodes are not created in this function we
             # have to search for the correct node and include it in
             # the params
-            for param in self.params:
-                if param.has_root:
-                    continue
-                if param.child_nodes.has_key(dep_name):
-                    params[param.name] = param.child_nodes[dep_name]
+            for selected_param in self.params:
+                if selected_param.child_nodes.has_key(dep_name):
+                    params[selected_param.name] = selected_param.child_nodes[dep_name]
 
-            rootless_child_node = self.get_rootless_child(param.name, "%s"%dep_name, data, params)
+            param.child_nodes[dep_name] = self.get_rootless_child(param.name, "%s"%dep_name, data, params)
 
-        return rootless_child_node
+        return self
 
     def summary(self, delimiter=None):
         """Return summary statistics of the group parameter distributions."""
