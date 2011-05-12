@@ -138,11 +138,11 @@ class Hierarchical(object):
         depends_on = copy(self.depends_on)
 
         # Make call to recursive function that does the partitioning
-        data_dep = self._get_data_depend_rec(self.data, depends_on, params, [], get_root_nodes=self.is_group_model)
+        data_dep = self._get_data_depend_rec(self.data, depends_on, params, [])
 
         return data_dep
     
-    def _get_data_depend_rec(self, data, depends_on, params, dep_name, param=None, get_root_nodes=False):
+    def _get_data_depend_rec(self, data, depends_on, params, dep_name, param=None):
         """Recursive function to partition data and params according
         to depends_on."""
         if len(depends_on) != 0: # If depends are present
@@ -166,8 +166,9 @@ class Hierarchical(object):
                 # Find param
                 for param in self.params:
                     if param.name == param_name:
-                        break
-                if self.is_group_model and not get_group_params:
+                        break # Param found
+                # Add the node
+                if self.is_group_model: 
                     params[param_name] = param.child_nodes[str(depend_element)]
                 else:
                     params[param_name] = param.root_nodes[str(depend_element)]
@@ -176,8 +177,7 @@ class Hierarchical(object):
                                                        depends_on=copy(depends_on),
                                                        params=copy(params),
                                                        dep_name = copy(dep_name),
-                                                       param = param,
-                                                       get_root_nodes=get_root_nodes)
+                                                       param = param)
                 data_params += data_param
                 # Remove last item (otherwise we would always keep
                 # adding the dep elems of in one column)
@@ -187,18 +187,31 @@ class Hierarchical(object):
         else: # Data does not depend on anything (anymore)
             return [(data, params, dep_name)]
 
-    def create(self):
+    def create(self, retry=20):
         """Set group level distributions. One distribution for each
         parameter."""
-        for param in self.params: # Loop through param names
-            if not param.has_root:
-                continue
-            # Check if parameter depends on data
-            if param.name in self.depends_on.keys():
-                self._set_dependent_param(param)
-            else:
-                self._set_independet_param(param)
-
+        def _create():
+            for param in self.params: # Loop through param names
+                if not param.has_root:
+                    continue
+                # Check if parameter depends on data
+                if param.name in self.depends_on.keys():
+                    self._set_dependent_param(param)
+                else:
+                    self._set_independet_param(param)
+        
+        succeeded = False
+        tries = 0
+        while(not succeeded):
+            try:
+                _create()
+                succeeded = True
+            except pm.ZeroProbability as e:
+                if tries < retry:
+                    tries += 1
+                else:
+                    raise pm.ZeroProbability, e
+        
         # Init rootless nodes
         for param in self.params:
             if param.has_root:
@@ -273,7 +286,7 @@ class Hierarchical(object):
 
     def _set_child_nodes(self, param, tag, data):
         # Generate subj variability parameter tau
-        param.tag = 'tau'
+        param.tag = 'tau'+tag
         param.data = data
         param.tau_nodes[tag] = self.get_tau_node(param)
         param.reset()
