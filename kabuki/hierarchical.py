@@ -99,7 +99,11 @@ class Hierarchical(object):
         if depends_on is None:
             self.depends_on = {}
         else:
-            # Check if column names exist in data
+            #transform string to list
+            for key in depends_on:
+                if type(depends_on[key]) == type(''):
+                    depends_on[key] = [depends_on[key]]
+           # Check if column names exist in data        
             for depend_on in depends_on.itervalues():
                 for elem in depend_on:
                     if elem not in self.data.dtype.names:
