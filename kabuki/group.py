@@ -76,7 +76,6 @@ def print_stats(stats):
          v['quantiles'][97.5], v['mc error'])
         
 def print_group_stats(stats):
-    
     g_stats = {}
     keys = [z for z in stats.keys() if re.match('[0-9]',z[-1]) is None]
     keys.sort()
