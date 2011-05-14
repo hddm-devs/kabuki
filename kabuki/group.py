@@ -92,13 +92,13 @@ def group_plot(model, n_bins=50):
     group_nodes = get_group_nodes(nodes)
     
     for node in group_nodes:
-        print "plotting %s" % node.__name__
-        sys.stdout.flush()
         pattern = ('%s[0-9]+'%node.__name__.replace("(","\(")).replace(')','\)')
         subj_nodes = [z for z in nodes if re.search(pattern,z.__name__) != None]
         if subj_nodes == []:
             continue
         
+        print "plotting %s" % node.__name__
+        sys.stdout.flush()        
         figure()
         subj_nodes = sorted(subj_nodes, key=lambda x:x.__name__)
         lb = min([min(x.trace()) for x in subj_nodes])
