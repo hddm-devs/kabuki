@@ -301,7 +301,7 @@ class Hierarchical(object):
         param.child_nodes[tag] = np.empty(self._num_subjs, dtype=object)
         # Create subj parameter distribution for each subject
         for subj_idx,subj in enumerate(self._subjs):
-            data_subj = data[data['subj_idx']==subj_idx]
+            data_subj = data[data['subj_idx']==subj]
             param.data = data_subj
             param.root = param.root_nodes[tag]
             param.tau = param.tau_nodes[tag]
