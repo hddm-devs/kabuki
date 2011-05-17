@@ -31,13 +31,26 @@ def get_group_nodes(nodes):
         return convert_model_to_dictionary(root)
     else:
         return root    
+    
+def get_subjs_numbers(mc):    
+    if type(model) == type(pm.MCMC([])):
+        nodes = model.stochastics
+    else:
+        nodes = model
 
-def get_subj_nodes(nodes, i_subj=None):
+    s = [re.search('[0-9]+$',z.__name__) for z in nodes]
+    return list(set([int(x) for x in s if x != None]))
+    
+def get_subj_nodes(model, i_subj=None):
     """get_subj_nodes(model, i_subj=None):
     return the nodes of subj i_subj. if is_subj is None then return all subjects' node
     if i_subj is -1, return root nodes
     """ 
-    pass
+    if type(model) == type(pm.MCMC([])):
+        nodes = model.stochastics
+    else:
+        nodes = model
+
 
     if i_subj==-1:
         return get_group_nodes(nodes)
