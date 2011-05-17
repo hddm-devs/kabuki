@@ -17,9 +17,7 @@ class Parameter(object):
         self.lower = lower
         self.upper = upper
         self.init = init
-
-        if vars is not None:
-            self.vars = vars
+        self.vars = vars
 
         self.root_nodes = OrderedDict()
         self.tau_nodes = OrderedDict()
@@ -60,7 +58,7 @@ class Parameter(object):
     
 class Hierarchical(object):
     """Class that builds hierarchical bayesian models."""
-    def __init__(self, data, is_group_model=None, depends_on=None):
+    def __init__(self, data, is_group_model=None, depends_on=None, trace_subjs=True, plot_subjs=False, plot_tau=False):
         """Initialize hierarchical model.
 
         Arguments:
@@ -91,6 +89,10 @@ class Hierarchical(object):
         user-specified method get_liklihood().
 
         """
+        self.trace_subjs = trace_subjs
+        self.plot_subjs = plot_subjs
+        self.plot_tau = plot_tau
+
         self.params_est = {}
         self.params_est_std = {}
         self.params_est_perc = {}
@@ -299,7 +301,7 @@ class Hierarchical(object):
         param.child_nodes[tag] = np.empty(self._num_subjs, dtype=object)
         # Create subj parameter distribution for each subject
         for subj_idx,subj in enumerate(self._subjs):
-            data_subj = data[data['subj_idx']==subj_idx]
+            data_subj = data[data['subj_idx']==subj]
             param.data = data_subj
             param.root = param.root_nodes[tag]
             param.tau = param.tau_nodes[tag]
@@ -368,59 +370,6 @@ class Hierarchical(object):
 
         return self
 
-    def summary(self, delimiter=None):
-        """Return summary statistics of the group parameter distributions."""
-        if delimiter is None:
-            delimiter = '\n'
-
-        s = ''
-        
-        for param, depends_on in self.depends_on.iteritems():
-            s+= 'Parameter "%s" depends on: %s%s' %(param, ','.join(depends_on), delimiter)
-
-        s += delimiter + 'General model stats:' + delimiter
-        for name, value in self.stats.iteritems():
-            s += '%s: %f%s'%(name, value, delimiter) 
-
-        s += delimiter + 'Group parameter\t\t\t\tMean\tStd\t5%\t95%' + delimiter
-        # Sort param names for better display
-        param_names = np.sort(self.params_est.keys())
-        for name in param_names:
-            # Create appropriate number of tabs for correct displaying
-            # if parameter names are longer than one tab space.
-            # 5 tabs if name string is smaller than 8 letters.
-            value = self.params_est[name]
-            num_tabs = int(5-np.floor(((len(name))/8.)))
-            tabs = ''.join(['\t' for i in range(num_tabs)])
-            s += '%s%s%.3f\t%.3f\t%.3f\t%.3f%s'%(name, tabs, value,
-                                        self.params_est_std[name],
-                                        self.params_est_perc[name][0],
-                                        self.params_est_perc[name][1],
-                                        delimiter)
-
-        return s
-
-    def summary_subjs(self, delimiter=None):
-        """Return summary statistics of the subject parameter distributions."""
-        if delimiter is None:
-            delimiter = '\n'
-
-        s = 'Group parameter\t\t\t\tMean\t\Std' + delimiter
-        for subj, params in self.params_est_subj.iteritems():
-            s += 'Subject: %i%s' % (subj, delimiter)
-            # Sort param names for better display
-            param_names = np.sort(params.keys())
-            for name in param_names:
-                # Create appropriate number of tabs for correct displaying
-                # if parameter names are longer than one tab space.
-                value = params[name]
-                num_tabs = int(5-np.floor(((len(name))/8.)))
-                tabs = ''.join(['\t' for i in range(num_tabs)])
-                s += '%s%s%.3f\t%.3f%s'%(name, tabs, value, self.params_est_subj_std[subj][name], delimiter)
-            s += delimiter
-            
-        return s
-
     def compare_all_pairwise(self):
         """Perform all pairwise comparisons of dependent parameter
         distributions (as indicated by depends_on).
@@ -461,60 +410,3 @@ class Hierarchical(object):
             plt.ylabel(p1.__name__)
             
             #plt.plot
-            
-                
-    def _gen_stats(self):
-        """Generate and set summary statistics of model and group parameter distributions."""
-        self.stats['logp'] = self.mcmc_model.logp
-        try:
-            self.stats['dic'] = self.mcmc_model.dic
-        except:
-            self.stats['dic'] = 0.
-        
-        for param_name in self.root_nodes.iterkeys():
-            self.params_est[param_name] = np.mean(self.mcmc_model.trace(param_name)())
-            self.params_est_std[param_name] = np.std(self.mcmc_model.trace(param_name)())
-            self.params_est_perc[param_name] = kabuki.utils.percentile(self.mcmc_model.trace(param_name)())
-            
-        return self
-    
-    def _gen_stats_subjs(self):
-        """Generate and set summary statistics of subject parameter distributions."""
-        self.params_est_subj = {}
-        self.params_est_subj_std = {}
-        self.params_est_subj_perc = {}
-
-        # Initialize params_est_subj dicts
-        for subj_idx in range(self._num_subjs):
-            if not self.params_est_subj.has_key(subj_idx):
-                self.params_est_subj[subj_idx] = {}
-                self.params_est_subj_std[subj_idx] = {}
-                self.params_est_subj_perc[subj_idx] = {}
-                
-        # Generate stats
-        for name,params in self.child_nodes.iteritems():
-            for subj_idx,subj_dist in enumerate(params):
-                self.params_est_subj[subj_idx][name] = np.mean(subj_dist.trace())
-                self.params_est_subj_std[subj_idx][name] = np.std(subj_dist.trace())
-                self.params_est_subj_perc[subj_idx][name] = kabuki.utils.percentile(subj_dist.trace())
-                
-        return self
-
-    def save_stats(self, fname):
-        """Save stats to output file.
-
-        Arguments:
-        ==========
-
-        fname<string>: Filename to save stats to."""
-        
-        print "Saving stats to %s" % fname
-
-        # Get summary string
-        s = self.summary()
-
-        # Write summary to file fname
-        with open(fname, 'w') as fd:
-            fd.write(s)
-                
-        return self
