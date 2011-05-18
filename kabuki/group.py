@@ -31,13 +31,26 @@ def get_group_nodes(nodes):
         return convert_model_to_dictionary(root)
     else:
         return root    
+    
+def get_subjs_numbers(mc):    
+    if type(model) == type(pm.MCMC([])):
+        nodes = model.stochastics
+    else:
+        nodes = model
 
-def get_subj_nodes(nodes, i_subj=None):
+    s = [re.search('[0-9]+$',z.__name__) for z in nodes]
+    return list(set([int(x) for x in s if x != None]))
+    
+def get_subj_nodes(model, i_subj=None):
     """get_subj_nodes(model, i_subj=None):
     return the nodes of subj i_subj. if is_subj is None then return all subjects' node
     if i_subj is -1, return root nodes
     """ 
-    pass
+    if type(model) == type(pm.MCMC([])):
+        nodes = model.stochastics
+    else:
+        nodes = model
+
 
     if i_subj==-1:
         return get_group_nodes(nodes)
@@ -69,6 +82,8 @@ def print_stats(stats):
     print s
     for node in nodes:
         v = stats[node]
+        if type(v['mean']) == type(np.array([])):
+            continue
         print "%s: %6.3f %6.3f %6.3f %6.3f %6.3f %6.3f %6.3f %6.3f" % \
         (node.ljust(len_name), v['mean'], v['standard deviation'], 
          v['quantiles'][2.5], v['quantiles'][25],\
@@ -91,13 +106,13 @@ def group_plot(model, n_bins=50):
     group_nodes = get_group_nodes(nodes)
     
     for node in group_nodes:
-        print "plotting %s" % node.__name__
-        sys.stdout.flush()
         pattern = ('%s[0-9]+'%node.__name__.replace("(","\(")).replace(')','\)')
         subj_nodes = [z for z in nodes if re.search(pattern,z.__name__) != None]
         if subj_nodes == []:
             continue
         
+        print "plotting %s" % node.__name__
+        sys.stdout.flush()        
         figure()
         subj_nodes = sorted(subj_nodes, key=lambda x:x.__name__)
         lb = min([min(x.trace()) for x in subj_nodes])
