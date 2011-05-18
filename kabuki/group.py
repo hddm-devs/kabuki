@@ -82,6 +82,8 @@ def print_stats(stats):
     print s
     for node in nodes:
         v = stats[node]
+        if type(v['mean']) == type(np.array([])):
+            continue
         print "%s: %6.3f %6.3f %6.3f %6.3f %6.3f %6.3f %6.3f %6.3f" % \
         (node.ljust(len_name), v['mean'], v['standard deviation'], 
          v['quantiles'][2.5], v['quantiles'][25],\
