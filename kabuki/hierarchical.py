@@ -101,7 +101,7 @@ class Hierarchical(object):
         if depends_on is None:
             self.depends_on = {}
         else:
-            #transform string to list
+            # Transform string to list
             for key in depends_on:
                 if type(depends_on[key]) == type(''):
                     depends_on[key] = [depends_on[key]]
@@ -109,7 +109,7 @@ class Hierarchical(object):
             for depend_on in depends_on.itervalues():
                 for elem in depend_on:
                     if elem not in self.data.dtype.names:
-                        raise KeyError, "Column named %s not found in data." % depend_on
+                        raise KeyError, "Column named %s not found in data." % elem
             self.depends_on = depends_on
 
         if is_group_model is None:

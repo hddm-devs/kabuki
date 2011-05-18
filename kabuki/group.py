@@ -57,7 +57,7 @@ def get_subj_nodes(nodes, i_subj=None):
             return subj
 
 def print_stats(stats):
-    nodes =sorted(stats.keys());    
+    nodes = sorted(stats.keys());    
     len_name = max([len(x) for x in nodes])
     fields = {}
     f_names  = ['mean', 'std', '2.5q', '25q', '50q', '75q', '97.5', 'mc_err']
