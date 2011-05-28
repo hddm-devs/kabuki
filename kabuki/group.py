@@ -41,7 +41,7 @@ def get_subjs_numbers(mc):
     s = [re.search('[0-9]+$',z.__name__) for z in nodes]
     return list(set([int(x) for x in s if x != None]))
     
-def get_subj_nodes(model, i_subj=None):
+def get_subj_nodes(model, startswith=None, i_subj=None):
     """get_subj_nodes(model, i_subj=None):
     return the nodes of subj i_subj. if is_subj is None then return all subjects' node
     if i_subj is -1, return root nodes
@@ -51,7 +51,9 @@ def get_subj_nodes(model, i_subj=None):
     else:
         nodes = model
 
-
+    if startswith is None:
+        startswith = ''
+        
     if i_subj==-1:
         return get_group_nodes(nodes)
     else: 
@@ -59,10 +61,10 @@ def get_subj_nodes(model, i_subj=None):
             nodes = nodes.values()
         
         if i_subj is None:        
-            subj = [z for z in nodes if re.search('[A-Za-z)][0-9]+$',z.__name__) != None]
+            subj = [z for z in nodes if re.search(startswith+'[A-Za-z)][0-9]+$',z.__name__) != None]
         else:
             s_subj = str(i_subj)
-            subj = [z for z in nodes if re.search('[A-Za-z)]%d$'%i_subj,z.__name__) != None]
+            subj = [z for z in nodes if re.search(startswith+'[A-Za-z)]%d$'%i_subj,z.__name__) != None]
         
         if type(nodes) == type({}):
             return convert_model_to_dictionary(subj)
@@ -112,7 +114,7 @@ def group_plot(model, n_bins=50):
             continue
         
         print "plotting %s" % node.__name__
-        sys.stdout.flush()        
+        sys.stdout.flush()
         figure()
         subj_nodes = sorted(subj_nodes, key=lambda x:x.__name__)
         lb = min([min(x.trace()) for x in subj_nodes])

@@ -11,13 +11,14 @@ import pymc as pm
 import kabuki
 
 class Parameter(object):
-    def __init__(self, name, has_root=True, lower=None, upper=None, init=None, vars=None):
+    def __init__(self, name, has_root=True, lower=None, upper=None, init=None, vars=None, no_childs=False):
         self.name = name
         self.has_root = has_root
         self.lower = lower
         self.upper = upper
         self.init = init
         self.vars = vars
+        self.no_childs = no_childs
 
         self.root_nodes = OrderedDict()
         self.tau_nodes = OrderedDict()
@@ -136,7 +137,7 @@ class Hierarchical(object):
         for param in self.params:
             if param.name in self.depends_on or not param.has_root:
                 continue
-            if self.is_group_model:
+            if self.is_group_model and not param.no_childs:
                 params[param.name] = param.child_nodes['']
             else:
                 params[param.name] = param.root_nodes['']
@@ -174,7 +175,7 @@ class Hierarchical(object):
                     if param.name == param_name:
                         break # Param found
                 # Add the node
-                if self.is_group_model: 
+                if self.is_group_model and not param.no_childs:
                     params[param_name] = param.child_nodes[str(depend_element)]
                 else:
                     params[param_name] = param.root_nodes[str(depend_element)]
@@ -212,7 +213,7 @@ class Hierarchical(object):
             try:
                 _create()
                 succeeded = True
-            except pm.ZeroProbability as e:
+            except (pm.ZeroProbability, ValueError) as e:
                 if tries < retry:
                     tries += 1
                 else:
@@ -272,7 +273,7 @@ class Hierarchical(object):
             param.root_nodes[tag] = self.get_root_node(param)
             param.reset()
 
-            if self.is_group_model:
+            if self.is_group_model and not param.no_childs:
                 # Create appropriate subj parameter
                 self._set_child_nodes(param, tag, data_dep_select)
 
@@ -285,7 +286,7 @@ class Hierarchical(object):
         param.root_nodes[''] = self.get_root_node(param)
         param.reset()
 
-        if self.is_group_model:
+        if self.is_group_model and not param.no_childs:
             self._set_child_nodes(param, '', self.data)
         
         return self
@@ -321,7 +322,7 @@ class Hierarchical(object):
         for i, (data, params_dep, dep_name) in enumerate(data_dep):
             dep_name = str(dep_name)
             if init:
-                if self.is_group_model:
+                if self.is_group_model and not param.no_childs:
                     param.child_nodes[dep_name] = np.empty(self._num_subjs, dtype=object)
                 else:
                     param.child_nodes[dep_name] = None
@@ -338,6 +339,9 @@ class Hierarchical(object):
             for i,subj in enumerate(self._subjs):
                 # Select data belonging to subj
                 data_subj = data[data['subj_idx'] == subj]
+                # Skip if subject was not tested on this condition
+                if len(data_subj) == 0:
+                    continue
                 # Select params belonging to subject
                 selected_child_nodes = {}
                 # Create new params dict and copy over nodes
@@ -345,10 +349,16 @@ class Hierarchical(object):
                     # Since rootless nodes are not created in this function we
                     # have to search for the correct node and include it in
                     # the params.
-                    if selected_param.child_nodes.has_key(dep_name):
-                        selected_child_nodes[selected_param.name] = selected_param.child_nodes[dep_name][i]
+                    if selected_param.no_childs:
+                        if selected_param.child_nodes.has_key(dep_name):
+                            selected_child_nodes[selected_param.name] = selected_param.root_nodes[dep_name]
+                        else:
+                            selected_child_nodes[selected_param.name] = params[selected_param.name]
                     else:
-                        selected_child_nodes[selected_param.name] = params[selected_param.name][i]
+                        if selected_param.child_nodes.has_key(dep_name):
+                            selected_child_nodes[selected_param.name] = selected_param.child_nodes[dep_name][i]
+                        else:
+                            selected_child_nodes[selected_param.name] = params[selected_param.name][i]
 
                 # Call to the user-defined function!
                 param.tag = dep_name
