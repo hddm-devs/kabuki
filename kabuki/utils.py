@@ -369,6 +369,18 @@ def check_geweke(model, assert_=True):
 
     return True
 
+def load_traces_from_db(mc, dbname):
+    """Load samples from a database created by an earlier model
+    """
+    # Open database
+    db = pm.database.hdf5.load(dbname)
+    
+    # Loop through parameters and set traces
+    for node in mc.nodes:
+        #loop only not-observed
+        if node.observed:
+            continue
+        node.trace = db.trace(node.__name__)
 
 
 if __name__ == "__main__":
