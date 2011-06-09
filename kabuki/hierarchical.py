@@ -171,9 +171,11 @@ class Hierarchical(object):
                 # params[col_name] and the observed will get linked to
                 # the correct nodes automatically.
                 # Find param
-                for param in self.params:
-                    if param.name == param_name:
-                        break # Param found
+                try:
+                    param = next(param for param in self.params if param.name == param_name)
+                except StopIteration:
+                    raise TypeError, "Parameter named %s not found." % param_name
+
                 # Add the node
                 if self.is_group_model and not param.no_childs:
                     params[param_name] = param.child_nodes[str(depend_element)]
