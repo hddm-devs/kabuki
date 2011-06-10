@@ -16,21 +16,26 @@ def convert_model_to_dictionary(model):
         d[node.__name__] = node
     return d
 
-def get_group_nodes(nodes):
+def get_group_nodes(nodes, return_list=False):
     """
     get_group_nodes(model)
     get only the group nodes from the model
     """
     
     if type(nodes)==type({}):
-        nodes = nodes.values()
-    
-    root = [z for z in nodes if re.search('[A-Za-z)][0-9]+$',z.__name__) == None]
-    
-    if type(nodes) == type({}):
-        return convert_model_to_dictionary(root)
+        group_nodes = {}
+        for name, node in nodes.iteritems():
+            if (re.search('[A-Za-z)][0-9]+$',name) == None) and \
+               not name.startswith('Metropolis') and \
+               not name.startswith('deviance'):
+                group_nodes[name] = node
+        if return_list:
+            return group_nodes.values()
+        else:
+            return group_nodes
     else:
-        return root    
+        root = [z for z in nodes if re.search('[A-Za-z)][0-9]+$',z.__name__) == None]
+        return root
     
 def get_subjs_numbers(mc):    
     if type(model) == type(pm.MCMC([])):
@@ -41,7 +46,7 @@ def get_subjs_numbers(mc):
     s = [re.search('[0-9]+$',z.__name__) for z in nodes]
     return list(set([int(x) for x in s if x != None]))
     
-def get_subj_nodes(model, i_subj=None):
+def get_subj_nodes(model, startswith=None, i_subj=None):
     """get_subj_nodes(model, i_subj=None):
     return the nodes of subj i_subj. if is_subj is None then return all subjects' node
     if i_subj is -1, return root nodes
@@ -51,7 +56,9 @@ def get_subj_nodes(model, i_subj=None):
     else:
         nodes = model
 
-
+    if startswith is None:
+        startswith = ''
+        
     if i_subj==-1:
         return get_group_nodes(nodes)
     else: 
@@ -59,10 +66,10 @@ def get_subj_nodes(model, i_subj=None):
             nodes = nodes.values()
         
         if i_subj is None:        
-            subj = [z for z in nodes if re.search('[A-Za-z)][0-9]+$',z.__name__) != None]
+            subj = [z for z in nodes if re.search(startswith+'[A-Za-z)][0-9]+$',z.__name__) != None]
         else:
             s_subj = str(i_subj)
-            subj = [z for z in nodes if re.search('[A-Za-z)]%d$'%i_subj,z.__name__) != None]
+            subj = [z for z in nodes if re.search(startswith+'[A-Za-z)]%d$'%i_subj,z.__name__) != None]
         
         if type(nodes) == type({}):
             return convert_model_to_dictionary(subj)
@@ -70,7 +77,7 @@ def get_subj_nodes(model, i_subj=None):
             return subj
 
 def print_stats(stats):
-    nodes =sorted(stats.keys());    
+    nodes = sorted(stats.keys());    
     len_name = max([len(x) for x in nodes])
     fields = {}
     f_names  = ['mean', 'std', '2.5q', '25q', '50q', '75q', '97.5', 'mc_err']
@@ -82,7 +89,7 @@ def print_stats(stats):
     print s
     for node in nodes:
         v = stats[node]
-        if type(v['mean']) == type(np.array([])):
+        if type(v['mean']) == type(np.array([])) or node.startswith('Metropolis') or node == 'deviance':
             continue
         print "%s: %6.3f %6.3f %6.3f %6.3f %6.3f %6.3f %6.3f %6.3f" % \
         (node.ljust(len_name), v['mean'], v['standard deviation'], 
@@ -103,7 +110,8 @@ def group_plot(model, n_bins=50):
         nodes = model.stochastics
     else:
         nodes = model
-    group_nodes = get_group_nodes(nodes)
+
+    group_nodes = get_group_nodes(nodes, return_list=True)
     
     for node in group_nodes:
         pattern = ('%s[0-9]+'%node.__name__.replace("(","\(")).replace(')','\)')
@@ -112,7 +120,7 @@ def group_plot(model, n_bins=50):
             continue
         
         print "plotting %s" % node.__name__
-        sys.stdout.flush()        
+        sys.stdout.flush()
         figure()
         subj_nodes = sorted(subj_nodes, key=lambda x:x.__name__)
         lb = min([min(x.trace()) for x in subj_nodes])
