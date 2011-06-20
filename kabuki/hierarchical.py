@@ -114,7 +114,14 @@ class Hierarchical(object):
             self.depends_on = depends_on
 
         if is_group_model is None:
-            self.is_group_model = 'subj_idx' in data.dtype.names
+            if 'subj_idx' in data.dtype.names:
+                if len(np.unique(data['subj_idx'])) != 1:
+                    self.is_group_model = True
+                else:
+                    self.is_group_model = False
+            else:
+                self.is_group_model = False
+
         else:
             self.is_group_model = is_group_model
 

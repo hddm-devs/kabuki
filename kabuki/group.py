@@ -6,6 +6,7 @@ import kabuki
 from matplotlib.pylab import show, hist, close, figure
 import matplotlib.pyplot as plt
 import sys
+from operator import attrgetter
 
 def convert_model_to_dictionary(model):
     """convert_model_to_dictionary(model)
@@ -122,7 +123,7 @@ def group_plot(model, n_bins=50):
         print "plotting %s" % node.__name__
         sys.stdout.flush()
         figure()
-        subj_nodes = sorted(subj_nodes, key=lambda x:x.__name__)
+        subj_nodes = sorted(subj_nodes, key=attrgetter('__name__'))
         lb = min([min(x.trace()) for x in subj_nodes])
         lb = min(lb, min(node.trace()))
         ub = max([max(x.trace()) for x in subj_nodes])
