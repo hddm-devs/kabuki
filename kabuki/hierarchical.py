@@ -11,7 +11,7 @@ import pymc as pm
 import kabuki
 
 class Parameter(object):
-    def __init__(self, name, has_root=True, lower=None, upper=None, init=None, vars=None, no_childs=False):
+    def __init__(self, name, has_root=True, lower=None, upper=None, init=None, vars=None, default=None, no_childs=False, optional=False):
         self.name = name
         self.has_root = has_root
         self.lower = lower
@@ -19,6 +19,11 @@ class Parameter(object):
         self.init = init
         self.vars = vars
         self.no_childs = no_childs
+        self.optional = optional
+        self.default = default
+
+        if self.optional and self.default is None:
+            raise ValueError("Optional parameters have to have a default value.")
 
         self.root_nodes = OrderedDict()
         self.tau_nodes = OrderedDict()
@@ -59,7 +64,7 @@ class Parameter(object):
     
 class Hierarchical(object):
     """Class that builds hierarchical bayesian models."""
-    def __init__(self, data, is_group_model=None, depends_on=None, trace_subjs=True, plot_subjs=False, plot_tau=False):
+    def __init__(self, data, is_group_model=None, depends_on=None, trace_subjs=True, plot_subjs=False, plot_tau=False, include=()):
         """Initialize hierarchical model.
 
         Arguments:
@@ -90,14 +95,12 @@ class Hierarchical(object):
         user-specified method get_liklihood().
 
         """
+        # Init
+        self.include = set(include)
+
         self.trace_subjs = trace_subjs
         self.plot_subjs = plot_subjs
         self.plot_tau = plot_tau
-
-        self.params_est = {}
-        self.params_est_std = {}
-        self.params_est_perc = {}
-        self.stats = {}
 
         if depends_on is None:
             self.depends_on = {}
@@ -129,7 +132,8 @@ class Hierarchical(object):
         if self.is_group_model:
             self._subjs = np.unique(data['subj_idx'])
             self._num_subjs = self._subjs.shape[0]
-        
+
+            
     def _get_data_depend(self):
         """Partition data according to self.depends_on.
 
@@ -141,13 +145,13 @@ class Hierarchical(object):
         
         params = {} # use subj parameters to feed into model
         # Create new params dict and copy over nodes
-        for param in self.params:
-            if param.name in self.depends_on or not param.has_root:
+        for name, param in self.params_include.iteritems():
+            if name in self.depends_on or not param.has_root:
                 continue
             if self.is_group_model and not param.no_childs:
-                params[param.name] = param.child_nodes['']
+                params[name] = param.child_nodes['']
             else:
-                params[param.name] = param.root_nodes['']
+                params[name] = param.root_nodes['']
 
         depends_on = copy(self.depends_on)
 
@@ -177,11 +181,7 @@ class Hierarchical(object):
                 # trick so that later on the get_rootless_child can use
                 # params[col_name] and the observed will get linked to
                 # the correct nodes automatically.
-                # Find param
-                try:
-                    param = next(param for param in self.params if param.name == param_name)
-                except StopIteration:
-                    raise TypeError, "Parameter named %s not found." % param_name
+                param = self.params_include[param_name]
 
                 # Add the node
                 if self.is_group_model and not param.no_childs:
@@ -207,15 +207,28 @@ class Hierarchical(object):
         """Set group level distributions. One distribution for each
         parameter."""
         def _create():
-            for param in self.params: # Loop through param names
+            for name, param in self.params_include.iteritems(): # Loop through param names
                 if not param.has_root:
                     continue
                 # Check if parameter depends on data
-                if param.name in self.depends_on.keys():
+                if name in self.depends_on.keys():
                     self._set_dependent_param(param)
                 else:
                     self._set_independet_param(param)
+
+        # Include all defined parameters by default.
+        self.non_optional_params = [param.name for param in self.params if not param.optional]
+
+        # Create params dictionary
+        self.params_dict = OrderedDict()
+        for param in self.params:
+            self.params_dict[param.name] = param
+        self.params_include = OrderedDict()
+        for param in self.params:
+            if param.name in self.include or not param.optional:
+                self.params_include[param.name] = param
         
+
         succeeded = False
         tries = 0
         while(not succeeded):
@@ -229,26 +242,26 @@ class Hierarchical(object):
                     raise pm.ZeroProbability, e
         
         # Init rootless nodes
-        for param in self.params:
+        for param in self.params_include.itervalues():
             if param.has_root:
                 continue
             self._set_rootless_child_nodes(param, init=True)
 
         # Create rootless nodes
-        for param in self.params:
+        for param in self.params_include.itervalues():
             if param.has_root:
                 continue
             self._set_rootless_child_nodes(param, init=False)
 
         # Create model dictionary
         nodes = {}
-        for param in self.params:
+        for name, param in self.params_include.iteritems():
             for tag, node in param.root_nodes.iteritems():
-                nodes[param.name+tag+'_root'] = node
+                nodes[name+tag+'_root'] = node
             for tag, node in param.child_nodes.iteritems():
-                nodes[param.name+tag+'_child'] = node
+                nodes[name+tag+'_child'] = node
             for tag, node in param.tau_nodes.iteritems():
-                nodes[param.name+tag+'_tau'] = node
+                nodes[name+tag+'_tau'] = node
 
         return nodes
     
@@ -354,7 +367,7 @@ class Hierarchical(object):
                 # Select params belonging to subject
                 selected_child_nodes = {}
                 # Create new params dict and copy over nodes
-                for selected_param in self.params:
+                for selected_param in self.params_include.itervalues():
                     # Since rootless nodes are not created in this function we
                     # have to search for the correct node and include it in
                     # the params.
@@ -379,7 +392,7 @@ class Hierarchical(object):
             # Since rootless nodes are not created in this function we
             # have to search for the correct node and include it in
             # the params
-            for selected_param in self.params:
+            for selected_param in self.params_include.itervalues():
                 if selected_param.child_nodes.has_key(dep_name):
                     params[selected_param.name] = selected_param.child_nodes[dep_name]
             param.tag = dep_name
@@ -429,3 +442,10 @@ class Hierarchical(object):
             plt.ylabel(p1.__name__)
             
             #plt.plot
+
+    def get_node(self, node_name, params):
+        if node_name in self.include:
+            return params[node_name]
+        else:
+            assert self.params_dict[node_name].default != None, "Default value of not-included parameter not set."
+            return self.params_dict[node_name].default
