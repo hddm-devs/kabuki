@@ -11,7 +11,26 @@ import pymc as pm
 import kabuki
 
 class Parameter(object):
-    def __init__(self, name, has_root=True, lower=None, upper=None, init=None, vars=None, default=None, no_childs=False, optional=False):
+    """Specify a parameter of a model.
+
+    :Arguments:
+        name <str>: Name of parameter.
+
+    :Keyword arguments:
+        has_root <bool=True>: Parameter has a root node.
+        lower <float>: Lower bound (e.g. for a uniform distribution).
+        upper <float>: Upper bound (e.g. for a uniform distribution).
+        init <float>: Initialize to value.
+        vars <dict>: User-defined variables, can be anything you later
+            want to access.
+        optional <bool=False>: Only create distribution when included. 
+            Otherwise, set to default value (see below).
+        default <float>: Default value if optional=True.
+        no_childs <bool=False>: Do not create children nodes.
+        verbose <int=0>: Verbosity.
+    """
+
+    def __init__(self, name, has_root=True, lower=None, upper=None, init=None, vars=None, default=None, no_childs=False, optional=False, verbose=0):
         self.name = name
         self.has_root = has_root
         self.lower = lower
@@ -21,7 +40,8 @@ class Parameter(object):
         self.no_childs = no_childs
         self.optional = optional
         self.default = default
-
+        self.verbose = verbose
+        
         if self.optional and self.default is None:
             raise ValueError("Optional parameters have to have a default value.")
 
@@ -37,7 +57,6 @@ class Parameter(object):
         self.idx = None
 
     def reset(self):
-        # Pointers that get overwritten
         self.root = None
         self.child = None
         self.tag = None
@@ -63,41 +82,70 @@ class Parameter(object):
 
     
 class Hierarchical(object):
-    """Class that builds hierarchical bayesian models."""
-    def __init__(self, data, is_group_model=None, depends_on=None, trace_subjs=True, plot_subjs=False, plot_tau=False, include=()):
-        """Initialize hierarchical model.
+    """Creation of hierarchical Bayesian models in which each subject
+    has a set of parameters that are constrained by a group distribution.
 
-        Arguments:
-        ==========
+    :Arguments:
+        data <numpy.recarray>: Input data with a row for each trial.
+            Must contain the following columns:
+              * 'rt': Reaction time of trial in seconds.
+              * 'response': Binary response (e.g. 0->error, 1->correct)
+            May contain:
+              * 'subj_idx': A unique ID (int) of the subject.
+              * Other user-defined columns that can be used in depends_on
+                keyword.
 
-        data <numpy.recarray>: Structured array containing input data.
+    :Keyword arguments:
+        include <tuple=()>: If the model has optional arguments, they
+            can be included as a tuple of strings here.
 
-        Keyword arguments:
-        ==================
-
-        is_group_model <bool>: This results in a hierarchical model
-        with distributions for each parameter for each subject whose
-        parameters are themselves distributed according to a group
-        parameter distribution.
+        is_group_model <bool>: If True, this results in a hierarchical
+            model with separate parameter distributions for each
+            subject. The subject parameter distributions are
+            themselves distributed according to a group parameter
+            distribution.
         
         depends_on <dict>: Specifies which parameter depends on data
-        in a supplied column. For each unique element in that column,
-        a separate set of parameter distributions will be created and
-        applied. Multiple columns can be specified in a sequential
-        container (e.g. list)
+            of a column in data. For each unique element in that
+            column, a separate set of parameter distributions will be
+            created and applied. Multiple columns can be specified in
+            a sequential container (e.g. list)
 
-        Example: depends_on={'param1':['column1']}
-        
-        Suppose column1 has the elements 'element1' and 'element2',
-        then parameters 'param1('element1',)' and
-        'param1('element2',)' will be created and the corresponding
-        parameter distribution and data will be provided to the
-        user-specified method get_liklihood().
+            :Example: 
 
-        """
+            depends_on={'param1':['column1']}
+    
+            Suppose column1 has the elements 'element1' and
+            'element2', then parameters 'param1('element1',)' and
+            'param1('element2',)' will be created and the
+            corresponding parameter distribution and data will be
+            provided to the user-specified method get_liklihood().
+
+        trace_subjs <bool=True>: Save trace for subjs (needed for many
+             statistics so probably a good idea.)
+
+        plot_tau <bool=False>: Plot group variability parameters
+             (i.e. variance of Normal distribution.)
+
+    :Note: 
+        This class must be inherited. The child class must provide
+        the following functions:
+            * get_root_node(param): Return group mean distribution.
+            * get_tau_node(param): Return group variability distribution.
+            * get_child_node(param): Return subject distribution.
+            * get_rootless_child(param, params): Return distribution for 
+                  parameters that have no root (e.g. the model likelihood).
+
+        In addition, the variable self.params must be defined as a
+        list of Paramater().
+
+    """
+
+    def __init__(self, data, is_group_model=None, depends_on=None, trace_subjs=True, plot_subjs=False, plot_tau=False, include=()):
         # Init
         self.include = set(include)
-
+        
+        self.nodes = {}
         self.trace_subjs = trace_subjs
         self.plot_subjs = plot_subjs
         self.plot_tau = plot_tau
@@ -105,11 +153,12 @@ class Hierarchical(object):
         if depends_on is None:
             self.depends_on = {}
         else:
-            # Transform string to list
+            # Support for supplying columns as a single string
+            # -> transform to list
             for key in depends_on:
-                if type(depends_on[key]) == type(''):
+                if type(depends_on[key]) is str:
                     depends_on[key] = [depends_on[key]]
-           # Check if column names exist in data        
+            # Check if column names exist in data        
             for depend_on in depends_on.itervalues():
                 for elem in depend_on:
                     if elem not in self.data.dtype.names:
@@ -126,6 +175,11 @@ class Hierarchical(object):
                 self.is_group_model = False
 
         else:
+            if is_group_model:
+                if 'subj_idx' not in data.dtype.names:
+                    raise ValueError("Group models require 'subj_idx'
+                                     column in input data.")
+
             self.is_group_model = is_group_model
 
         # Should the model incorporate multiple subjects
@@ -137,8 +191,7 @@ class Hierarchical(object):
     def _get_data_depend(self):
         """Partition data according to self.depends_on.
 
-        Returns:
-        ========
+        :Returns:
         
         List of tuples with the data, the corresponding parameter
         distribution and the parameter name."""
@@ -162,7 +215,9 @@ class Hierarchical(object):
     
     def _get_data_depend_rec(self, data, depends_on, params, dep_name, param=None):
         """Recursive function to partition data and params according
-        to depends_on."""
+        to depends_on.
+
+        """
         if len(depends_on) != 0: # If depends are present
             data_params = []
             # Get first param from depends_on
@@ -203,9 +258,15 @@ class Hierarchical(object):
         else: # Data does not depend on anything (anymore)
             return [(data, params, dep_name)]
 
-    def create(self, retry=20):
+    def create_nodes(self, retry=20):
         """Set group level distributions. One distribution for each
-        parameter."""
+        parameter.
+
+        :Arguments:
+            retry <int=20>: How often to retry when model creation 
+                failed (due to bad starting values).
+
+        """
         def _create():
             for name, param in self.params_include.iteritems(): # Loop through param names
                 if not param.has_root:
@@ -254,25 +315,37 @@ class Hierarchical(object):
             self._set_rootless_child_nodes(param, init=False)
 
         # Create model dictionary
-        nodes = {}
+        self.nodes = {}
         for name, param in self.params_include.iteritems():
             for tag, node in param.root_nodes.iteritems():
-                nodes[name+tag+'_root'] = node
+                self.nodes[name+tag+'_root'] = node
             for tag, node in param.child_nodes.iteritems():
-                nodes[name+tag+'_child'] = node
+                self.nodes[name+tag+'_child'] = node
             for tag, node in param.tau_nodes.iteritems():
-                nodes[name+tag+'_tau'] = node
+                self.nodes[name+tag+'_tau'] = node
 
-        return nodes
+        return self.nodes
     
+    def mcmc(self):
+        """
+        Returns pymc.MCMC object of model.
+        """
+
+        if not self.nodes:
+            self.create_nodes()
+        self.mcmc = pm.MCMC(nodes)
+        
+        return self.mcmc
+
     def _set_dependent_param(self, param):
         """Set parameter that depends on data.
 
-        Arguments:
-        ==========
-        
-        param_name<string>: Name of parameter that depends on data for
-        which to set distributions."""
+        :Arguments:
+
+            param_name<string>: Name of parameter that depends on data for
+                which to set distributions.
+
+        """
 
         # Get column names for provided param_name
         depends_on = self.depends_on[param.name]
@@ -302,6 +375,14 @@ class Hierarchical(object):
         return self
 
     def _set_independet_param(self, param):
+        """Set parameter that does _not_ depend on data.
+
+        :Arguments:
+
+            param_name<string>: Name of parameter.
+
+        """
+
         # Parameter does not depend on data
         # Set group parameter
         param.tag = ''
@@ -314,6 +395,16 @@ class Hierarchical(object):
         return self
 
     def _set_child_nodes(self, param, tag, data):
+        """Set nodes with a parent.
+
+        :Arguments:
+
+            param_name <string>: Name of parameter.
+            tag <string>: Element name.
+            data <np.recarray>: Part of the data the parameter 
+                depends on.
+
+        """
         # Generate subj variability parameter tau
         param.tag = 'tau'+tag
         param.data = data
@@ -336,7 +427,17 @@ class Hierarchical(object):
         return self
     
     def _set_rootless_child_nodes(self, param, init=False):
-        """Create and set up the complete model."""
+        """Set parameter node that has no parent.
+
+        :Arguments:
+
+            param_name <string>: Name of parameter.
+        
+        :Keyword arguments:
+
+            init <bool=False>: Initialize parameter.
+
+        """
         # Divide data and parameter distributions according to self.depends_on
         data_dep = self._get_data_depend()
 
@@ -354,8 +455,19 @@ class Hierarchical(object):
         return self
         
     def _create_rootless_child_node(self, param, data, params, dep_name, idx):
-        """Create and return observed distribution where data depends
-        on params.
+        """Create parameter node object which has no parent.
+
+        :Note: 
+            Called by self._set_rootless_child_node().
+
+        :Arguments:
+
+            param_name <string>: Name of parameter.
+            data <np.recarray>: Data on which parameter depends on.
+            params <list>: List of parameters the node depends on.
+            dep_name <str>: Element name the node depends on.
+            idx <int>: Subject index.
+        
         """
         if self.is_group_model:
             for i,subj in enumerate(self._subjs):
@@ -444,8 +556,12 @@ class Hierarchical(object):
             #plt.plot
 
     def get_node(self, node_name, params):
+        """Returns the node object with node_name from params if node
+        is included in model, otherwise returns default value.
+
+        """
         if node_name in self.include:
             return params[node_name]
         else:
-            assert self.params_dict[node_name].default != None, "Default value of not-included parameter not set."
+            assert self.params_dict[node_name].default is not None, "Default value of not-included parameter not set."
             return self.params_dict[node_name].default
