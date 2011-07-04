@@ -1,7 +1,7 @@
 from hierarchical import *
-from models import *
+
 import utils
-import group
+import analyze
 
 try:
     from IPython.core.debugger import Tracer; debug_here = Tracer()
