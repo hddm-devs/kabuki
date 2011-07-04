@@ -152,8 +152,8 @@ class Hierarchical(object):
         self.plot_subjs = plot_subjs
         self.plot_tau = plot_tau
 
-        self.depends_on = depends_on or {}
-
+        if not depends_on:
+            self.depends_on = {}
         else:
             # Support for supplying columns as a single string
             # -> transform to list
@@ -179,8 +179,7 @@ class Hierarchical(object):
         else:
             if is_group_model:
                 if 'subj_idx' not in data.dtype.names:
-                    raise ValueError("Group models require 'subj_idx'
-                                     column in input data.")
+                    raise ValueError("Group models require 'subj_idx' column in input data.")
 
             self.is_group_model = is_group_model
 
