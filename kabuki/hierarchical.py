@@ -524,15 +524,18 @@ class Hierarchical(object):
         * Mean difference
         * 5th and 95th percentile
         """
-        
+        from scipy.stats import scoreatpercentile
+        from itertools import combinations
+
         print "Parameters\tMean difference\t5%\t95%"
         # Loop through dependent parameters and generate stats
         for params in self.root_nodes_dep.itervalues():
             # Loop through all pairwise combinations
-            for p0,p1 in kabuki.utils.all_pairs(params):
+            for p0,p1 in combinations(params, 2):
                 diff = self.root_nodes[p0].trace()-self.root_nodes[p1].trace()
-                perc = kabuki.utils.percentile(diff)
-                print "%s vs %s\t%.3f\t%.3f\t%.3f" %(p0, p1, np.mean(diff), perc[0], perc[1])
+                perc_5 = scoreatpercentile(diff, 5)
+                perc_95 = scoreatpercentile(diff, 95)
+                print "%s vs %s\t%.3f\t%.3f\t%.3f" %(p0, p1, np.mean(diff), perc_5, perc_95)
 
     def plot_all_pairwise(self):
         """Plot all pairwise posteriors to find correlations.

@@ -5,26 +5,6 @@ import pymc as pm
 
 import kabuki
 
-def percentile(x):
-    """Return the 5% and 95% percentile of an array.
-
-    >>> percentile(np.linspace(0,100,100))
-    (5., 95.)
-    """
-    sorted_x = np.sort(x)
-    perc = (sorted_x[int(.05*len(sorted_x)-1)],
-            sorted_x[int(.95*len(sorted_x)-1)])
-    return perc
-
-def all_pairs(seq):
-    l = len(seq)
-    for i in range(l):
-        for j in range(i+1, l):
-            yield seq[i], seq[j]
-
-def neg_sum(args):
-    return -np.sum(args)
-
 def difference_prior(delta):
     # See Wagenmakers et al 2010, equation 14
     if type(delta) is int:
@@ -38,32 +18,6 @@ def difference_prior(delta):
         out[delta > 0] = 1-delta[delta > 0]
         return out
 
-def generate_effect_data(true_mean, true_e1, true_e2, true_e3, subjs, N):
-    tau = 1/(2.**2) # Precision is inverse of variance.
-    tau_subj = 1.
-
-    # Generate subj means
-    true_subj_mean = pm.rnormal(true_mean, tau_subj, size=subjs)
-    true_subj_e1 = pm.rnormal(true_subj_mean+true_e1, 800)
-    true_subj_e2 = pm.rnormal(true_subj_mean+true_e2, 800)
-    true_subj_e3 = pm.rnormal(true_subj_mean+true_e3, 800)
-
-    # Generate data for each subj
-    N=50
-    samples=N*3
-    data = np.empty((subjs*samples), dtype=[('subj_idx','i4'), ('score','f4'), ('cond', 'S4')])
-    for subj in range(subjs):
-        slice = data[subj*samples:(subj+1)*samples]
-        slice['subj_idx'] = subj
-        slice['score'][0:N] = pm.rnormal(true_subj_e1[subj], tau, size=N)
-        slice['score'][N:2*N] = pm.rnormal(true_subj_e2[subj], tau, size=N)
-        slice['score'][2*N:3*N] = pm.rnormal(true_subj_e3[subj], tau, size=N)
-        slice[0:N]['cond'] = 'e1'
-        slice[N:2*N]['cond'] = 'e2'
-        slice[2*N:3*N]['cond'] = 'e3'
-
-    return data
-
 def interpolate_trace(x, trace, range=(-1,1), bins=100):
     import scipy.interpolate
 
@@ -72,13 +26,6 @@ def interpolate_trace(x, trace, range=(-1,1), bins=100):
     interp = scipy.interpolate.InterpolatedUnivariateSpline(x_histo, histo)(x)
 
     return interp
-
-def uniform(x, lower, upper):
-    y = np.ones(x.shape, dtype=np.float)/(upper-lower)
-    #y[x<lower] = 0.
-    #y[x>upper] = 0.
-
-    return y
 
 def savage_dickey(post_trace, range=(-1,1), bins=100, plot=False, title=None, savefig=None, prior_trace=None, prior_y=None, plot_prior=True, label=None):
     # Calculate Savage-Dickey density ratio test, see Wagenmakers et al 2010
@@ -115,102 +62,6 @@ def savage_dickey(post_trace, range=(-1,1), bins=100, plot=False, title=None, sa
             plt.savefig('plots/'+savefig+'.png')
 
     return sav_dick #, prior, posterior, prior0, posterior0
-
-def call_mcmc((model_class, data, dbname, rnd, kwargs)):
-    # Randomize seed
-    np.random.seed(int(rnd))
-
-    model = model_class(data, **kwargs)
-    model.mcmc(dbname=dbname)
-    model.mcmc_model.db.close()
-
-def create_tag_names(tag, chains=None):
-    import multiprocessing
-    if chains is None:
-        chains = multiprocessing.cpu_count()
-    tag_names = []
-    # Create copies of data and the corresponding db names
-    for chain in range(chains):
-        tag_names.append("db/mcmc%s%i.pickle"% (tag,chain))
-
-    return tag_names
-
-def load_parallel_chains(model_class, data, tag, kwargs, chains=None, test_convergance=True, combine=True):
-    tag_names = create_tag_names(tag, chains=chains)
-    models = []
-    for tag_name in tag_names:
-        model = model_class(data, **kwargs)
-        model.mcmc_load_from_db(tag_name)
-        models.append(model)
-
-    if test_convergance:
-        Rhat = test_chain_convergance(models)
-        print Rhat
-    
-    if combine:
-        m = combine_chains(models, model_class, data, kwargs)
-        return m
-    
-    return models
-
-def combine_chains(models, model_class, data, kwargs):
-    """Combine multiple model runs into one final model (make sure that chains converged)."""
-    # Create model that will contain the other traces
-    m = copy(models[0])
-
-    # Loop through models and combine chains
-    for model in models[1:]:
-        m._set_traces(m.group_params, mcmc_model=model.mcmc_model, add=True)
-        m._set_traces(m.group_params_tau, mcmc_model=model.mcmc_model, add=True)
-        m._set_traces(m.subj_params, mcmc_model=model.mcmc_model, add=True)
-
-    return m
-
-def run_parallel_chains(model_class, data, tag, load=False, cpus=None, chains=None, **kwargs):
-    import multiprocessing
-    if cpus is None:
-        cpus = multiprocessing.cpu_count()
-
-    tag_names = create_tag_names(tag, chains=chains)
-    # Parallel call
-    if not load:
-        rnds = np.random.rand(len(tag_names))*10000
-        pool = multiprocessing.Pool(processes=cpus)
-        pool.map(call_mcmc, [(model_class, data, tag_name, rnd, kwargs) for tag_name,rnd in zip(tag_names, rnds)])
-
-    models = load_parallel_chains(model_class, data, tag_names, kwargs)
-
-    return models
-
-def R_hat(samples):
-    n, num_chains = samples.shape # n=num_samples
-    chain_means = np.mean(samples, axis=1)
-    # Calculate between-sequence variance
-    between_var = n * np.var(chain_means, ddof=1)
-
-    chain_var = np.var(samples, axis=1, ddof=1)
-    within_var = np.mean(chain_var)
-
-    marg_post_var = ((n-1.)/n) * within_var + (1./n) * between_var # 11.2
-    R_hat_sqrt = np.sqrt(marg_post_var/within_var)
-
-    return R_hat_sqrt
-
-def test_chain_convergance(models):
-    # Calculate R statistic to check for chain convergance (Gelman at al 2004, 11.4)
-    params = models[0].group_params
-    R_hat_param = {}
-    for param_name in params.iterkeys():
-        # Calculate mean for each chain
-        num_samples = models[0].group_params[param_name].trace().shape[0] # samples
-        num_chains = len(models)
-        samples = np.empty((num_chains, num_samples))
-        for i,model in enumerate(models):
-            samples[i,:] = model.group_params[param_name].trace()
-
-        R_hat_param[param_name] = R_hat(samples)
-
-    return R_hat_param
 
 def save_csv(data, fname, sep=None):
     """Save record array to fname as csv.

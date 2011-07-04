@@ -129,7 +129,7 @@ def group_plot(model, n_bins=50):
         ub = max([max(x.trace()) for x in subj_nodes])
         ub = max(ub, max(node.trace()))
         x_data = np.linspace(lb, ub, n_bins)
-        g_hist =np.histogram(node.trace(),bins=n_bins, range=[lb, ub], normed=True)[0]
+        g_hist = np.histogram(node.trace(),bins=n_bins, range=[lb, ub], normed=True)[0]
         plt.plot(x_data, g_hist, '--', label='group')
         for i in subj_nodes:
             g_hist =np.histogram(i.trace(),bins=n_bins, range=[lb, ub], normed=True)[0]
