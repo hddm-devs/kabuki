@@ -290,7 +290,6 @@ class Hierarchical(object):
         for param in self.params:
             if param.name in self.include or not param.optional:
                 self.params_include[param.name] = param
-        
 
         succeeded = False
         tries = 0

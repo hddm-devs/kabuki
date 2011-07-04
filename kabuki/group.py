@@ -23,7 +23,7 @@ def get_group_nodes(nodes, return_list=False):
     get only the group nodes from the model
     """
     
-    if type(nodes)==type({}):
+    if type(nodes) is dict:
         group_nodes = {}
         for name, node in nodes.iteritems():
             if (re.search('[A-Za-z)][0-9]+$',name) == None) and \
@@ -52,7 +52,7 @@ def get_subj_nodes(model, startswith=None, i_subj=None):
     return the nodes of subj i_subj. if is_subj is None then return all subjects' node
     if i_subj is -1, return root nodes
     """ 
-    if type(model) == type(pm.MCMC([])):
+    if type(model) is pm.MCMC:
         nodes = model.stochastics
     else:
         nodes = model
@@ -63,7 +63,7 @@ def get_subj_nodes(model, startswith=None, i_subj=None):
     if i_subj==-1:
         return get_group_nodes(nodes)
     else: 
-        if type(nodes) == type({}):
+        if type(nodes) is dict:
             nodes = nodes.values()
         
         if i_subj is None:        
@@ -72,7 +72,7 @@ def get_subj_nodes(model, startswith=None, i_subj=None):
             s_subj = str(i_subj)
             subj = [z for z in nodes if re.search(startswith+'[A-Za-z)]%d$'%i_subj,z.__name__) != None]
         
-        if type(nodes) == type({}):
+        if type(nodes) is dict:
             return convert_model_to_dictionary(subj)
         else:
             return subj
@@ -107,7 +107,7 @@ def print_group_stats(stats):
     print_stats(g_stats)
     
 def group_plot(model, n_bins=50):
-    if type(model) == type(pm.MCMC([])):
+    if type(model) is pm.MCMC:
         nodes = model.stochastics
     else:
         nodes = model
