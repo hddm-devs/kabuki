@@ -6,7 +6,10 @@ import pymc as pm
 import kabuki
 
 def difference_prior(delta):
-    # See Wagenmakers et al 2010, equation 14
+    """Evaluate the difference prior.
+
+    :Ref: See Wagenmakers et al 2010, equation 14.
+    """
     if type(delta) is int:
         if delta<=0:
             return 1+delta
@@ -19,6 +22,21 @@ def difference_prior(delta):
         return out
 
 def interpolate_trace(x, trace, range=(-1,1), bins=100):
+    """Interpolate distribution (from samples) at position x.
+
+    :Arguments:
+        x <float>: position at which to evalute posterior.
+        trace <np.ndarray>: Trace containing samples from posterior.
+    
+    :Keyword arguments:
+        range <tuple=(-1,1): Bounds of histogram (should be fairly
+            close around region of interest).
+        bins <int=100>: Bins of histogram (should depend on trace length).
+
+    :Returns:
+        float: Posterior density at x.
+    """
+
     import scipy.interpolate
 
     x_histo = np.linspace(range[0], range[1], bins)
@@ -28,7 +46,10 @@ def interpolate_trace(x, trace, range=(-1,1), bins=100):
     return interp
 
 def savage_dickey(post_trace, range=(-1,1), bins=100, plot=False, title=None, savefig=None, prior_trace=None, prior_y=None, plot_prior=True, label=None):
-    # Calculate Savage-Dickey density ratio test, see Wagenmakers et al 2010
+    """Calculate Savage-Dickey density ratio (i.e. Bayes Factor).
+
+    :Ref: Wagenmakers et al 2010.
+    """
     # Estimate density of posterior
     # Calculate normalized histogram (density)
     x = np.linspace(range[0], range[1], bins)
@@ -65,6 +86,15 @@ def savage_dickey(post_trace, range=(-1,1), bins=100, plot=False, title=None, sa
 
 def save_csv(data, fname, sep=None):
     """Save record array to fname as csv.
+    
+    :Arguments:
+        data <np.recarray>: Data array to output.
+        fname <str>: File name.
+    
+    :Keyword arguments:
+        sep <str=','>: Separator between columns.
+
+    :SeeAlso: load_csv
     """
     if sep is None:
         sep = ','
@@ -79,9 +109,35 @@ def save_csv(data, fname, sep=None):
             fd.write('\n')
 
 def load_csv(*args, **kwargs):
+    """Load record array from csv.
+    
+    :Arguments:
+        fname <str>: File name.
+        See numpy.recfromcsv
+
+    :Keyword arguments:
+        See numpy.recfromcsv
+    
+    :Note:
+        Direct wrapper for numpy.recfromcsv().
+
+    :SeeAlso: save_csv, numpy.recfromcsv
+    """
     return np.recfromcsv(*args, **kwargs)
 
 def parse_config_file(fname, mcmc=False, load=False, param_names=None):
+    """Open, parse and execute a kabuki model as specified by the
+    configuration file.
+
+    :Arguments:
+        fname <str>: File name of config file.
+    
+    :Keyword arguments:
+        mcmc <bool=False>: Run MCMC on model.
+        load <bool=False>: Load from database.
+    """
+    raise NotImplementedError("Obsolete, todo!")
+
     import os.path
     if not os.path.isfile(fname):
         raise ValueError("%s could not be found."%fname)
@@ -221,6 +277,7 @@ def check_geweke(model, assert_=True):
     return True
 
 def load_traces_from_db(mc, dbname):
+
     """Load samples from a database created by an earlier model
     """
     # Open database

@@ -130,11 +130,13 @@ class Hierarchical(object):
     :Note: 
         This class must be inherited. The child class must provide
         the following functions:
-            * get_root_node(param): Return group mean distribution.
-            * get_tau_node(param): Return group variability distribution.
-            * get_child_node(param): Return subject distribution.
-            * get_rootless_child(param, params): Return distribution for 
-                  parameters that have no root (e.g. the model likelihood).
+            * get_root_node(param): Return group mean distribution for param.
+            * get_tau_node(param): Return group variability distribution for param.
+            * get_child_node(param): Return subject distribution for param.
+            * get_rootless_child(param, params): Return distribution
+                  for rootless param (e.g. the model
+                  likelihood). params contains the associated model
+                  parameters.
 
         In addition, the variable self.params must be defined as a
         list of Paramater().
