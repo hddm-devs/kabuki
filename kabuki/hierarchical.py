@@ -152,8 +152,8 @@ class Hierarchical(object):
         self.plot_subjs = plot_subjs
         self.plot_tau = plot_tau
 
-        if depends_on is None:
-            self.depends_on = {}
+        self.depends_on = depends_on or {}
+
         else:
             # Support for supplying columns as a single string
             # -> transform to list
@@ -270,7 +270,7 @@ class Hierarchical(object):
 
         """
         def _create():
-            for name, param in self.params_include.iteritems(): # Loop through param names
+            for name, param in self.params_include.iteritems():
                 if not param.has_root:
                     continue
                 # Check if parameter depends on data
@@ -335,7 +335,7 @@ class Hierarchical(object):
 
         if not self.nodes:
             self.create_nodes()
-        self.mcmc = pm.MCMC(nodes)
+        self.mcmc = pm.MCMC(self.nodes)
         
         return self.mcmc
 
@@ -460,6 +460,7 @@ class Hierarchical(object):
         """Create parameter node object which has no parent.
 
         :Note: 
+
             Called by self._set_rootless_child_node().
 
         :Arguments:
@@ -520,11 +521,10 @@ class Hierarchical(object):
         """Perform all pairwise comparisons of dependent parameter
         distributions (as indicated by depends_on).
 
-        Stats generated:
-        ================
+        :Stats generated:
 
-        * Mean difference
-        * 5th and 95th percentile
+            * Mean difference
+            * 5th and 95th percentile
         """
         from scipy.stats import scoreatpercentile
         from itertools import combinations
