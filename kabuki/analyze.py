@@ -52,7 +52,7 @@ def get_subj_nodes(model, startswith=None, i_subj=None):
     return the nodes of subj i_subj. if is_subj is None then return all subjects' node
     if i_subj is -1, return root nodes
     """ 
-    if type(model) is pm.MCMC:
+    if type(model) == type(pm.MCMC([])):
         nodes = model.stochastics
     else:
         nodes = model

@@ -264,7 +264,8 @@ class Hierarchical(object):
         parameter.
 
         :Arguments:
-            retry <int=20>: How often to retry when model creation 
+            retry : int
+                How often to retry when model creation 
                 failed (due to bad starting values).
 
         """
@@ -326,23 +327,23 @@ class Hierarchical(object):
 
         return self.nodes
     
-    def mcmc(self):
+    def mcmc(self, *args, **kwargs):
         """
         Returns pymc.MCMC object of model.
         """
 
         if not self.nodes:
             self.create_nodes()
-        self.mcmc = pm.MCMC(self.nodes)
+        self.mc = pm.MCMC(self.nodes, *args, **kwargs)
         
-        return self.mcmc
+        return self.mc
 
     def _set_dependent_param(self, param):
         """Set parameter that depends on data.
 
         :Arguments:
-
-            param_name<string>: Name of parameter that depends on data for
+            param_name : string
+                Name of parameter that depends on data for
                 which to set distributions.
 
         """
@@ -378,8 +379,8 @@ class Hierarchical(object):
         """Set parameter that does _not_ depend on data.
 
         :Arguments:
-
-            param_name<string>: Name of parameter.
+            param_name : string
+                Name of parameter.
 
         """
 
@@ -398,10 +399,12 @@ class Hierarchical(object):
         """Set nodes with a parent.
 
         :Arguments:
-
-            param_name <string>: Name of parameter.
-            tag <string>: Element name.
-            data <np.recarray>: Part of the data the parameter 
+            param_name : string
+                Name of parameter.
+            tag : string
+                Element name.
+            data : numpy.recarray
+                Part of the data the parameter 
                 depends on.
 
         """
@@ -430,12 +433,12 @@ class Hierarchical(object):
         """Set parameter node that has no parent.
 
         :Arguments:
-
-            param_name <string>: Name of parameter.
+            param_name : string
+                Name of parameter.
         
-        :Keyword arguments:
-
-            init <bool=False>: Initialize parameter.
+        :Optional:
+            init : bool
+                Initialize parameter.
 
         """
         # Divide data and parameter distributions according to self.depends_on
@@ -458,16 +461,19 @@ class Hierarchical(object):
         """Create parameter node object which has no parent.
 
         :Note: 
-
             Called by self._set_rootless_child_node().
 
         :Arguments:
-
-            param_name <string>: Name of parameter.
-            data <np.recarray>: Data on which parameter depends on.
-            params <list>: List of parameters the node depends on.
-            dep_name <str>: Element name the node depends on.
-            idx <int>: Subject index.
+            param_name : string
+                Name of parameter.
+            data : numpy.recarray
+                Data on which parameter depends on.
+            params : list
+                List of parameters the node depends on.
+            dep_name : str
+                Element name the node depends on.
+            idx : int
+                Subject index.
         
         """
         if self.is_group_model:
@@ -520,9 +526,9 @@ class Hierarchical(object):
         distributions (as indicated by depends_on).
 
         :Stats generated:
-
             * Mean difference
             * 5th and 95th percentile
+
         """
         from scipy.stats import scoreatpercentile
         from itertools import combinations
@@ -538,8 +544,7 @@ class Hierarchical(object):
                 print "%s vs %s\t%.3f\t%.3f\t%.3f" %(p0, p1, np.mean(diff), perc_5, perc_95)
 
     def plot_all_pairwise(self):
-        """Plot all pairwise posteriors to find correlations.
-        """
+        """Plot all pairwise posteriors to find correlations."""
         import matplotlib.pyplot as plt
         import scipy as sp
         import scipy.stats
