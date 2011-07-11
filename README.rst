@@ -20,7 +20,7 @@ Hierarchical Bayesian modeling allows us to construct models that map the nature
 Features
 ========
 
-* Simplicity: Define 3 functions that return the parameters. The complete model creation is taken care of by kabuki.
+* Simplicity: Define 3 functions that return the parameters of your model. The complete model creation is taken care of by kabuki.
 
 * Flexibility in model specification: Kabuki tries not to constrain any models you'll want to create. You specify which parameters your model uses and what distribution the likelihoods have.
 

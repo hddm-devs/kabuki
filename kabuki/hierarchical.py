@@ -86,7 +86,8 @@ class Hierarchical(object):
     has a set of parameters that are constrained by a group distribution.
 
     :Arguments:
-        data <numpy.recarray>: Input data with a row for each trial.
+        data : numpy.recarray
+            Input data with a row for each trial.
             Must contain the following columns:
               * 'rt': Reaction time of trial in seconds.
               * 'response': Binary response (e.g. 0->error, 1->correct)
@@ -95,17 +96,20 @@ class Hierarchical(object):
               * Other user-defined columns that can be used in depends_on
                 keyword.
 
-    :Keyword arguments:
-        include <tuple=()>: If the model has optional arguments, they
+    :Optional:
+        include : tuple
+            If the model has optional arguments, they
             can be included as a tuple of strings here.
 
-        is_group_model <bool>: If True, this results in a hierarchical
+        is_group_model : bool 
+            If True, this results in a hierarchical
             model with separate parameter distributions for each
             subject. The subject parameter distributions are
             themselves distributed according to a group parameter
             distribution.
         
-        depends_on <dict>: Specifies which parameter depends on data
+        depends_on : dict
+            Specifies which parameter depends on data
             of a column in data. For each unique element in that
             column, a separate set of parameter distributions will be
             created and applied. Multiple columns can be specified in
@@ -113,7 +117,7 @@ class Hierarchical(object):
 
             :Example: 
 
-            depends_on={'param1':['column1']}
+            >>> depends_on={'param1':['column1']}
     
             Suppose column1 has the elements 'element1' and
             'element2', then parameters 'param1('element1',)' and
@@ -121,10 +125,12 @@ class Hierarchical(object):
             corresponding parameter distribution and data will be
             provided to the user-specified method get_liklihood().
 
-        trace_subjs <bool=True>: Save trace for subjs (needed for many
+        trace_subjs : bool
+             Save trace for subjs (needed for many
              statistics so probably a good idea.)
 
-        plot_tau <bool=False>: Plot group variability parameters
+        plot_tau : bool
+             Plot group variability parameters
              (i.e. variance of Normal distribution.)
 
     :Note: 
@@ -148,6 +154,7 @@ class Hierarchical(object):
         self.include = set(include)
         
         self.nodes = {}
+        self.mc = None
         self.trace_subjs = trace_subjs
         self.plot_subjs = plot_subjs
         self.plot_tau = plot_tau
@@ -193,9 +200,10 @@ class Hierarchical(object):
         """Partition data according to self.depends_on.
 
         :Returns:
-        
-        List of tuples with the data, the corresponding parameter
-        distribution and the parameter name."""
+            List of tuples with the data, the corresponding parameter
+            distribution and the parameter name.
+
+        """
         
         params = {} # use subj parameters to feed into model
         # Create new params dict and copy over nodes
@@ -330,11 +338,32 @@ class Hierarchical(object):
     def mcmc(self, *args, **kwargs):
         """
         Returns pymc.MCMC object of model.
+
+        :Note:
+            Forwards arguments to pymc.MCMC().
+
         """
 
         if not self.nodes:
             self.create_nodes()
         self.mc = pm.MCMC(self.nodes, *args, **kwargs)
+        
+        if kwargs.has_key('dbname'):
+            self.mc.db.close()
+
+        return self.mc
+
+    def sample(self, *args, **kwargs):
+        """Sample from posterior.
+        
+        :Note:
+            Forwards arguments to pymc.MCMC.sample().
+
+        """
+        if not self.mc:
+            self.mcmc()
+        
+        self.mc.sample(*args, **kwargs)
         
         return self.mc
 

@@ -51,6 +51,7 @@ def get_subj_nodes(model, startswith=None, i_subj=None):
     """get_subj_nodes(model, i_subj=None):
     return the nodes of subj i_subj. if is_subj is None then return all subjects' node
     if i_subj is -1, return root nodes
+
     """ 
     if type(model) == type(pm.MCMC([])):
         nodes = model.stochastics
@@ -90,7 +91,7 @@ def print_stats(stats):
     print s
     for node in nodes:
         v = stats[node]
-        if type(v['mean']) == type(np.array([])) or node.startswith('Metropolis') or node == 'deviance':
+        if type(v['mean']) is np.array or node.startswith('Metropolis') or node == 'deviance':
             continue
         print "%s: %6.3f %6.3f %6.3f %6.3f %6.3f %6.3f %6.3f %6.3f" % \
         (node.ljust(len_name), v['mean'], v['standard deviation'], 
