@@ -346,6 +346,7 @@ class Hierarchical(object):
 
         if not self.nodes:
             self.create_nodes()
+
         self.mc = pm.MCMC(self.nodes, *args, **kwargs)
         
         if kwargs.has_key('dbname'):
@@ -366,6 +367,18 @@ class Hierarchical(object):
         self.mc.sample(*args, **kwargs)
         
         return self.mc
+
+    def print_group_stats(self):
+        if not self.mc:
+            raise ValueError("No model found.")
+            
+        kabuki.analyze.print_group_stats(self.mc.stats())
+
+    def print_stats(self):
+        if not self.mc:
+            raise ValueError("No model found.")
+            
+        kabuki.analyze.print_stats(self.mc.stats())
 
     def _set_dependent_param(self, param):
         """Set parameter that depends on data.

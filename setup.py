@@ -3,8 +3,8 @@ from distutils.core import setup
 setup(
     name="kabuki",
     version="0.1",
-    author="Thomas V. Wiecki",
-    author_email="thomas_wiecki@brown.edu",
+    author="Thomas V. Wiecki, Imri Sofer",
+    author_email="thomas.wiecki@gmail.com",
     url="http://code.google.com/p/kabuki",
     packages=["kabuki"],
     description="kabuki is a python toolbox that allows easy creation of hierarchical bayesian models for the cognitive sciences.",
