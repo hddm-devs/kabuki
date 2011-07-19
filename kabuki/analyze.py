@@ -39,7 +39,7 @@ def get_group_nodes(nodes, return_list=False):
         return root
     
 def get_subjs_numbers(mc):    
-    if type(model) == type(pm.MCMC([])):
+    if type(model) is pm.MCMC:
         nodes = model.stochastics
     else:
         nodes = model
