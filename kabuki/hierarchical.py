@@ -615,3 +615,50 @@ class Hierarchical(object):
         else:
             assert self.params_dict[node_name].default is not None, "Default value of not-included parameter not set."
             return self.params_dict[node_name].default
+
+
+    #################################
+    # Methods that can be overwritten
+    #################################
+    def get_root_node(self, param):
+        """Create and return a uniform prior distribution for root
+        parameter 'param'.
+
+        This is used for the group distributions.
+
+        """
+        return pm.Uniform(param.full_name,
+                          lower=param.lower,
+                          upper=param.upper,
+                          value=param.init,
+                          verbose=param.verbose)
+
+    def get_tau_node(self, param):
+        """Create and return a Uniform prior distribution for the
+        variability parameter 'param'.
+        
+        Note, that we chose a Uniform distribution rather than the
+        more common Gamma (see Gelman 2006: "Prior distributions for
+        variance parameters in hierarchical models").
+
+        This is used for the variability fo the group distribution.
+
+        """
+        return pm.Uniform(param.full_name, lower=0., upper=1.,
+                          value=.1, plot=self.plot_tau)
+
+    def get_child_node(self, param):
+        """Create and return a Truncated Normal distribution for
+        'param' centered around param.root with standard deviation
+        param.tau and initialization value param.init.
+
+        This is used for the individual subject distributions.
+
+        """
+        return pm.TruncatedNormal(param.full_name,
+                                  a=param.lower,
+                                  b=param.upper,
+                                  mu=param.root, 
+                                  tau=param.tau**-2,
+                                  plot=self.plot_subjs,
+                                  value=param.init)
