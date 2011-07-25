@@ -123,8 +123,19 @@ def load_csv(*args, **kwargs):
 
     :SeeAlso: save_csv, numpy.recfromcsv
     """
-    return np.recfromcsv(*args, **kwargs)
-
+    #read data
+    data = np.recfromcsv(*args, **kwargs)
+    assert('data_idx' not in data.dtype.names),'A field named data_idx was found in the data file, please change it.'
+    
+    #add data_idx
+    new_dtype = data.dtype.descr + [('data_idx', '<i8')]
+    new_data = np.empty(data.shape, dtype=new_dtype)
+    for field in data.dtype.fields:
+        new_data[field] = data[field]
+    new_data['data_idx'] = np.arange(len(data))
+    
+    return new_data
+   
 def parse_config_file(fname, mcmc=False, load=False, param_names=None):
     """Open, parse and execute a kabuki model as specified by the
     configuration file.
