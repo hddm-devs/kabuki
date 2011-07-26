@@ -159,6 +159,16 @@ class Hierarchical(object):
         self.plot_subjs = plot_subjs
         self.plot_tau = plot_tau
 
+        #add data_idx field to data
+        assert('data_idx' not in data.dtype.names),'A field named data_idx was found in the data file, please change it.'
+        new_dtype = data.dtype.descr + [('data_idx', '<i8')]
+        new_data = np.empty(data.shape, dtype=new_dtype)
+        for field in data.dtype.fields:
+            new_data[field] = data[field]
+        new_data['data_idx'] = np.arange(len(data))
+        data = new_data
+        self.data = data
+
         if not depends_on:
             self.depends_on = {}
         else:
