@@ -28,7 +28,7 @@ def interpolate_trace(x, trace, range=(-1,1), bins=100):
         x <float>: position at which to evalute posterior.
         trace <np.ndarray>: Trace containing samples from posterior.
     
-    :Keyword arguments:
+    :Optional:
         range <tuple=(-1,1): Bounds of histogram (should be fairly
             close around region of interest).
         bins <int=100>: Bins of histogram (should depend on trace length).
@@ -91,7 +91,7 @@ def save_csv(data, fname, sep=None):
         data <np.recarray>: Data array to output.
         fname <str>: File name.
     
-    :Keyword arguments:
+    :Optional:
         sep <str=','>: Separator between columns.
 
     :SeeAlso: load_csv
@@ -115,7 +115,7 @@ def load_csv(*args, **kwargs):
         fname <str>: File name.
         See numpy.recfromcsv
 
-    :Keyword arguments:
+    :Optional:
         See numpy.recfromcsv
     
     :Note:
@@ -133,7 +133,7 @@ def parse_config_file(fname, mcmc=False, load=False, param_names=None):
     :Arguments:
         fname <str>: File name of config file.
     
-    :Keyword arguments:
+    :Optional:
         mcmc <bool=False>: Run MCMC on model.
         load <bool=False>: Load from database.
     """
