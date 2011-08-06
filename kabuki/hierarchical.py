@@ -359,9 +359,6 @@ class Hierarchical(object):
 
         self.mc = pm.MCMC(self.nodes, *args, **kwargs)
         
-        if kwargs.has_key('dbname'):
-            self.mc.db.close()
-
         return self.mc
 
     def sample(self, *args, **kwargs):
