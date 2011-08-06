@@ -16,7 +16,7 @@ class Parameter(object):
     :Arguments:
         name <str>: Name of parameter.
 
-    :Keyword arguments:
+    :Optional:
         has_root <bool=True>: Parameter has a root node.
         lower <float>: Lower bound (e.g. for a uniform distribution).
         upper <float>: Upper bound (e.g. for a uniform distribution).
@@ -597,11 +597,12 @@ class Hierarchical(object):
         import matplotlib.pyplot as plt
         import scipy as sp
         import scipy.stats
+        from itertools import combinations
         #size = int(np.ceil(np.sqrt(len(data_deps))))
         fig = plt.figure()
         fig.subplots_adjust(wspace=0.4, hspace=0.4)
         # Loop through all pairwise combinations
-        for i,(p0,p1) in enumerate(kabuki.utils.all_pairs(self.root_nodes.values())):
+        for i,(p0,p1) in enumerate(combinations(self.root_nodes.values())):
             fig.add_subplot(6,6,i+1)
             plt.plot(p0.trace(), p1.trace(), '.')
             (a_s,b_s,r,tt,stderr) = sp.stats.linregress(p0.trace(), p1.trace())
