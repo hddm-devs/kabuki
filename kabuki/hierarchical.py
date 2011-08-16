@@ -652,7 +652,7 @@ class Hierarchical(object):
         This is used for the variability fo the group distribution.
 
         """
-        return pm.Uniform(param.full_name, lower=0., upper=1.,
+        return pm.Uniform(param.full_name, lower=0., upper=100.,
                           value=.1, plot=self.plot_tau)
 
     def get_child_node(self, param):
