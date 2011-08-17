@@ -17,7 +17,9 @@ class Parameter(object):
         name <str>: Name of parameter.
 
     :Optional:
-        has_root <bool=True>: Parameter has a root node.
+        create_group_node <bool=True>: Create group nodes for parameter.
+        create_subj_nodes <bool=True>: Create subj nodes for parameter.
+        is_bottom_node <bool=False>: Is node at the bottom of the hierarchy (e.g. likelihoods)
         lower <float>: Lower bound (e.g. for a uniform distribution).
         upper <float>: Upper bound (e.g. for a uniform distribution).
         init <float>: Initialize to value.
@@ -26,18 +28,18 @@ class Parameter(object):
         optional <bool=False>: Only create distribution when included. 
             Otherwise, set to default value (see below).
         default <float>: Default value if optional=True.
-        no_childs <bool=False>: Do not create children nodes.
         verbose <int=0>: Verbosity.
     """
 
-    def __init__(self, name, has_root=True, lower=None, upper=None, init=None, vars=None, default=None, no_childs=False, optional=False, verbose=0):
+    def __init__(self, name, create_group_node=True, create_subj_nodes=True, is_bottom_node=False, lower=None, upper=None, init=None, vars=None, default=None, optional=False, verbose=0):
         self.name = name
-        self.has_root = has_root
+        self.create_group_node = create_group_node
+        self.create_subj_nodes = create_subj_nodes
+        self.is_bottom_node = is_bottom_node
         self.lower = lower
         self.upper = upper
         self.init = init
         self.vars = vars
-        self.no_childs = no_childs
         self.optional = optional
         self.default = default
         self.verbose = verbose
@@ -45,20 +47,20 @@ class Parameter(object):
         if self.optional and self.default is None:
             raise ValueError("Optional parameters have to have a default value.")
 
-        self.root_nodes = OrderedDict()
-        self.tau_nodes = OrderedDict()
-        self.child_nodes = OrderedDict()
+        self.group_nodes = OrderedDict()
+        self.var_nodes = OrderedDict()
+        self.subj_nodes = OrderedDict()
 
         # Pointers that get overwritten
-        self.root = None
-        self.child = None
+        self.group = None
+        self.subj = None
         self.tag = None
         self.data = None
         self.idx = None
 
     def reset(self):
-        self.root = None
-        self.child = None
+        self.group = None
+        self.subj = None
         self.tag = None
         self.data = None
         self.idx = None
@@ -129,18 +131,18 @@ class Hierarchical(object):
              Save trace for subjs (needed for many
              statistics so probably a good idea.)
 
-        plot_tau : bool
+        plot_var : bool
              Plot group variability parameters
              (i.e. variance of Normal distribution.)
 
     :Note: 
         This class must be inherited. The child class must provide
         the following functions:
-            * get_root_node(param): Return group mean distribution for param.
-            * get_tau_node(param): Return group variability distribution for param.
-            * get_child_node(param): Return subject distribution for param.
-            * get_rootless_child(param, params): Return distribution
-                  for rootless param (e.g. the model
+            * get_group_node(param): Return group mean distribution for param.
+            * get_var_node(param): Return group variability distribution for param.
+            * get_subj_node(param): Return subject distribution for param.
+            * get_bottom_node(param, params): Return distribution
+                  for nodes at the bottom of the hierarchy param (e.g. the model
                   likelihood). params contains the associated model
                   parameters.
 
@@ -149,7 +151,7 @@ class Hierarchical(object):
 
     """
 
-    def __init__(self, data, is_group_model=None, depends_on=None, trace_subjs=True, plot_subjs=False, plot_tau=False, include=()):
+    def __init__(self, data, is_group_model=None, depends_on=None, trace_subjs=True, plot_subjs=False, plot_var=False, include=()):
         # Init
         self.include = set(include)
         
@@ -157,7 +159,7 @@ class Hierarchical(object):
         self.mc = None
         self.trace_subjs = trace_subjs
         self.plot_subjs = plot_subjs
-        self.plot_tau = plot_tau
+        self.plot_var = plot_var
 
         #add data_idx field to data
         assert('data_idx' not in data.dtype.names),'A field named data_idx was found in the data file, please change it.'
@@ -218,12 +220,13 @@ class Hierarchical(object):
         params = {} # use subj parameters to feed into model
         # Create new params dict and copy over nodes
         for name, param in self.params_include.iteritems():
-            if name in self.depends_on or not param.has_root:
+            # Bottom nodes are created later
+            if name in self.depends_on or param.is_bottom_node:
                 continue
-            if self.is_group_model and not param.no_childs:
-                params[name] = param.child_nodes['']
+            if self.is_group_model and param.create_subj_nodes:
+                params[name] = param.subj_nodes['']
             else:
-                params[name] = param.root_nodes['']
+                params[name] = param.group_nodes['']
 
         depends_on = copy(self.depends_on)
 
@@ -252,16 +255,16 @@ class Hierarchical(object):
 
                 # Add a key that is only the col_name that links to
                 # the correct dependent nodes. This is the central
-                # trick so that later on the get_rootless_child can use
+                # trick so that later on the get_bottom_node can use
                 # params[col_name] and the observed will get linked to
                 # the correct nodes automatically.
                 param = self.params_include[param_name]
 
                 # Add the node
-                if self.is_group_model and not param.no_childs:
-                    params[param_name] = param.child_nodes[str(depend_element)]
+                if self.is_group_model and param.create_subj_nodes:
+                    params[param_name] = param.subj_nodes[str(depend_element)]
                 else:
-                    params[param_name] = param.root_nodes[str(depend_element)]
+                    params[param_name] = param.group_nodes[str(depend_element)]
                 # Recursive call with one less dependency and the selected data.
                 data_param = self._get_data_depend_rec(data_dep,
                                                        depends_on=copy(depends_on),
@@ -289,7 +292,8 @@ class Hierarchical(object):
         """
         def _create():
             for name, param in self.params_include.iteritems():
-                if not param.has_root:
+                # Bottom nodes are created elsewhere
+                if param.is_bottom_node:
                     continue
                 # Check if parameter depends on data
                 if name in self.depends_on.keys():
@@ -321,27 +325,27 @@ class Hierarchical(object):
                 else:
                     raise pm.ZeroProbability, e
         
-        # Init rootless nodes
+        # Init bottom nodes
         for param in self.params_include.itervalues():
-            if param.has_root:
+            if not param.is_bottom_node:
                 continue
-            self._set_rootless_child_nodes(param, init=True)
+            self._set_bottom_nodes(param, init=True)
 
-        # Create rootless nodes
+        # Create bottom nodes
         for param in self.params_include.itervalues():
-            if param.has_root:
+            if not param.is_bottom_node:
                 continue
-            self._set_rootless_child_nodes(param, init=False)
+            self._set_bottom_nodes(param, init=False)
 
         # Create model dictionary
         self.nodes = {}
         for name, param in self.params_include.iteritems():
-            for tag, node in param.root_nodes.iteritems():
-                self.nodes[name+tag+'_root'] = node
-            for tag, node in param.child_nodes.iteritems():
-                self.nodes[name+tag+'_child'] = node
-            for tag, node in param.tau_nodes.iteritems():
-                self.nodes[name+tag+'_tau'] = node
+            for tag, node in param.group_nodes.iteritems():
+                self.nodes[name+tag+'_group'] = node
+            for tag, node in param.subj_nodes.iteritems():
+                self.nodes[name+tag+'_subj'] = node
+            for tag, node in param.var_nodes.iteritems():
+                self.nodes[name+tag+'_var'] = node
 
         return self.nodes
     
@@ -418,12 +422,15 @@ class Hierarchical(object):
             # Create parameter distribution from factory
             param.tag = tag
             param.data = data_dep_select
-            param.root_nodes[tag] = self.get_root_node(param)
+            if param.create_group_node:
+                param.group_nodes[tag] = self.get_group_node(param)
+            else:
+                param.group_nodes[tag] = None
             param.reset()
 
-            if self.is_group_model and not param.no_childs:
+            if self.is_group_model and param.create_subj_nodes:
                 # Create appropriate subj parameter
-                self._set_child_nodes(param, tag, data_dep_select)
+                self._set_subj_nodes(param, tag, data_dep_select)
 
         return self
 
@@ -439,15 +446,15 @@ class Hierarchical(object):
         # Parameter does not depend on data
         # Set group parameter
         param.tag = ''
-        param.root_nodes[''] = self.get_root_node(param)
+        param.group_nodes[''] = self.get_group_node(param)
         param.reset()
 
-        if self.is_group_model and not param.no_childs:
-            self._set_child_nodes(param, '', self.data)
+        if self.is_group_model and param.create_subj_nodes:
+            self._set_subj_nodes(param, '', self.data)
         
         return self
 
-    def _set_child_nodes(self, param, tag, data):
+    def _set_subj_nodes(self, param, tag, data):
         """Set nodes with a parent.
 
         :Arguments:
@@ -460,28 +467,28 @@ class Hierarchical(object):
                 depends on.
 
         """
-        # Generate subj variability parameter tau
-        param.tag = 'tau'+tag
+        # Generate subj variability parameter var
+        param.tag = 'var'+tag
         param.data = data
-        param.tau_nodes[tag] = self.get_tau_node(param)
+        param.var_nodes[tag] = self.get_var_node(param)
         param.reset()
 
         # Init
-        param.child_nodes[tag] = np.empty(self._num_subjs, dtype=object)
+        param.subj_nodes[tag] = np.empty(self._num_subjs, dtype=object)
         # Create subj parameter distribution for each subject
         for subj_idx,subj in enumerate(self._subjs):
             data_subj = data[data['subj_idx']==subj]
             param.data = data_subj
-            param.root = param.root_nodes[tag]
-            param.tau = param.tau_nodes[tag]
+            param.group = param.group_nodes[tag]
+            param.var = param.var_nodes[tag]
             param.tag = tag
             param.idx = subj_idx
-            param.child_nodes[tag][subj_idx] = self.get_child_node(param)
+            param.subj_nodes[tag][subj_idx] = self.get_subj_node(param)
             param.reset()
 
         return self
     
-    def _set_rootless_child_nodes(self, param, init=False):
+    def _set_bottom_nodes(self, param, init=False):
         """Set parameter node that has no parent.
 
         :Arguments:
@@ -500,20 +507,20 @@ class Hierarchical(object):
         for i, (data, params_dep, dep_name) in enumerate(data_dep):
             dep_name = str(dep_name)
             if init:
-                if self.is_group_model and not param.no_childs:
-                    param.child_nodes[dep_name] = np.empty(self._num_subjs, dtype=object)
+                if self.is_group_model and param.create_subj_nodes:
+                    param.subj_nodes[dep_name] = np.empty(self._num_subjs, dtype=object)
                 else:
-                    param.child_nodes[dep_name] = None
+                    param.subj_nodes[dep_name] = None
             else:
-                self._create_rootless_child_node(param, data, params_dep, dep_name, i)
+                self._create_bottom_node(param, data, params_dep, dep_name, i)
             
         return self
         
-    def _create_rootless_child_node(self, param, data, params, dep_name, idx):
+    def _create_bottom_node(self, param, data, params, dep_name, idx):
         """Create parameter node object which has no parent.
 
         :Note: 
-            Called by self._set_rootless_child_node().
+            Called by self._set_bottom_node().
 
         :Arguments:
             param_name : string
@@ -536,39 +543,40 @@ class Hierarchical(object):
                 if len(data_subj) == 0:
                     continue
                 # Select params belonging to subject
-                selected_child_nodes = {}
+                selected_subj_nodes = {}
                 # Create new params dict and copy over nodes
                 for selected_param in self.params_include.itervalues():
-                    # Since rootless nodes are not created in this function we
+                    # Since groupless nodes are not created in this function we
                     # have to search for the correct node and include it in
                     # the params.
-                    if selected_param.no_childs:
-                        if selected_param.child_nodes.has_key(dep_name):
-                            selected_child_nodes[selected_param.name] = selected_param.root_nodes[dep_name]
+                    if not selected_param.create_subj_nodes:
+                        if selected_param.subj_nodes.has_key(dep_name):
+                            selected_subj_nodes[selected_param.name] = selected_param.group_nodes[dep_name]
                         else:
-                            selected_child_nodes[selected_param.name] = params[selected_param.name]
+                            selected_subj_nodes[selected_param.name] = params[selected_param.name]
                     else:
-                        if selected_param.child_nodes.has_key(dep_name):
-                            selected_child_nodes[selected_param.name] = selected_param.child_nodes[dep_name][i]
+                        if selected_param.subj_nodes.has_key(dep_name):
+                            selected_subj_nodes[selected_param.name] = selected_param.subj_nodes[dep_name][i]
                         else:
-                            selected_child_nodes[selected_param.name] = params[selected_param.name][i]
+                            selected_subj_nodes[selected_param.name] = params[selected_param.name][i]
 
                 # Call to the user-defined function!
                 param.tag = dep_name
                 param.idx = i
                 param.data = data_subj
-                param.child_nodes[dep_name][i] = self.get_rootless_child(param, selected_child_nodes)
+                param.subj_nodes[dep_name][i] = self.get_bottom_node(param, selected_subj_nodes)
                 param.reset()
         else: # Do not use subj params, but group ones
-            # Since rootless nodes are not created in this function we
+            # Since group nodes are not created in this function we
             # have to search for the correct node and include it in
             # the params
             for selected_param in self.params_include.itervalues():
-                if selected_param.child_nodes.has_key(dep_name):
-                    params[selected_param.name] = selected_param.child_nodes[dep_name]
+                if selected_param.subj_nodes.has_key(dep_name):
+                    params[selected_param.name] = selected_param.subj_nodes[dep_name]
+
             param.tag = dep_name
             param.data = data
-            param.child_nodes[dep_name] = self.get_rootless_child(param, params)
+            param.subj_nodes[dep_name] = self.get_bottom_node(param, params)
             param.reset()
 
         return self
@@ -587,10 +595,10 @@ class Hierarchical(object):
 
         print "Parameters\tMean difference\t5%\t95%"
         # Loop through dependent parameters and generate stats
-        for params in self.root_nodes_dep.itervalues():
+        for params in self.group_nodes_dep.itervalues():
             # Loop through all pairwise combinations
             for p0,p1 in combinations(params, 2):
-                diff = self.root_nodes[p0].trace()-self.root_nodes[p1].trace()
+                diff = self.group_nodes[p0].trace()-self.group_nodes[p1].trace()
                 perc_5 = scoreatpercentile(diff, 5)
                 perc_95 = scoreatpercentile(diff, 95)
                 print "%s vs %s\t%.3f\t%.3f\t%.3f" %(p0, p1, np.mean(diff), perc_5, perc_95)
@@ -605,7 +613,7 @@ class Hierarchical(object):
         fig = plt.figure()
         fig.subplots_adjust(wspace=0.4, hspace=0.4)
         # Loop through all pairwise combinations
-        for i,(p0,p1) in enumerate(combinations(self.root_nodes.values())):
+        for i,(p0,p1) in enumerate(combinations(self.group_nodes.values())):
             fig.add_subplot(6,6,i+1)
             plt.plot(p0.trace(), p1.trace(), '.')
             (a_s,b_s,r,tt,stderr) = sp.stats.linregress(p0.trace(), p1.trace())
@@ -631,8 +639,8 @@ class Hierarchical(object):
     #################################
     # Methods that can be overwritten
     #################################
-    def get_root_node(self, param):
-        """Create and return a uniform prior distribution for root
+    def get_group_node(self, param):
+        """Create and return a uniform prior distribution for group
         parameter 'param'.
 
         This is used for the group distributions.
@@ -644,7 +652,7 @@ class Hierarchical(object):
                           value=param.init,
                           verbose=param.verbose)
 
-    def get_tau_node(self, param):
+    def get_var_node(self, param):
         """Create and return a Uniform prior distribution for the
         variability parameter 'param'.
         
@@ -656,12 +664,12 @@ class Hierarchical(object):
 
         """
         return pm.Uniform(param.full_name, lower=0., upper=1.,
-                          value=.1, plot=self.plot_tau)
+                          value=.1, plot=self.plot_var)
 
-    def get_child_node(self, param):
+    def get_subj_node(self, param):
         """Create and return a Truncated Normal distribution for
-        'param' centered around param.root with standard deviation
-        param.tau and initialization value param.init.
+        'param' centered around param.group with standard deviation
+        param.var and initialization value param.init.
 
         This is used for the individual subject distributions.
 
@@ -669,7 +677,7 @@ class Hierarchical(object):
         return pm.TruncatedNormal(param.full_name,
                                   a=param.lower,
                                   b=param.upper,
-                                  mu=param.root, 
-                                  tau=param.tau**-2,
+                                  mu=param.group, 
+                                  var=param.var**-2,
                                   plot=self.plot_subjs,
                                   value=param.init)
