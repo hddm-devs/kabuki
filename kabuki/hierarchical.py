@@ -363,9 +363,6 @@ class Hierarchical(object):
 
         self.mc = pm.MCMC(self.nodes, *args, **kwargs)
         
-        if kwargs.has_key('dbname'):
-            self.mc.db.close()
-
         return self.mc
 
     def sample(self, *args, **kwargs):
@@ -663,7 +660,7 @@ class Hierarchical(object):
         This is used for the variability fo the group distribution.
 
         """
-        return pm.Uniform(param.full_name, lower=0., upper=1.,
+        return pm.Uniform(param.full_name, lower=0., upper=100.,
                           value=.1, plot=self.plot_var)
 
     def get_subj_node(self, param):

@@ -91,7 +91,8 @@ def print_stats(stats):
     print s
     for node in nodes:
         v = stats[node]
-        if type(v['mean']) is np.array or node.startswith('Metropolis') or node == 'deviance':
+        if type(v['mean']) is np.array or node.startswith('Metropolis') \
+        or node == 'deviance' or not np.isscalar(stats['a']['mean']):
             continue
         print "%s: %6.3f %6.3f %6.3f %6.3f %6.3f %6.3f %6.3f %6.3f" % \
         (node.ljust(len_name), v['mean'], v['standard deviation'], 
