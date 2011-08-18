@@ -7,6 +7,7 @@ import numpy.lib.recfunctions as rec
 from ordereddict import OrderedDict
 
 import pymc as pm
+import warnings
 
 import kabuki
 
@@ -374,8 +375,14 @@ class Hierarchical(object):
         """
         if not self.mc:
             self.mcmc()
-        
-        self.mc.sample(*args, **kwargs)
+
+        if ('hdf5' in dir(pm.database)) and \
+           (type(self.mc.db) is pm.database.hdf5.Database):
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore', pm.database.hdf5.tables.NaturalNameWarning)
+                self.mc.sample(*args, **kwargs)
+        else:
+            self.mc.sample(*args, **kwargs)
         
         return self.mc
 
