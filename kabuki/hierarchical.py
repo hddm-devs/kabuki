@@ -686,5 +686,5 @@ class Hierarchical(object):
                                   mu=param.group, 
                                   var=param.var**-2,
                                   plot=self.plot_subjs,
-                                  trace = self.trace_subjs,
+                                  trace=self.trace_subjs,
                                   value=param.init)
