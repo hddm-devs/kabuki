@@ -32,7 +32,9 @@ class Parameter(object):
         verbose <int=0>: Verbosity.
     """
 
-    def __init__(self, name, create_group_node=True, create_subj_nodes=True, is_bottom_node=False, lower=None, upper=None, init=None, vars=None, default=None, optional=False, verbose=0):
+    def __init__(self, name, create_group_node=True, create_subj_nodes=True,
+                 is_bottom_node=False, lower=None, upper=None, init=None,
+                 vars=None, default=None, optional=False, verbose=0):
         self.name = name
         self.create_group_node = create_group_node
         self.create_subj_nodes = create_subj_nodes
@@ -684,4 +686,5 @@ class Hierarchical(object):
                                   mu=param.group, 
                                   var=param.var**-2,
                                   plot=self.plot_subjs,
+                                  trace = self.trace_subjs,
                                   value=param.init)
