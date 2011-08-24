@@ -79,8 +79,13 @@ def get_subj_nodes(model, startswith=None, i_subj=None):
             return subj
 
 def print_stats(stats):
-    nodes = sorted(stats.keys());    
-    len_name = max([len(x) for x in nodes])
+    """
+    print the model's stats in a pretty format
+    Input:
+        stats - the output of MCMC.stats()
+    """
+    names = sorted(stats.keys())
+    len_name = max([len(x) for x in names])
     fields = {}
     f_names  = ['mean', 'std', '2.5q', '25q', '50q', '75q', '97.5', 'mc_err']
     len_f_names = 6
@@ -89,18 +94,23 @@ def print_stats(stats):
     for name in f_names:
         s = s + ' ' + name.center(len_f_names)
     print s
-    for node in nodes:
-        v = stats[node]
-        if type(v['mean']) is np.array or node.startswith('Metropolis') \
-        or node == 'deviance' or not np.isscalar(stats['a']['mean']):
+    for name in names:
+        i_stats = stats[name]
+        if not np.isscalar(i_stats['mean']):
             continue
         print "%s: %6.3f %6.3f %6.3f %6.3f %6.3f %6.3f %6.3f %6.3f" % \
-        (node.ljust(len_name), v['mean'], v['standard deviation'], 
-         v['quantiles'][2.5], v['quantiles'][25],\
-         v['quantiles'][50], v['quantiles'][75], \
-         v['quantiles'][97.5], v['mc error'])
+        (name.ljust(len_name), i_stats['mean'], i_stats['standard deviation'],
+         i_stats['quantiles'][2.5], i_stats['quantiles'][25],\
+         i_stats['quantiles'][50], i_stats['quantiles'][75], \
+         i_stats['quantiles'][97.5], i_stats['mc error'])
         
 def print_group_stats(stats):
+    """
+    print the model's group stats in a pretty format
+    Input:
+        stats - the output of MCMC.stats()
+    """
+
     g_stats = {}
     keys = [z for z in stats.keys() if re.match('[0-9]',z[-1]) is None]
     keys.sort()
