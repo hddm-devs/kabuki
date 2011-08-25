@@ -316,17 +316,17 @@ class Hierarchical(object):
             if param.name in self.include or not param.optional:
                 self.params_include[param.name] = param
 
-        succeeded = False
         tries = 0
-        while(not succeeded):
+        while(True)
             try:
                 _create()
-                succeeded = True
             except (pm.ZeroProbability, ValueError) as e:
                 if tries < retry:
                     tries += 1
+                    continue
                 else:
                     raise pm.ZeroProbability, e
+            break
         
         # Init bottom nodes
         for param in self.params_include.itervalues():
@@ -352,6 +352,66 @@ class Hierarchical(object):
 
         return self.nodes
     
+    def map(self, runs=4, max_retry=4, warn_crit=5, **kwargs):
+        """
+        Find MAP and set optimized values to nodes.
+
+        :Arguments:
+            runs : int
+                How many runs to make with different starting values
+            max_retry : int
+                If model creation fails, how often to retry per run
+            warn_crit: float
+                How far must the two best fitting values be apart in order to print a warning message
+
+        :Returns:
+            pymc.MAP object of model.
+
+        :Note:
+            Forwards additional keyword arguments to pymc.MAP().
+
+        """
+
+        from operator import attrgetter
+
+        maps = []
+
+        for i in range(runs):
+            retries = 0
+            # Sometimes initial values are badly chosen, so retry.
+            while True:
+                try:
+                    # (re)create nodes to get new initival values
+                    self.create_nodes()
+                    m = pm.MAP(self.nodes, **kwargs)
+                    m.fit()
+                    maps.append(m)
+                except pm.ZeroProbability as e:
+                    retries += 1
+                    if retries >= max_retry:
+                        raise e
+                    else:
+                        continue
+                break
+
+        # We want to use values of the best fitting model
+        sorted_maps = sorted(maps, key=attrgetter('logp'))
+        max_map = sorted_maps[-1]
+        
+        # If maximum logp values are not in the same range, there
+        # could be a problem with the model.
+        if runs >= 2:
+            abs_err = np.abs(sorted_maps[-1].logp - sorted_maps[-2].logp)
+            if abs_err > warn_crit:
+                print "Warning! Two best fitting MAP estimates are %f apart. Consider using more runs to avoid local minima." % abs_err
+
+        # Set values of nodes
+        for name, node in max_map._dict_container.iteritems():
+            if not node.observed:
+                self.nodes[name].value = node.value 
+        
+        return max_map
+
     def mcmc(self, *args, **kwargs):
         """
         Returns pymc.MCMC object of model.
