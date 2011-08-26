@@ -5,22 +5,6 @@ import pymc as pm
 
 import kabuki
 
-def difference_prior(delta):
-    """Evaluate the difference prior.
-
-    :Ref: See Wagenmakers et al 2010, equation 14.
-    """
-    if type(delta) is int:
-        if delta<=0:
-            return 1+delta
-        else:
-            return 1-delta
-    else:
-        out = copy(delta)
-        out[delta <= 0] = 1+delta[delta <= 0]
-        out[delta > 0] = 1-delta[delta > 0]
-        return out
-
 def interpolate_trace(x, trace, range=(-1,1), bins=100):
     """Interpolate distribution (from samples) at position x.
 
@@ -44,45 +28,6 @@ def interpolate_trace(x, trace, range=(-1,1), bins=100):
     interp = scipy.interpolate.InterpolatedUnivariateSpline(x_histo, histo)(x)
 
     return interp
-
-def savage_dickey(post_trace, range=(-1,1), bins=100, plot=False, title=None, savefig=None, prior_trace=None, prior_y=None, plot_prior=True, label=None):
-    """Calculate Savage-Dickey density ratio (i.e. Bayes Factor).
-
-    :Ref: Wagenmakers et al 2010.
-    """
-    # Estimate density of posterior
-    # Calculate normalized histogram (density)
-    x = np.linspace(range[0], range[1], bins)
-    if prior_trace is not None:
-        prior0 = interpolate_trace(0, prior_trace, range=range, bins=bins)
-        prior = interpolate_trace(x, prior_trace, range=range, bins=bins)
-    elif prior_y is not None:
-        import scipy.interpolate
-        prior0 = scipy.interpolate.InterpolatedUnivariateSpline(x, prior_y)(0)
-        prior = prior_y
-    else:
-        assert ValueError, "Supply either prior_trace or prior_y keyword arguments"
-        
-    posterior0 = interpolate_trace(0, post_trace, range=range, bins=bins)
-    posterior = interpolate_trace(x, post_trace, range=range, bins=bins)
-
-    # Calculate Savage-Dickey density ratio at x=0
-    sav_dick = posterior0 / prior0
-
-    if plot:
-        if label is None:
-            label='posterior'
-        plt.plot(x, posterior, label=label, lw=2.)
-        if plot_prior:
-            plt.plot(x, prior, label='prior', lw=2.)
-        plt.axvline(x=0, lw=1., color='k')
-        plt.ylim(ymin=0)
-        if title:
-            plt.title(title)
-        if savefig:
-            plt.savefig('plots/'+savefig+'.png')
-
-    return sav_dick #, prior, posterior, prior0, posterior0
 
 def save_csv(data, fname, sep=None):
     """Save record array to fname as csv.
@@ -262,23 +207,7 @@ def posterior_predictive_check(model, data):
     # Check
     return pm.discrepancy(data_sampled, data, .5)
     
-    
-def check_geweke(model, assert_=True):
-    # Test for convergence using geweke method
-    for param in model.group_params.itervalues():
-        geweke = np.array(pm.geweke(param))
-        if assert_:
-            assert (np.any(np.abs(geweke[:,1]) < 2)), 'Chain of %s not properly converged'%param
-            return False
-        else:
-            if np.any(np.abs(geweke[:,1]) > 2):
-                print "Chain of %s not properly converged" % param
-                return False
-
-    return True
-
 def load_traces_from_db(mc, dbname):
-
     """Load samples from a database created by an earlier model
     """
     # Open database
@@ -291,6 +220,13 @@ def load_traces_from_db(mc, dbname):
             continue
         node.trace = db.trace(node.__name__)
 
+def set_proposal_sd(mc, tau=.1):
+    for var in mc.variables:
+        if var.__name__.endswith('var'):
+            # Change proposal SD
+            mc.use_step_method(pm.Metropolis, var, proposal_sd = tau)
+
+    return
 
 if __name__ == "__main__":
     import doctest

@@ -78,6 +78,26 @@ def get_subj_nodes(model, startswith=None, i_subj=None):
         else:
             return subj
 
+def gen_stats(traces, alpha=0.05, batches=100):
+    """Useful helper function to generate stats() on a loaded database
+    object.  Pass the db._traces list.
+
+    """
+    
+    from pymc.utils import hpd, quantiles
+    from pymc import batchsd
+
+    stats = {}
+    for name, trace_obj in traces.iteritems():
+        trace = np.squeeze(np.array(trace_obj(), float))
+        stats[name] = {'standard deviation': trace.std(0),
+                       'mean': trace.mean(0),
+                       '%s%s HPD interval' % (int(100*(1-alpha)),'%'): hpd(trace, alpha),
+                       'mc error': batchsd(trace, batches),
+                       'quantiles': quantiles(trace)}
+
+    return stats
+
 def print_stats(stats):
     """
     print the model's stats in a pretty format
@@ -149,3 +169,92 @@ def group_plot(model, n_bins=50):
         plt.legend()
         plt.title(node.__name__)
     show()     
+
+def savage_dickey(pos, post_trace, range=(-.3,.3), bins=40, prior_trace=None, prior_y=None):
+    """Calculate Savage-Dickey density ratio test, see Wagenmakers et
+    al. 2010 at http://dx.doi.org/10.1016/j.cogpsych.2009.12.001
+
+    :Arguments:
+        pos : float
+            position at which to calculate the savage dickey ratio at (i.e. the spec hypothesis you want to test)
+        post_trace : numpy.array
+            trace of the posterior distribution
+    
+    :Optional:
+         prior_trace : numpy.array
+             trace of the prior distribution
+         prior_y : numpy.array
+             prior density pos
+         range : (int,int)
+             Range over which to interpolate and plot
+         bins : int
+             Over how many bins to compute the histogram over
+    
+    :Note: Supply either prior_trace or prior_y.
+
+    """
+    
+    x = np.linspace(range[0], range[1], bins)
+
+    if prior_trace is not None:
+        # Prior is provided as a trace -> histogram + interpolate
+        prior_pos = interpolate_trace(pos, prior_trace, range=range, bins=bins)
+
+    elif prior_y is not None:
+        # Prior is provided as a density for each point -> interpolate to retrieve positional density
+        import scipy.interpolate
+        prior_pos = prior_y #scipy.interpolate.InterpolatedUnivariateSpline(x, prior_y)(pos)
+    else:
+        assert ValueError, "Supply either prior_trace or prior_y keyword arguments"
+
+    # Histogram and interpolate posterior trace at SD position
+    posterior_pos = interpolate_trace(pos, post_trace, range=range, bins=bins)
+
+    # Calculate Savage-Dickey density ratio at pos
+    sav_dick = prior_pos / posterior_pos
+
+    return sav_dick
+
+def R_hat(samples):
+    n, num_chains = samples.shape # n=num_samples
+    chain_means = np.mean(samples, axis=1)
+    # Calculate between-sequence variance
+    between_var = n * np.var(chain_means, ddof=1)
+
+    chain_var = np.var(samples, axis=1, ddof=1)
+    within_var = np.mean(chain_var)
+
+    marg_post_var = ((n-1.)/n) * within_var + (1./n) * between_var # 11.2
+    R_hat_sqrt = np.sqrt(marg_post_var/within_var)
+
+    return R_hat_sqrt
+
+def test_chain_convergance(models):
+    # Calculate R statistic to check for chain convergance (Gelman at al 2004, 11.4)
+    params = models[0].group_params
+    R_hat_param = {}
+    for param_name in params.iterkeys():
+        # Calculate mean for each chain
+        num_samples = models[0].group_params[param_name].trace().shape[0] # samples
+        num_chains = len(models)
+        samples = np.empty((num_chains, num_samples))
+        for i,model in enumerate(models):
+            samples[i,:] = model.group_params[param_name].trace()
+
+        R_hat_param[param_name] = R_hat(samples)
+
+    return R_hat_param
+
+def check_geweke(model, assert_=True):
+    # Test for convergence using geweke method
+    for param in model.group_params.itervalues():
+        geweke = np.array(pm.geweke(param))
+        if assert_:
+            assert (np.any(np.abs(geweke[:,1]) < 2)), 'Chain of %s not properly converged'%param
+            return False
+        else:
+            if np.any(np.abs(geweke[:,1]) > 2):
+                print "Chain of %s not properly converged" % param
+                return False
+
+    return True
