@@ -317,7 +317,7 @@ class Hierarchical(object):
                 self.params_include[param.name] = param
 
         tries = 0
-        while(True)
+        while(True):
             try:
                 _create()
             except (pm.ZeroProbability, ValueError) as e:
