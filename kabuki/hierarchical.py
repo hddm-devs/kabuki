@@ -712,13 +712,13 @@ class Hierarchical(object):
             nchains = self.mc.db.chains
         except AttributeError:
             raise ValueError("No model found.")
-        
+
         #check which chain is going to be "stat"
         if 'chain' in kwargs:
             i_chain = kwargs['chain']
         else:
             i_chain = nchains
-        
+
         #compute stats
         try:
             if self._stats_chain==i_chain:
