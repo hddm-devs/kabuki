@@ -449,16 +449,19 @@ class Hierarchical(object):
         return self.mc
 
     def print_group_stats(self):
-        if not self.mc:
+        try:
+            self.stats()
+            kabuki.analyze.print_group_stats(self._stats)
+        except AttributeError:
             raise ValueError("No model found.")
-            
-        kabuki.analyze.print_group_stats(self.mc.stats())
 
     def print_stats(self):
-        if not self.mc:
+        try:
+            self.stats()
+            kabuki.analyze.print_stats(self._stats)
+        except AttributeError:
             raise ValueError("No model found.")
-            
-        kabuki.analyze.print_stats(self.mc.stats())
+    
 
     def _set_dependent_param(self, param):
         """Set parameter that depends on data.
@@ -688,7 +691,7 @@ class Hierarchical(object):
             plt.xlabel(p0.__name__)
             plt.ylabel(p1.__name__)
             
-            #plt.plot
+        plt.draw()
 
     def get_node(self, node_name, params):
         """Returns the node object with node_name from params if node
@@ -700,6 +703,31 @@ class Hierarchical(object):
         else:
             assert self.params_dict[node_name].default is not None, "Default value of not-included parameter not set."
             return self.params_dict[node_name].default
+
+    def stats(self, *args, **kwargs):
+        """
+        smart call of MCMC.stats() for the model
+        """
+        try:
+            nchains = self.mc.db.chains
+        except AttributeError:
+            raise ValueError("No model found.")
+        
+        #check which chain is going to be "stat"
+        if 'chain' in kwargs:
+            i_chain = kwargs['chain']
+        else:
+            i_chain = nchains
+        
+        #compute stats
+        try:
+            if self._stats_chain==i_chain:
+                return self._stats
+        except AttributeError:
+            self._stats = self.mc.stats(*args, **kwargs)
+            self._stats_chain = i_chain
+            return self._stats 
+
 
 
     #################################
