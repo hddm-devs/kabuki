@@ -7,6 +7,13 @@ from matplotlib.pylab import show, hist, close, figure
 import matplotlib.pyplot as plt
 import sys
 from operator import attrgetter
+import scipy as sc
+try:
+    from IPython.Debugger import Tracer;
+except ImportError:
+    from IPython.core.debugger import Tracer;
+debug_here = Tracer()
+
 
 def convert_model_to_dictionary(model):
     """convert_model_to_dictionary(model)
@@ -258,3 +265,51 @@ def check_geweke(model, assert_=True):
                 return False
 
     return True
+
+def group_cond_diff(hm, node, cond1, cond2, threshold = 0):
+    """
+    compute the difference between different condition in a group analysis.
+    The function compute for each subject the difference between 'node' under
+    condition 'cond1' to 'node' under condition 'cond2'.
+    by assuming that each of the differences is normal distributed
+    we can easily compute the group mean and group variance of the difference.
+    Then the difference is compared to 'threshold' to compute the mass of the
+    group pdf which is smaller than 'threshold'
+
+    Input:
+        hm - hierachical model
+        node - name of node to be analyized
+        cond1 - name of condition 1
+        cond2 - name of condition 2
+        threshold - see description
+
+    Output:
+        group_mean - group mean of the differnce
+        group_var - group variance of the difference
+        mass_under_threshold  - the mass of the group pdf which is smaller than threshold
+    """
+    name = node
+    node_dict = hm.params_include[name].subj_nodes
+    n_subjs = hm._num_subjs
+    subj_diff = [None]*n_subjs
+    #loop over subjs
+    subj_diff_mean = np.zeros(n_subjs)
+    subj_diff_std = np.zeros(n_subjs)
+    for i_subj in range(n_subjs):
+        #compute diffrence of traces
+        name1 = node_dict[cond1][i_subj].__name__
+        name2 = node_dict[cond2][i_subj].__name__
+        trace1 = hm.mc.db.trace(name1)[:]
+        trace2 = hm.mc.db.trace(name2)[:]
+        diff_trace = trace1 - trace2
+
+        #compute stats
+        subj_diff_mean[i_subj] = np.mean(diff_trace)
+        subj_diff_std[i_subj]= np.std(diff_trace)
+
+    pooled_var = 1. / sum(1. / (subj_diff_std**2))
+    pooled_mean = sum(subj_diff_mean / (subj_diff_std**2)) * pooled_var
+
+    mass_under = sc.stats.norm.cdf(threshold,pooled_mean, np.sqrt(pooled_var))
+
+    return pooled_mean, pooled_var, mass_under
