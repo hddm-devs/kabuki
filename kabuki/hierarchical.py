@@ -352,7 +352,7 @@ class Hierarchical(object):
 
         return self.nodes
     
-    def map(self, runs=4, max_retry=4, warn_crit=5, **kwargs):
+    def map(self, runs=2, max_retry=4, warn_crit=5, **kwargs):
         """
         Find MAP and set optimized values to nodes.
 
@@ -385,6 +385,7 @@ class Hierarchical(object):
                     self.create_nodes()
                     m = pm.MAP(self.nodes, **kwargs)
                     m.fit()
+                    print m.logp
                     maps.append(m)
                 except pm.ZeroProbability as e:
                     retries += 1
@@ -407,7 +408,10 @@ class Hierarchical(object):
 
         # Set values of nodes
         for name, node in max_map._dict_container.iteritems():
-            if not node.observed:
+            if type(node) is pm.ArrayContainer:
+                for i,subj_node in enumerate(node):
+                    self.nodes[node][i].value = subj_node.value
+            elif not node.observed:
                 self.nodes[name].value = node.value 
         
         return max_map
