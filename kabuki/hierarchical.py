@@ -26,7 +26,7 @@ class Parameter(object):
         init <float>: Initialize to value.
         vars <dict>: User-defined variables, can be anything you later
             want to access.
-        optional <bool=False>: Only create distribution when included. 
+        optional <bool=False>: Only create distribution when included.
             Otherwise, set to default value (see below).
         default <float>: Default value if optional=True.
         verbose <int=0>: Verbosity.
@@ -46,7 +46,7 @@ class Parameter(object):
         self.optional = optional
         self.default = default
         self.verbose = verbose
-        
+
         if self.optional and self.default is None:
             raise ValueError("Optional parameters have to have a default value.")
 
@@ -85,7 +85,7 @@ class Parameter(object):
     def __repr__(self):
         return object.__repr__(self).replace(' object ', " '%s' "%self.name)
 
-    
+
 class Hierarchical(object):
     """Creation of hierarchical Bayesian models in which each subject
     has a set of parameters that are constrained by a group distribution.
@@ -106,13 +106,13 @@ class Hierarchical(object):
             If the model has optional arguments, they
             can be included as a tuple of strings here.
 
-        is_group_model : bool 
+        is_group_model : bool
             If True, this results in a hierarchical
             model with separate parameter distributions for each
             subject. The subject parameter distributions are
             themselves distributed according to a group parameter
             distribution.
-        
+
         depends_on : dict
             Specifies which parameter depends on data
             of a column in data. For each unique element in that
@@ -120,10 +120,10 @@ class Hierarchical(object):
             created and applied. Multiple columns can be specified in
             a sequential container (e.g. list)
 
-            :Example: 
+            :Example:
 
             >>> depends_on={'param1':['column1']}
-    
+
             Suppose column1 has the elements 'element1' and
             'element2', then parameters 'param1('element1',)' and
             'param1('element2',)' will be created and the
@@ -138,7 +138,7 @@ class Hierarchical(object):
              Plot group variability parameters
              (i.e. variance of Normal distribution.)
 
-    :Note: 
+    :Note:
         This class must be inherited. The child class must provide
         the following functions:
             * get_group_node(param): Return group mean distribution for param.
@@ -157,7 +157,7 @@ class Hierarchical(object):
     def __init__(self, data, is_group_model=None, depends_on=None, trace_subjs=True, plot_subjs=False, plot_var=False, include=()):
         # Init
         self.include = set(include)
-        
+
         self.nodes = {}
         self.mc = None
         self.trace_subjs = trace_subjs
@@ -182,7 +182,7 @@ class Hierarchical(object):
             for key in depends_on:
                 if type(depends_on[key]) is str:
                     depends_on[key] = [depends_on[key]]
-            # Check if column names exist in data        
+            # Check if column names exist in data
             for depend_on in depends_on.itervalues():
                 for elem in depend_on:
                     if elem not in self.data.dtype.names:
@@ -210,7 +210,7 @@ class Hierarchical(object):
             self._subjs = np.unique(data['subj_idx'])
             self._num_subjs = self._subjs.shape[0]
 
-            
+
     def _get_data_depend(self):
         """Partition data according to self.depends_on.
 
@@ -219,7 +219,7 @@ class Hierarchical(object):
             distribution and the parameter name.
 
         """
-        
+
         params = {} # use subj parameters to feed into model
         # Create new params dict and copy over nodes
         for name, param in self.params_include.iteritems():
@@ -237,7 +237,7 @@ class Hierarchical(object):
         data_dep = self._get_data_depend_rec(self.data, depends_on, params, [])
 
         return data_dep
-    
+
     def _get_data_depend_rec(self, data, depends_on, params, dep_name, param=None):
         """Recursive function to partition data and params according
         to depends_on.
@@ -279,7 +279,7 @@ class Hierarchical(object):
                 # adding the dep elems of in one column)
                 dep_name.pop()
             return data_params
-                
+
         else: # Data does not depend on anything (anymore)
             return [(data, params, dep_name)]
 
@@ -289,7 +289,7 @@ class Hierarchical(object):
 
         :Arguments:
             retry : int
-                How often to retry when model creation 
+                How often to retry when model creation
                 failed (due to bad starting values).
 
         """
@@ -327,7 +327,7 @@ class Hierarchical(object):
                 else:
                     raise pm.ZeroProbability, e
             break
-        
+
         # Init bottom nodes
         for param in self.params_include.itervalues():
             if not param.is_bottom_node:
@@ -351,7 +351,7 @@ class Hierarchical(object):
                 self.nodes[name+tag+'_var'] = node
 
         return self.nodes
-    
+
     def map(self, runs=2, max_retry=4, warn_crit=5, **kwargs):
         """
         Find MAP and set optimized values to nodes.
@@ -398,7 +398,7 @@ class Hierarchical(object):
         # We want to use values of the best fitting model
         sorted_maps = sorted(maps, key=attrgetter('logp'))
         max_map = sorted_maps[-1]
-        
+
         # If maximum logp values are not in the same range, there
         # could be a problem with the model.
         if runs >= 2:
@@ -410,10 +410,11 @@ class Hierarchical(object):
         for name, node in max_map._dict_container.iteritems():
             if type(node) is pm.ArrayContainer:
                 for i,subj_node in enumerate(node):
-                    self.nodes[node][i].value = subj_node.value
+                    if not subj_node.observed:
+                        self.nodes[name][i].value = subj_node.value
             elif not node.observed:
-                self.nodes[name].value = node.value 
-        
+                self.nodes[name].value = node.value
+
         return max_map
 
     def mcmc(self, *args, **kwargs):
@@ -429,12 +430,12 @@ class Hierarchical(object):
             self.create_nodes()
 
         self.mc = pm.MCMC(self.nodes, *args, **kwargs)
-        
+
         return self.mc
 
     def sample(self, *args, **kwargs):
         """Sample from posterior.
-        
+
         :Note:
             Forwards arguments to pymc.MCMC.sample().
 
@@ -449,19 +450,19 @@ class Hierarchical(object):
                 self.mc.sample(*args, **kwargs)
         else:
             self.mc.sample(*args, **kwargs)
-        
+
         return self.mc
 
     def print_group_stats(self):
         if not self.mc:
             raise ValueError("No model found.")
-            
+
         kabuki.analyze.print_group_stats(self.mc.stats())
 
     def print_stats(self):
         if not self.mc:
             raise ValueError("No model found.")
-            
+
         kabuki.analyze.print_stats(self.mc.stats())
 
     def _set_dependent_param(self, param):
@@ -521,7 +522,7 @@ class Hierarchical(object):
 
         if self.is_group_model and param.create_subj_nodes:
             self._set_subj_nodes(param, '', self.data)
-        
+
         return self
 
     def _set_subj_nodes(self, param, tag, data):
@@ -533,7 +534,7 @@ class Hierarchical(object):
             tag : string
                 Element name.
             data : numpy.recarray
-                Part of the data the parameter 
+                Part of the data the parameter
                 depends on.
 
         """
@@ -557,14 +558,14 @@ class Hierarchical(object):
             param.reset()
 
         return self
-    
+
     def _set_bottom_nodes(self, param, init=False):
         """Set parameter node that has no parent.
 
         :Arguments:
             param_name : string
                 Name of parameter.
-        
+
         :Optional:
             init : bool
                 Initialize parameter.
@@ -583,13 +584,13 @@ class Hierarchical(object):
                     param.subj_nodes[dep_name] = None
             else:
                 self._create_bottom_node(param, data, params_dep, dep_name, i)
-            
+
         return self
-        
+
     def _create_bottom_node(self, param, data, params, dep_name, idx):
         """Create parameter node object which has no parent.
 
-        :Note: 
+        :Note:
             Called by self._set_bottom_node().
 
         :Arguments:
@@ -603,7 +604,7 @@ class Hierarchical(object):
                 Element name the node depends on.
             idx : int
                 Subject index.
-        
+
         """
         if self.is_group_model:
             for i,subj in enumerate(self._subjs):
@@ -691,7 +692,7 @@ class Hierarchical(object):
             plt.plot((np.min(p0.trace()), np.max(p0.trace())), reg, '-')
             plt.xlabel(p0.__name__)
             plt.ylabel(p1.__name__)
-            
+
             #plt.plot
 
     def get_node(self, node_name, params):
@@ -725,7 +726,7 @@ class Hierarchical(object):
     def get_var_node(self, param):
         """Create and return a Uniform prior distribution for the
         variability parameter 'param'.
-        
+
         Note, that we chose a Uniform distribution rather than the
         more common Gamma (see Gelman 2006: "Prior distributions for
         variance parameters in hierarchical models").
@@ -747,7 +748,7 @@ class Hierarchical(object):
         return pm.TruncatedNormal(param.full_name,
                                   a=param.lower,
                                   b=param.upper,
-                                  mu=param.group, 
+                                  mu=param.group,
                                   var=param.var**-2,
                                   plot=self.plot_subjs,
                                   trace=self.trace_subjs,
