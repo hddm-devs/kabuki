@@ -188,6 +188,7 @@ class Hierarchical(object):
                     if elem not in self.data.dtype.names:
                         raise KeyError, "Column named %s not found in data." % elem
             self.depends_on = depends_on
+        self.depends_dict = OrderedDict()
 
         if is_group_model is None:
             if 'subj_idx' in data.dtype.names:
@@ -483,6 +484,9 @@ class Hierarchical(object):
         # Get unique elements from the columns
         data_dep = self.data[depends_on]
         uniq_data_dep = np.unique(data_dep)
+
+        #update depends_dict
+        self.depends_dict[param.name] = uniq_data_dep
 
         # Loop through unique elements
         for uniq_date in uniq_data_dep:
