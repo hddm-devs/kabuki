@@ -455,10 +455,10 @@ class Hierarchical(object):
         return self.mc
 
     def print_group_stats(self):
-        kabuki.analyze.print_group_stats(self.mc.stats())
+        kabuki.analyze.print_group_stats(self.stats())
 
     def print_stats(self):
-        kabuki.analyze.print_stats(self.mc.stats())
+        kabuki.analyze.print_stats(self.stats())
 
     def _set_dependent_param(self, param):
         """Set parameter that depends on data.
