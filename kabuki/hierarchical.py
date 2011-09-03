@@ -50,6 +50,10 @@ class Parameter(object):
         if self.optional and self.default is None:
             raise ValueError("Optional parameters have to have a default value.")
 
+        if self.is_bottom_node:
+            self.create_group_node = False
+            self.create_subj_nodes = True
+
         self.group_nodes = OrderedDict()
         self.var_nodes = OrderedDict()
         self.subj_nodes = OrderedDict()
@@ -164,7 +168,10 @@ class Hierarchical(object):
         self.plot_subjs = plot_subjs
         self.plot_var = plot_var
 
-        #add data_idx field to data
+        # Add data_idx field to data. Since we are restructuring the
+        # data, this provides a means of getting the data out of
+        # kabuki and sorting to according to data_idx to get the
+        # original order.
         assert('data_idx' not in data.dtype.names),'A field named data_idx was found in the data file, please change it.'
         new_dtype = data.dtype.descr + [('data_idx', '<i8')]
         new_data = np.empty(data.shape, dtype=new_dtype)
@@ -209,7 +216,6 @@ class Hierarchical(object):
         if self.is_group_model:
             self._subjs = np.unique(data['subj_idx'])
             self._num_subjs = self._subjs.shape[0]
-
 
     def _get_data_depend(self):
         """Partition data according to self.depends_on.
@@ -259,7 +265,7 @@ class Hierarchical(object):
                 # Add a key that is only the col_name that links to
                 # the correct dependent nodes. This is the central
                 # trick so that later on the get_bottom_node can use
-                # params[col_name] and the observed will get linked to
+                # params[col_name] and the bottm node will get linked to
                 # the correct nodes automatically.
                 param = self.params_include[param_name]
 
@@ -342,13 +348,20 @@ class Hierarchical(object):
 
         # Create model dictionary
         self.nodes = {}
+        self.group_nodes = {}
+        self.var_nodes = {}
+        self.subj_nodes = {}
+
         for name, param in self.params_include.iteritems():
             for tag, node in param.group_nodes.iteritems():
                 self.nodes[name+tag+'_group'] = node
+                self.group_nodes[name+tag] = node
             for tag, node in param.subj_nodes.iteritems():
                 self.nodes[name+tag+'_subj'] = node
+                self.subj_nodes[name+tag] = node
             for tag, node in param.var_nodes.iteritems():
                 self.nodes[name+tag+'_var'] = node
+                self.var_nodes[name+tag] = node
 
         return self.nodes
 
@@ -383,13 +396,14 @@ class Hierarchical(object):
                 try:
                     # (re)create nodes to get new initival values
                     self.create_nodes()
-                    m = pm.MAP(self.nodes, **kwargs)
-                    m.fit()
+                    m = pm.MAP(self.nodes)
+                    m.fit(**kwargs)
                     print m.logp
                     maps.append(m)
                 except pm.ZeroProbability as e:
                     retries += 1
                     if retries >= max_retry:
+                        print "After %f retries, still not good fit found." %(retries)
                         raise e
                     else:
                         continue
@@ -570,7 +584,11 @@ class Hierarchical(object):
 
         # Loop through parceled data and params and create an observed stochastic
         for i, (data, params_dep, dep_name) in enumerate(data_dep):
-            dep_name = str(dep_name)
+            if len(dep_name) != 0:
+                dep_name = str(dep_name[0])
+            else:
+                dep_name = ''
+
             if init:
                 if self.is_group_model and param.create_subj_nodes:
                     param.subj_nodes[dep_name] = np.empty(self._num_subjs, dtype=object)
@@ -769,7 +787,7 @@ class Hierarchical(object):
                                   a=param.lower,
                                   b=param.upper,
                                   mu=param.group,
-                                  var=param.var**-2,
+                                  tau=param.var**-2,
                                   plot=self.plot_subjs,
                                   trace=self.trace_subjs,
                                   value=param.init)
