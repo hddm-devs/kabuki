@@ -556,7 +556,7 @@ class Hierarchical(object):
         # Generate subj variability parameter var
         param.tag = 'var'+tag
         param.data = data
-        if param.create_group_param:
+        if param.create_group_node:
             param.var_nodes[tag] = self.get_var_node(param)
         else:
             param.var_nodes[''] = None
