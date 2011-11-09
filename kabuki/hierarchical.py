@@ -776,8 +776,8 @@ class Hierarchical(object):
         This is used for the variability fo the group distribution.
 
         """
-        return pm.Uniform(param.full_name, lower=0., upper=10.,
-                          value=.1, plot=self.plot_var)
+        return pm.Uniform(param.full_name, lower=0.01, upper=10.,
+                          value=.3, plot=self.plot_var)
 
     def get_subj_node(self, param):
         """Create and return a Truncated Normal distribution for
