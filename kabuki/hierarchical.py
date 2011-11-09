@@ -515,7 +515,10 @@ class Hierarchical(object):
         # Parameter does not depend on data
         # Set group parameter
         param.tag = ''
-        param.group_nodes[''] = self.get_group_node(param)
+        if param.create_group_node:
+            param.group_nodes[''] = self.get_group_node(param)
+        else:
+            param.group_nodes[''] = None
         param.reset()
 
         if self.is_group_model and param.create_subj_nodes:
@@ -539,7 +542,10 @@ class Hierarchical(object):
         # Generate subj variability parameter var
         param.tag = 'var'+tag
         param.data = data
-        param.var_nodes[tag] = self.get_var_node(param)
+        if param.create_group_param:
+            param.var_nodes[tag] = self.get_var_node(param)
+        else:
+            param.var_nodes[''] = None
         param.reset()
 
         # Init
