@@ -8,12 +8,6 @@ import matplotlib.pyplot as plt
 import sys
 from operator import attrgetter
 import scipy as sc
-try:
-    from IPython.Debugger import Tracer;
-except ImportError:
-    from IPython.core.debugger import Tracer;
-debug_here = Tracer()
-
 
 def convert_model_to_dictionary(model):
     """convert_model_to_dictionary(model)
@@ -29,7 +23,7 @@ def get_group_nodes(nodes, return_list=False):
     get_group_nodes(model)
     get only the group nodes from the model
     """
-    
+
     if type(nodes) is dict:
         group_nodes = {}
         for name, node in nodes.iteritems():
@@ -44,8 +38,8 @@ def get_group_nodes(nodes, return_list=False):
     else:
         root = [z for z in nodes if re.search('[A-Za-z)][0-9]+$',z.__name__) == None]
         return root
-    
-def get_subjs_numbers(mc):    
+
+def get_subjs_numbers(mc):
     if type(model) is pm.MCMC:
         nodes = model.stochastics
     else:
@@ -53,13 +47,13 @@ def get_subjs_numbers(mc):
 
     s = [re.search('[0-9]+$',z.__name__) for z in nodes]
     return list(set([int(x) for x in s if x != None]))
-    
+
 def get_subj_nodes(model, startswith=None, i_subj=None):
     """get_subj_nodes(model, i_subj=None):
     return the nodes of subj i_subj. if is_subj is None then return all subjects' node
     if i_subj is -1, return root nodes
 
-    """ 
+    """
     if type(model) == type(pm.MCMC([])):
         nodes = model.stochastics
     else:
@@ -67,19 +61,19 @@ def get_subj_nodes(model, startswith=None, i_subj=None):
 
     if startswith is None:
         startswith = ''
-        
+
     if i_subj==-1:
         return get_group_nodes(nodes)
-    else: 
+    else:
         if type(nodes) is dict:
             nodes = nodes.values()
-        
-        if i_subj is None:        
+
+        if i_subj is None:
             subj = [z for z in nodes if re.search(startswith+'[A-Za-z)][0-9]+$',z.__name__) != None]
         else:
             s_subj = str(i_subj)
             subj = [z for z in nodes if re.search(startswith+'[A-Za-z)]%d$'%i_subj,z.__name__) != None]
-        
+
         if type(nodes) is dict:
             return convert_model_to_dictionary(subj)
         else:
@@ -90,7 +84,7 @@ def gen_stats(traces, alpha=0.05, batches=100):
     object.  Pass the db._traces list.
 
     """
-    
+
     from pymc.utils import hpd, quantiles
     from pymc import batchsd
 
@@ -130,7 +124,7 @@ def print_stats(stats):
          i_stats['quantiles'][2.5], i_stats['quantiles'][25],\
          i_stats['quantiles'][50], i_stats['quantiles'][75], \
          i_stats['quantiles'][97.5], i_stats['mc error'])
-        
+
 def print_group_stats(stats):
     """
     print the model's group stats in a pretty format
@@ -144,7 +138,7 @@ def print_group_stats(stats):
     for key in keys:
         g_stats[key] = stats[key]
     print_stats(g_stats)
-    
+
 def group_plot(model, n_bins=50):
     if type(model) is pm.MCMC:
         nodes = model.stochastics
@@ -152,13 +146,13 @@ def group_plot(model, n_bins=50):
         nodes = model
 
     group_nodes = get_group_nodes(nodes, return_list=True)
-    
+
     for node in group_nodes:
         pattern = ('%s[0-9]+'%node.__name__.replace("(","\(")).replace(')','\)')
         subj_nodes = [z for z in nodes if re.search(pattern,z.__name__) != None]
         if subj_nodes == []:
             continue
-        
+
         print "plotting %s" % node.__name__
         sys.stdout.flush()
         figure()
@@ -175,7 +169,7 @@ def group_plot(model, n_bins=50):
             plt.plot(x_data, g_hist, label=re.search('[0-9]+$',i.__name__).group())
         plt.legend()
         plt.title(node.__name__)
-    show()     
+    show()
 
 def savage_dickey(pos, post_trace, range=(-.3,.3), bins=40, prior_trace=None, prior_y=None):
     """Calculate Savage-Dickey density ratio test, see Wagenmakers et
@@ -186,7 +180,7 @@ def savage_dickey(pos, post_trace, range=(-.3,.3), bins=40, prior_trace=None, pr
             position at which to calculate the savage dickey ratio at (i.e. the spec hypothesis you want to test)
         post_trace : numpy.array
             trace of the posterior distribution
-    
+
     :Optional:
          prior_trace : numpy.array
              trace of the prior distribution
@@ -196,11 +190,11 @@ def savage_dickey(pos, post_trace, range=(-.3,.3), bins=40, prior_trace=None, pr
              Range over which to interpolate and plot
          bins : int
              Over how many bins to compute the histogram over
-    
+
     :Note: Supply either prior_trace or prior_y.
 
     """
-    
+
     x = np.linspace(range[0], range[1], bins)
 
     if prior_trace is not None:
