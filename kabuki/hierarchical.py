@@ -595,7 +595,10 @@ class Hierarchical(object):
         # Loop through parceled data and params and create an observed stochastic
         for i, (data, params_dep, dep_name) in enumerate(data_dep):
             if len(dep_name) != 0:
-                dep_name = str(dep_name[0])
+                if len(dep_name) == 1:
+                    dep_name = str(dep_name[0])
+                else:
+                    dep_name = str(dep_name)
             else:
                 dep_name = ''
 
