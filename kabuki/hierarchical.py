@@ -556,7 +556,7 @@ class Hierarchical(object):
         # Generate subj variability parameter var
         param.tag = 'var'+tag
         param.data = data
-        if param.create_group_param:
+        if param.create_group_node:
             param.var_nodes[tag] = self.get_var_node(param)
         else:
             param.var_nodes[''] = None
@@ -801,3 +801,41 @@ class Hierarchical(object):
                                   plot=self.plot_subjs,
                                   trace=self.trace_subjs,
                                   value=param.init)
+        
+    def init_from_existing_model(self, pre_model, step_method,**kwargs):
+        """
+        initialize the value and step methods of the model using an existing model 
+        """
+        if not self.nodes:
+            self.mcmc(**kwargs)
+        all_nodes = list(self.mc.stochastics)
+        all_pre_nodes = list(pre_model.mc.stochastics)
+        assigned_values = 0
+        assigned_setps = 0
+        
+        #loop over all nodes
+        for i_node in range(len(all_nodes)):
+            #get name of current node
+            t_name = all_nodes[i_node].__name__
+            #get the matched node from the pre_model
+            pre_node = [x for x in all_pre_nodes if x.__name__ == t_name]
+            if len(pre_node)==0:
+                continue
+            pre_node = pre_node[0]
+            assigned_values += 1
+        
+            all_nodes[i_node].value= pre_node.value
+            if step_method:
+                step_pre_node = pre_model.mc.step_method_dict[pre_node][0]
+                pre_sd = step_pre_node.proposal_sd * step_pre_node.adaptive_scale_factor
+                if type(step_pre_node) == pm.Metropolis:
+                    self.mc.use_step_method(pm.Metropolis(all_nodes[i_node], 
+                                                          proposal_sd = pre_sd))
+                    assigned_steps += 1
+                    
+        print "assigned values to %d nodes (out of %d)." % (assigned_values, len(all_nodes))
+        if step_method:
+            print "assigned step methods to %d (out of %d)." % (assigned_steps, len(all_nodes))
+            
+    def plot_posteriors(self):
+        hddm.plot_posteriors(self)
