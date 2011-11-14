@@ -839,6 +839,3 @@ class Hierarchical(object):
         print "assigned values to %d nodes (out of %d)." % (assigned_values, len(all_nodes))
         if step_method:
             print "assigned step methods to %d (out of %d)." % (assigned_steps, len(all_nodes))
-            
-    def plot_posteriors(self):
-        hddm.plot_posteriors(self)
