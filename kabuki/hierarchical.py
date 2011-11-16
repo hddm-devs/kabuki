@@ -332,7 +332,7 @@ class Hierarchical(object):
                     tries += 1
                     continue
                 else:
-                    raise pm.ZeroProbability, e
+                    _create()
             break
 
         # Init bottom nodes
