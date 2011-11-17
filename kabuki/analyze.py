@@ -158,10 +158,10 @@ def group_plot(model, params_to_plot = (), n_bins=50):
             print "plotting %s" % group_node.__name__
             sys.stdout.flush()
             figure()
-            lb = min([min(db.trace(x.__name__)) for x in subj_nodes])
+            lb = min([min(db.trace(x.__name__)[:]) for x in subj_nodes])
             lb = min(lb, min(g_node_trace))
-            ub = max([max(db.trace(x.__name__)) for x in subj_nodes])
-            ub = max(lb, max(g_node_trace))
+            ub = max([max(db.trace(x.__name__)[:]) for x in subj_nodes])
+            ub = max(ub, max(g_node_trace))
             x_data = np.linspace(lb, ub, n_bins)
             g_hist = np.histogram(g_node_trace,bins=n_bins, range=[lb, ub], normed=True)[0]
             plt.plot(x_data, g_hist, '--', label='group')

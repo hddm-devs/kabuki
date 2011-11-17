@@ -142,6 +142,9 @@ class Hierarchical(object):
              Plot group variability parameters
              (i.e. variance of Normal distribution.)
 
+        replace_params : list of Parameters
+            User defined parameters to replace the default ones.
+
     :Note:
         This class must be inherited. The child class must provide
         the following functions:
@@ -158,7 +161,8 @@ class Hierarchical(object):
 
     """
 
-    def __init__(self, data, is_group_model=None, depends_on=None, trace_subjs=True, plot_subjs=False, plot_var=False, include=()):
+    def __init__(self, data, is_group_model=None, depends_on=None, trace_subjs=True,
+                 plot_subjs=False, plot_var=False, include=(), replace_params = None):
         # Init
         self.include = set(include)
 
@@ -217,6 +221,21 @@ class Hierarchical(object):
         if self.is_group_model:
             self._subjs = np.unique(data['subj_idx'])
             self._num_subjs = self._subjs.shape[0]
+
+        #set Parameters
+        self.params = self.get_params()
+        if replace_params != None:
+            self.set_user_params(replace_params)
+
+    def set_user_params(self, replace_params):
+        """replace parameters with user defined parameters"""
+        if type(replace_params)==Parameter:
+            replace_params = [replace_params]
+        for new_param in replace_params:
+            for i in range(len(self.params)):
+                if self.params[i].name == new_param.name:
+                    self.params[i] = new_param
+
 
     def _get_data_depend(self):
         """Partition data according to self.depends_on.
@@ -288,7 +307,17 @@ class Hierarchical(object):
             return data_params
 
         else: # Data does not depend on anything (anymore)
-            return [(data, params, dep_name)]
+
+            #create_
+            if len(dep_name) != 0:
+                if len(dep_name) == 1:
+                    dep_name_str = str(dep_name[0])
+                else:
+                    dep_name_str = str(dep_name)
+            else:
+                dep_name_str = ''
+
+            return [(data, params, dep_name, dep_name_str)]
 
     def create_nodes(self, retry=20):
         """Set group level distributions. One distribution for each
@@ -332,7 +361,7 @@ class Hierarchical(object):
                     tries += 1
                     continue
                 else:
-                    raise pm.ZeroProbability, e
+                    _create()
             break
 
         # Init bottom nodes
@@ -609,12 +638,8 @@ class Hierarchical(object):
         data_dep = self._get_data_depend()
 
         # Loop through parceled data and params and create an observed stochastic
-        for i, (data, params_dep, dep_name) in enumerate(data_dep):
-            if len(dep_name) != 0:
-                dep_name = str(dep_name[0])
-            else:
-                dep_name = ''
-
+        for i, (data, params_dep, dep_name_list, dep_name_str) in enumerate(data_dep):
+            dep_name = dep_name_str
             if init:
                 if self.is_group_model and param.create_subj_nodes:
                     param.subj_nodes[dep_name] = np.empty(self._num_subjs, dtype=object)
