@@ -218,6 +218,7 @@ class Hierarchical(object):
             self._subjs = np.unique(data['subj_idx'])
             self._num_subjs = self._subjs.shape[0]
 
+
     def _get_data_depend(self):
         """Partition data according to self.depends_on.
 
@@ -288,7 +289,17 @@ class Hierarchical(object):
             return data_params
 
         else: # Data does not depend on anything (anymore)
-            return [(data, params, dep_name)]
+
+            #create_
+            if len(dep_name) != 0:
+                if len(dep_name) == 1:
+                    dep_name_str = str(dep_name[0])
+                else:
+                    dep_name_str = str(dep_name)
+            else:
+                dep_name_str = ''
+
+            return [(data, params, dep_name, dep_name_str)]
 
     def create_nodes(self, retry=20):
         """Set group level distributions. One distribution for each
@@ -593,15 +604,8 @@ class Hierarchical(object):
         data_dep = self._get_data_depend()
 
         # Loop through parceled data and params and create an observed stochastic
-        for i, (data, params_dep, dep_name) in enumerate(data_dep):
-            if len(dep_name) != 0:
-                if len(dep_name) == 1:
-                    dep_name = str(dep_name[0])
-                else:
-                    dep_name = str(dep_name)
-            else:
-                dep_name = ''
-
+        for i, (data, params_dep, dep_name_list, dep_name_str) in enumerate(data_dep):
+            dep_name = dep_name_str
             if init:
                 if self.is_group_model and param.create_subj_nodes:
                     param.subj_nodes[dep_name] = np.empty(self._num_subjs, dtype=object)
