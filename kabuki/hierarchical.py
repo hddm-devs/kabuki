@@ -142,6 +142,9 @@ class Hierarchical(object):
              Plot group variability parameters
              (i.e. variance of Normal distribution.)
 
+        replace_params : list of Parameters
+            User defined parameters to replace the default ones.
+
     :Note:
         This class must be inherited. The child class must provide
         the following functions:
@@ -158,7 +161,8 @@ class Hierarchical(object):
 
     """
 
-    def __init__(self, data, is_group_model=None, depends_on=None, trace_subjs=True, plot_subjs=False, plot_var=False, include=()):
+    def __init__(self, data, is_group_model=None, depends_on=None, trace_subjs=True,
+                 plot_subjs=False, plot_var=False, include=(), replace_params = None):
         # Init
         self.include = set(include)
 
@@ -217,6 +221,20 @@ class Hierarchical(object):
         if self.is_group_model:
             self._subjs = np.unique(data['subj_idx'])
             self._num_subjs = self._subjs.shape[0]
+
+        #set Parameters
+        self.params = self.get_params()
+        if replace_params != None:
+            self.set_user_params(replace_params)
+
+    def set_user_params(self, replace_params):
+        """replace parameters with user defined parameters"""
+        if type(replace_params)==Parameter:
+            replace_params = [replace_params]
+        for new_param in replace_params:
+            for i in range(len(self.params)):
+                if self.params[i].name == new_param.name:
+                    self.params[i] = new_param
 
 
     def _get_data_depend(self):
