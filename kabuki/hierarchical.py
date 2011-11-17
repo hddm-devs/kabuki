@@ -455,16 +455,32 @@ class Hierarchical(object):
             Forwards arguments to pymc.MCMC.sample().
 
         """
-        if not self.mc:
-            self.mcmc()
+        #if not self.mc:
 
+        if kwargs.has_key('max_retries'):
+            max_retries = kwargs['max_retries']
+            del kwargs['max_retries']
+        else:
+            max_retries = 4
+
+        retry = 0
         if ('hdf5' in dir(pm.database)) and \
            (type(self.mc.db) is pm.database.hdf5.Database):
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore', pm.database.hdf5.tables.NaturalNameWarning)
+        # Sometimes initial values are badly chosen, so retry.
+        while True:
+            try:
+                self.mcmc()
                 self.mc.sample(*args, **kwargs)
-        else:
-            self.mc.sample(*args, **kwargs)
+            except (pm.ZeroProbability, ValueError) as e:
+                retry += 1
+                if retry >= max_retries:
+                    print "After %f retries, still not good fit found." %(retry)
+                    raise e
+                else:
+                    continue
+            break
 
         return self.mc
 
@@ -801,10 +817,10 @@ class Hierarchical(object):
                                   plot=self.plot_subjs,
                                   trace=self.trace_subjs,
                                   value=param.init)
-        
+
     def init_from_existing_model(self, pre_model, step_method,**kwargs):
         """
-        initialize the value and step methods of the model using an existing model 
+        initialize the value and step methods of the model using an existing model
         """
         if not self.nodes:
             self.mcmc(**kwargs)
@@ -812,7 +828,7 @@ class Hierarchical(object):
         all_pre_nodes = list(pre_model.mc.stochastics)
         assigned_values = 0
         assigned_setps = 0
-        
+
         #loop over all nodes
         for i_node in range(len(all_nodes)):
             #get name of current node
@@ -823,19 +839,19 @@ class Hierarchical(object):
                 continue
             pre_node = pre_node[0]
             assigned_values += 1
-        
+
             all_nodes[i_node].value= pre_node.value
             if step_method:
                 step_pre_node = pre_model.mc.step_method_dict[pre_node][0]
                 pre_sd = step_pre_node.proposal_sd * step_pre_node.adaptive_scale_factor
                 if type(step_pre_node) == pm.Metropolis:
-                    self.mc.use_step_method(pm.Metropolis(all_nodes[i_node], 
+                    self.mc.use_step_method(pm.Metropolis(all_nodes[i_node],
                                                           proposal_sd = pre_sd))
                     assigned_steps += 1
-                    
+
         print "assigned values to %d nodes (out of %d)." % (assigned_values, len(all_nodes))
         if step_method:
             print "assigned step methods to %d (out of %d)." % (assigned_steps, len(all_nodes))
-            
+
     def plot_posteriors(self):
         hddm.plot_posteriors(self)
