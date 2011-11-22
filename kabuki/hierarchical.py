@@ -340,6 +340,18 @@ class Hierarchical(object):
                 else:
                     self._set_independet_param(param)
 
+            # Init bottom nodes
+            for param in self.params_include.itervalues():
+                if not param.is_bottom_node:
+                    continue
+                self._set_bottom_nodes(param, init=True)
+
+            # Create bottom nodes
+            for param in self.params_include.itervalues():
+                if not param.is_bottom_node:
+                    continue
+                self._set_bottom_nodes(param, init=False)
+
         # Include all defined parameters by default.
         self.non_optional_params = [param.name for param in self.params if not param.optional]
 
@@ -361,20 +373,9 @@ class Hierarchical(object):
                     tries += 1
                     continue
                 else:
-                    _create()
+                    print "After %f retries, still not good fit found." %(retries)
+                    raise e
             break
-
-        # Init bottom nodes
-        for param in self.params_include.itervalues():
-            if not param.is_bottom_node:
-                continue
-            self._set_bottom_nodes(param, init=True)
-
-        # Create bottom nodes
-        for param in self.params_include.itervalues():
-            if not param.is_bottom_node:
-                continue
-            self._set_bottom_nodes(param, init=False)
 
         # Create model dictionary
         self.nodes = {}
@@ -484,32 +485,16 @@ class Hierarchical(object):
             Forwards arguments to pymc.MCMC.sample().
 
         """
-        #if not self.mc:
-
-        if kwargs.has_key('max_retries'):
-            max_retries = kwargs['max_retries']
-            del kwargs['max_retries']
-        else:
-            max_retries = 4
+        if not self.mc:
+            self.mcmc()
 
         retry = 0
         if ('hdf5' in dir(pm.database)) and \
            (type(self.mc.db) is pm.database.hdf5.Database):
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore', pm.database.hdf5.tables.NaturalNameWarning)
-        # Sometimes initial values are badly chosen, so retry.
-        while True:
-            try:
-                self.mcmc()
-                self.mc.sample(*args, **kwargs)
-            except (pm.ZeroProbability, ValueError) as e:
-                retry += 1
-                if retry >= max_retries:
-                    print "After %f retries, still not good fit found." %(retry)
-                    raise e
-                else:
-                    continue
-            break
+
+        self.mc.sample(*args, **kwargs)
 
         return self.mc
 
