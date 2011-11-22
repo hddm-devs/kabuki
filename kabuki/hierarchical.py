@@ -319,7 +319,7 @@ class Hierarchical(object):
 
             return [(data, params, dep_name, dep_name_str)]
 
-    def create_nodes(self, retry=20):
+    def create_nodes(self):
         """Set group level distributions. One distribution for each
         parameter.
 
@@ -485,15 +485,18 @@ class Hierarchical(object):
             Forwards arguments to pymc.MCMC.sample().
 
         """
-        if not self.mc:
+
+        #init mc if needed
+        if self.mc == None:
             self.mcmc()
 
-        retry = 0
+        #suppress annoying warnings
         if ('hdf5' in dir(pm.database)) and \
            (type(self.mc.db) is pm.database.hdf5.Database):
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore', pm.database.hdf5.tables.NaturalNameWarning)
-
+        
+        #sample   
         self.mc.sample(*args, **kwargs)
 
         return self.mc
