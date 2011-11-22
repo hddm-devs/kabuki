@@ -319,7 +319,7 @@ class Hierarchical(object):
 
             return [(data, params, dep_name, dep_name_str)]
 
-    def create_nodes(self, retry=20):
+    def create_nodes(self):
         """Set group level distributions. One distribution for each
         parameter.
 
@@ -328,17 +328,7 @@ class Hierarchical(object):
                 How often to retry when model creation
                 failed (due to bad starting values).
 
-        """
-        def _create():
-            for name, param in self.params_include.iteritems():
-                # Bottom nodes are created elsewhere
-                if param.is_bottom_node:
-                    continue
-                # Check if parameter depends on data
-                if name in self.depends_on.keys():
-                    self._set_dependent_param(param)
-                else:
-                    self._set_independet_param(param)
+        """            
 
         # Include all defined parameters by default.
         self.non_optional_params = [param.name for param in self.params if not param.optional]
@@ -352,17 +342,16 @@ class Hierarchical(object):
             if param.name in self.include or not param.optional:
                 self.params_include[param.name] = param
 
-        tries = 0
-        while(True):
-            try:
-                _create()
-            except (pm.ZeroProbability, ValueError) as e:
-                if tries < retry:
-                    tries += 1
-                    continue
-                else:
-                    _create()
-            break
+        #create_nodes
+        for name, param in self.params_include.iteritems():
+            # Bottom nodes are created elsewhere
+            if param.is_bottom_node:
+                continue
+            # Check if parameter depends on data
+            if name in self.depends_on.keys():
+                self._set_dependent_param(param)
+            else:
+                self._set_independet_param(param)
 
         # Init bottom nodes
         for param in self.params_include.itervalues():
@@ -484,33 +473,19 @@ class Hierarchical(object):
             Forwards arguments to pymc.MCMC.sample().
 
         """
-        #if not self.mc:
 
-        if kwargs.has_key('max_retries'):
-            max_retries = kwargs['max_retries']
-            del kwargs['max_retries']
-        else:
-            max_retries = 4
+        #init mc if needed
+        if self.mc == None:
+            self.mcmc()
 
-        retry = 0
+        #suppress annoying warnings
         if ('hdf5' in dir(pm.database)) and \
            (type(self.mc.db) is pm.database.hdf5.Database):
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore', pm.database.hdf5.tables.NaturalNameWarning)
-        # Sometimes initial values are badly chosen, so retry.
-        while True:
-            try:
-                self.mcmc()
-                self.mc.sample(*args, **kwargs)
-            except (pm.ZeroProbability, ValueError) as e:
-                retry += 1
-                if retry >= max_retries:
-                    print "After %f retries, still not good fit found." %(retry)
-                    raise e
-                else:
-                    continue
-            break
-
+        
+        #sample   
+        self.mc.sample(*args, **kwargs)
         return self.mc
 
     def print_group_stats(self):
