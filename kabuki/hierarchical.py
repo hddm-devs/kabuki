@@ -224,6 +224,11 @@ class Hierarchical(object):
 
         #set Parameters
         self.params = self.get_params()
+
+        self.params_dict = {}
+        for param in self.params:
+            self.params_dict[param.name] = param
+
         if replace_params != None:
             self.set_user_params(replace_params)
 
@@ -319,7 +324,7 @@ class Hierarchical(object):
 
             return [(data, params, dep_name, dep_name_str)]
 
-    def create_nodes(self):
+    def create_nodes(self, max_retries=8):
         """Set group level distributions. One distribution for each
         parameter.
 
@@ -359,23 +364,22 @@ class Hierarchical(object):
         self.params_dict = OrderedDict()
         for param in self.params:
             self.params_dict[param.name] = param
+
         self.params_include = OrderedDict()
         for param in self.params:
             if param.name in self.include or not param.optional:
                 self.params_include[param.name] = param
 
-        tries = 0
-        while(True):
+        for tries in range(max_retries):
             try:
                 _create()
             except (pm.ZeroProbability, ValueError) as e:
-                if tries < retry:
-                    tries += 1
-                    continue
-                else:
-                    print "After %f retries, still not good fit found." %(retries)
-                    raise e
+                pass
             break
+        else:
+            print "After %f retries, still not good fit found." %(retries)
+            raise e
+
 
         # Create model dictionary
         self.nodes = {}
@@ -421,24 +425,12 @@ class Hierarchical(object):
         maps = []
 
         for i in range(runs):
-            retries = 0
-            # Sometimes initial values are badly chosen, so retry.
-            while True:
-                try:
-                    # (re)create nodes to get new initival values
-                    self.create_nodes()
-                    m = pm.MAP(self.nodes)
-                    m.fit(**kwargs)
-                    print m.logp
-                    maps.append(m)
-                except pm.ZeroProbability as e:
-                    retries += 1
-                    if retries >= max_retry:
-                        print "After %f retries, still not good fit found." %(retries)
-                        raise e
-                    else:
-                        continue
-                break
+            # (re)create nodes to get new initival values
+            self.create_nodes()
+            m = pm.MAP(self.nodes)
+            m.fit(**kwargs)
+            print m.logp
+            maps.append(m)
 
         # We want to use values of the best fitting model
         sorted_maps = sorted(maps, key=attrgetter('logp'))
@@ -495,8 +487,8 @@ class Hierarchical(object):
            (type(self.mc.db) is pm.database.hdf5.Database):
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore', pm.database.hdf5.tables.NaturalNameWarning)
-        
-        #sample   
+
+        #sample
         self.mc.sample(*args, **kwargs)
 
         return self.mc
@@ -867,4 +859,4 @@ class Hierarchical(object):
             print "assigned step methods to %d (out of %d)." % (assigned_steps, len(all_nodes))
 
     def plot_posteriors(self):
-        hddm.plot_posteriors(self)
+        pm.Matplot.plot(self.mc)

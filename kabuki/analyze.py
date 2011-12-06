@@ -100,6 +100,9 @@ def gen_stats(traces, alpha=0.05, batches=100):
     return stats
 
 def print_stats(stats):
+    print gen_stats(stats)
+
+def gen_stats(stats):
     """
     print the model's stats in a pretty format
     Input:
@@ -113,19 +116,24 @@ def print_stats(stats):
 
     s = 'name'.center(len_name) + '  '
     for name in f_names:
-        s = s + ' ' + name.center(len_f_names)
-    print s
+        s += ' ' + name.center(len_f_names)
+
     for name in names:
         i_stats = stats[name]
         if not np.isscalar(i_stats['mean']):
             continue
-        print "%s: %6.3f %6.3f %6.3f %6.3f %6.3f %6.3f %6.3f %6.3f" % \
+        s += "%s: %6.3f %6.3f %6.3f %6.3f %6.3f %6.3f %6.3f %6.3f\n" % \
         (name.ljust(len_name), i_stats['mean'], i_stats['standard deviation'],
          i_stats['quantiles'][2.5], i_stats['quantiles'][25],\
          i_stats['quantiles'][50], i_stats['quantiles'][75], \
          i_stats['quantiles'][97.5], i_stats['mc error'])
 
+    return s
+
 def print_group_stats(stats):
+    print gen_group_stats(stats)
+
+def gen_group_stats(stats):
     """
     print the model's group stats in a pretty format
     Input:
@@ -137,7 +145,9 @@ def print_group_stats(stats):
     keys.sort()
     for key in keys:
         g_stats[key] = stats[key]
-    print_stats(g_stats)
+    s = gen_stats(g_stats)
+
+    return s
 
 def group_plot(model, params_to_plot = (), n_bins=50):
     if type(model) is pm.MCMC:
@@ -154,7 +164,7 @@ def group_plot(model, params_to_plot = (), n_bins=50):
             subj_nodes = param.subj_nodes[node_tag]
             if subj_nodes == []:
                 continue
-    
+
             print "plotting %s" % group_node.__name__
             sys.stdout.flush()
             figure()
