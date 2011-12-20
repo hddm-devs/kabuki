@@ -374,10 +374,10 @@ class Hierarchical(object):
             try:
                 _create()
             except (pm.ZeroProbability, ValueError) as e:
-                pass
+                continue
             break
         else:
-            print "After %f retries, still not good fit found." %(retries)
+            print "After %f retries, still not good fit found." %(tries)
             raise e
 
 
