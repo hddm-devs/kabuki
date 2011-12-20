@@ -117,6 +117,7 @@ def gen_stats(stats):
     s = 'name'.center(len_name) + '  '
     for name in f_names:
         s += ' ' + name.center(len_f_names)
+    s += '\n'
 
     for name in names:
         i_stats = stats[name]
