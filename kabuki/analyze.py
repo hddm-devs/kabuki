@@ -40,10 +40,10 @@ def get_group_nodes(nodes, return_list=False):
         return root
 
 def get_subjs_numbers(mc):
-    if type(model) is pm.MCMC:
-        nodes = model.stochastics
+    if isinstance(mc, pm.MCMC):
+        nodes = mc.stochastics
     else:
-        nodes = model
+        nodes = mc
 
     s = [re.search('[0-9]+$',z.__name__) for z in nodes]
     return list(set([int(x) for x in s if x != None]))
@@ -54,7 +54,7 @@ def get_subj_nodes(model, startswith=None, i_subj=None):
     if i_subj is -1, return root nodes
 
     """
-    if type(model) == type(pm.MCMC([])):
+    if isinstance(model, pm.MCMC):
         nodes = model.stochastics
     else:
         nodes = model
@@ -71,7 +71,6 @@ def get_subj_nodes(model, startswith=None, i_subj=None):
         if i_subj is None:
             subj = [z for z in nodes if re.search(startswith+'[A-Za-z)][0-9]+$',z.__name__) != None]
         else:
-            s_subj = str(i_subj)
             subj = [z for z in nodes if re.search(startswith+'[A-Za-z)]%d$'%i_subj,z.__name__) != None]
 
         if type(nodes) is dict:
@@ -79,7 +78,7 @@ def get_subj_nodes(model, startswith=None, i_subj=None):
         else:
             return subj
 
-def gen_stats(traces, alpha=0.05, batches=100):
+def gen_stats_db(traces, alpha=0.05, batches=100):
     """Useful helper function to generate stats() on a loaded database
     object.  Pass the db._traces list.
 
@@ -110,7 +109,6 @@ def gen_stats(stats):
     """
     names = sorted(stats.keys())
     len_name = max([len(x) for x in names])
-    fields = {}
     f_names  = ['mean', 'std', '2.5q', '25q', '50q', '75q', '97.5', 'mc_err']
     len_f_names = 6
 
@@ -321,3 +319,31 @@ def group_cond_diff(hm, node, cond1, cond2, threshold = 0):
     mass_under = sc.stats.norm.cdf(threshold,pooled_mean, np.sqrt(pooled_var))
 
     return pooled_mean, pooled_var, mass_under
+
+def get_traces(model):
+    """Returns recarray of all traces in the model.
+
+    :Arguments:
+        model : kabuki.Hierarchical submodel or pymc.MCMC model
+
+    :Returns:
+        trace_array : recarray
+
+    """
+    if isinstance(model, pm.MCMC):
+        m = model
+    else:
+        m = model.mc
+
+    nodes = list(m.stochastics)
+
+    names = [node.__name__ for node in nodes]
+    dtype = [(name, np.float) for name in names]
+    traces = np.empty(nodes[0].trace().shape[0], dtype=dtype)
+
+    print traces
+    # Store traces in one array
+    for name, node in zip(names, nodes):
+        traces[name] = node.trace()[:]
+
+    return traces
