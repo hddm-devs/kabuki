@@ -341,7 +341,6 @@ def get_traces(model):
     dtype = [(name, np.float) for name in names]
     traces = np.empty(nodes[0].trace().shape[0], dtype=dtype)
 
-    print traces
     # Store traces in one array
     for name, node in zip(names, nodes):
         traces[name] = node.trace()[:]
