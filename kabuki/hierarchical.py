@@ -290,7 +290,7 @@ class Hierarchical(object):
                 # Add a key that is only the col_name that links to
                 # the correct dependent nodes. This is the central
                 # trick so that later on the get_bottom_node can use
-                # params[col_name] and the bottm node will get linked to
+               # params[col_name] and the bottm node will get linked to
                 # the correct nodes automatically.
                 param = self.params_include[param_name]
 
@@ -374,10 +374,10 @@ class Hierarchical(object):
             try:
                 _create()
             except (pm.ZeroProbability, ValueError) as e:
-                pass
+                continue
             break
         else:
-            print "After %f retries, still not good fit found." %(retries)
+            print "After %f retries, still not good fit found." %(tries)
             raise e
 
 
@@ -491,11 +491,22 @@ class Hierarchical(object):
 
         return self.mc
 
-    def print_group_stats(self):
-        kabuki.analyze.print_group_stats(self.stats())
+    def print_group_stats(self, fname=None):
+        stats_str = kabuki.analyze.gen_group_stats(self.stats())
+        if fname is None:
+            print stats_str
+        else:
+            with open(fname) as fd:
+                fd.write(stats_str)
 
-    def print_stats(self):
-        kabuki.analyze.print_stats(self.stats())
+    def print_stats(self, fname=None):
+        stats_str = kabuki.analyze.gen_stats(self.stats())
+        if fname is None:
+            print stats_str
+        else:
+            with open(fname) as fd:
+                fd.write(stats_str)
+
 
     def _set_dependent_param(self, param):
         """Set parameter that depends on data.
