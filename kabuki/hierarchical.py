@@ -34,7 +34,7 @@ class Parameter(object):
 
     def __init__(self, name, create_group_node=True, create_subj_nodes=True,
                  is_bottom_node=False, lower=None, upper=None, init=None,
-                 vars=None, default=None, optional=False, var_lower=0.1, var_upper=10, verbose=0):
+                 vars=None, default=None, optional=False, var_lower=1e-3, var_upper=10, verbose=0):
         self.name = name
         self.create_group_node = create_group_node
         self.create_subj_nodes = create_subj_nodes
