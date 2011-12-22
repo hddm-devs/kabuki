@@ -225,12 +225,13 @@ class Hierarchical(object):
         #set Parameters
         self.params = self.get_params()
 
+        if replace_params != None:
+            self.set_user_params(replace_params)
+
         self.params_dict = {}
         for param in self.params:
             self.params_dict[param.name] = param
 
-        if replace_params != None:
-            self.set_user_params(replace_params)
 
     def set_user_params(self, replace_params):
         """replace parameters with user defined parameters"""
