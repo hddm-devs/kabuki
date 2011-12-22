@@ -400,15 +400,13 @@ class Hierarchical(object):
 
         return self.nodes
 
-    def map(self, runs=2, max_retry=4, warn_crit=5, **kwargs):
+    def map(self, runs=2, warn_crit=5, **kwargs):
         """
         Find MAP and set optimized values to nodes.
 
         :Arguments:
             runs : int
                 How many runs to make with different starting values
-            max_retry : int
-                If model creation fails, how often to retry per run
             warn_crit: float
                 How far must the two best fitting values be apart in order to print a warning message
 
