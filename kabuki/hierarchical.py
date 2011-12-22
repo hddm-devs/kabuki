@@ -34,7 +34,7 @@ class Parameter(object):
 
     def __init__(self, name, create_group_node=True, create_subj_nodes=True,
                  is_bottom_node=False, lower=None, upper=None, init=None,
-                 vars=None, default=None, optional=False, verbose=0):
+                 vars=None, default=None, optional=False, var_lower=0.1, var_upper=10, verbose=0):
         self.name = name
         self.create_group_node = create_group_node
         self.create_subj_nodes = create_subj_nodes
@@ -46,6 +46,8 @@ class Parameter(object):
         self.optional = optional
         self.default = default
         self.verbose = verbose
+        self.var_lower = var_lower
+        self.var_upper = var_upper
 
         if self.optional and self.default is None:
             raise ValueError("Optional parameters have to have a default value.")
@@ -813,7 +815,7 @@ class Hierarchical(object):
         This is used for the variability fo the group distribution.
 
         """
-        return pm.Uniform(param.full_name, lower=0.01, upper=10.,
+        return pm.Uniform(param.full_name, lower=param.var_lower, upper=param.var_upper,
                           value=.3, plot=self.plot_var)
 
     def get_subj_node(self, param):
