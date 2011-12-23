@@ -782,9 +782,10 @@ class Hierarchical(object):
             if self._stats_chain==i_chain:
                 return self._stats
         except AttributeError:
-            self._stats = self.mc.stats(*args, **kwargs)
-            self._stats_chain = i_chain
-            return self._stats
+            pass
+        self._stats = self.mc.stats(*args, **kwargs)
+        self._stats_chain = i_chain
+        return self._stats
 
 
 
