@@ -4,7 +4,11 @@ from copy import copy
 
 import numpy as np
 import numpy.lib.recfunctions as rec
-from ordereddict import OrderedDict
+
+try:
+    from collections import OrderedDict
+except ImportError:
+    from ordereddict import OrderedDict
 
 import pymc as pm
 import warnings
