@@ -38,7 +38,7 @@ class Parameter(object):
 
     def __init__(self, name, create_group_node=True, create_subj_nodes=True,
                  is_bottom_node=False, lower=None, upper=None, init=None,
-                 vars=None, default=None, optional=False, var_lower=0.1, var_upper=10, verbose=0):
+                 vars=None, default=None, optional=False, var_lower=1e-3, var_upper=10, verbose=0):
         self.name = name
         self.create_group_node = create_group_node
         self.create_subj_nodes = create_subj_nodes
@@ -231,12 +231,13 @@ class Hierarchical(object):
         #set Parameters
         self.params = self.get_params()
 
+        if replace_params != None:
+            self.set_user_params(replace_params)
+
         self.params_dict = {}
         for param in self.params:
             self.params_dict[param.name] = param
 
-        if replace_params != None:
-            self.set_user_params(replace_params)
 
     def set_user_params(self, replace_params):
         """replace parameters with user defined parameters"""
@@ -785,9 +786,10 @@ class Hierarchical(object):
             if self._stats_chain==i_chain:
                 return self._stats
         except AttributeError:
-            self._stats = self.mc.stats(*args, **kwargs)
-            self._stats_chain = i_chain
-            return self._stats
+            pass
+        self._stats = self.mc.stats(*args, **kwargs)
+        self._stats_chain = i_chain
+        return self._stats
 
 
 
