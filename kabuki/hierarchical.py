@@ -901,7 +901,7 @@ class Hierarchical(object):
         all_nodes = list(self.mc.stochastics)
         all_pre_nodes = list(pre_model.mc.stochastics)
         assigned_values = 0
-        assigned_setps = 0
+        assigned_steps = 0
 
         #loop over all nodes
         for i_node in range(len(all_nodes)):
