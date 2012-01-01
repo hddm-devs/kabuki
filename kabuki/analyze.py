@@ -2,11 +2,9 @@ from __future__ import division
 import numpy as np
 import pymc as pm
 import re
-import kabuki
-from matplotlib.pylab import show, hist, close, figure
+from matplotlib.pylab import show, figure
 import matplotlib.pyplot as plt
 import sys
-from operator import attrgetter
 import scipy as sc
 
 def convert_model_to_dictionary(model):
@@ -148,8 +146,8 @@ def gen_group_stats(stats):
 
     return s
 
-def group_plot(model, params_to_plot = (), n_bins=50):
-    if type(model) is pm.MCMC:
+def group_plot(model, params_to_plot=(), n_bins=50, save_to=None):
+    if isinstance(model, pm.MCMC):
         nodes = model.stochastics
     else:
         nodes = model
@@ -175,12 +173,16 @@ def group_plot(model, params_to_plot = (), n_bins=50):
             g_hist = np.histogram(g_node_trace,bins=n_bins, range=[lb, ub], normed=True)[0]
             plt.plot(x_data, g_hist, '--', label='group')
             for i in subj_nodes:
-                g_hist =np.histogram(db.trace(i.__name__)[:],bins=n_bins, range=[lb, ub], normed=True)[0]
+                g_hist = np.histogram(db.trace(i.__name__)[:],bins=n_bins, range=[lb, ub], normed=True)[0]
                 plt.plot(x_data, g_hist, label=re.search('[0-9]+$',i.__name__).group())
             leg = plt.legend(loc='best', fancybox=True)
             leg.get_frame().set_alpha(0.5)
-            plt.title(group_node.__name__)
-            plt.gcf().canvas.set_window_title(group_node.__name__)
+            name = group_node.__name__
+            plt.title(name)
+            plt.gcf().canvas.set_window_title(name)
+
+            if save_to is not None:
+                plt.savefig(os.path.join(save_to, "%s.png" % name))
     show()
 
 def savage_dickey(pos, post_trace, range=(-.3,.3), bins=40, prior_trace=None, prior_y=None):
