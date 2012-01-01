@@ -2,7 +2,7 @@ from __future__ import division
 import numpy as np
 import matplotlib.pyplot as plt
 import pymc as pm
-
+from copy import copy
 import kabuki
 
 def interpolate_trace(x, trace, range=(-1,1), bins=100):
@@ -11,7 +11,7 @@ def interpolate_trace(x, trace, range=(-1,1), bins=100):
     :Arguments:
         x <float>: position at which to evalute posterior.
         trace <np.ndarray>: Trace containing samples from posterior.
-    
+
     :Optional:
         range <tuple=(-1,1): Bounds of histogram (should be fairly
             close around region of interest).
@@ -31,11 +31,11 @@ def interpolate_trace(x, trace, range=(-1,1), bins=100):
 
 def save_csv(data, fname, sep=None):
     """Save record array to fname as csv.
-    
+
     :Arguments:
         data <np.recarray>: Data array to output.
         fname <str>: File name.
-    
+
     :Optional:
         sep <str=','>: Separator between columns.
 
@@ -55,14 +55,14 @@ def save_csv(data, fname, sep=None):
 
 def load_csv(*args, **kwargs):
     """Load record array from csv.
-    
+
     :Arguments:
         fname <str>: File name.
         See numpy.recfromcsv
 
     :Optional:
         See numpy.recfromcsv
-    
+
     :Note:
         Direct wrapper for numpy.recfromcsv().
 
@@ -70,14 +70,14 @@ def load_csv(*args, **kwargs):
     """
     #read data
     return np.recfromcsv(*args, **kwargs)
-   
+
 def parse_config_file(fname, mcmc=False, load=False, param_names=None):
     """Open, parse and execute a kabuki model as specified by the
     configuration file.
 
     :Arguments:
         fname <str>: File name of config file.
-    
+
     :Optional:
         mcmc <bool=False>: Run MCMC on model.
         load <bool=False>: Load from database.
@@ -89,10 +89,10 @@ def parse_config_file(fname, mcmc=False, load=False, param_names=None):
         raise ValueError("%s could not be found."%fname)
 
     import ConfigParser
-    
+
     config = ConfigParser.ConfigParser()
     config.read(fname)
-    
+
     #####################################################
     # Parse config file
     data_fname = config.get('data', 'load')
@@ -105,7 +105,7 @@ def parse_config_file(fname, mcmc=False, load=False, param_names=None):
         save = False
 
     data = np.recfromcsv(data_fname)
-    
+
     try:
         model_type = config.get('model', 'type')
     except ConfigParser.NoOptionError:
@@ -163,13 +163,13 @@ def parse_config_file(fname, mcmc=False, load=False, param_names=None):
         plot_rt_fit = config.getboolean('stats', 'plot_rt_fit')
     except ConfigParser.NoOptionError, ConfigParser.NoSectionError:
         plot_rt_fit = False
-        
+
     try:
         plot_posteriors = config.getboolean('stats', 'plot_posteriors')
     except ConfigParser.NoOptionError, ConfigParser.NoSectionError:
         plot_posteriors = False
 
-    
+
     print "Creating model..."
     m = hddm.models.Multi(data, model_type=model_type, is_subj_model=is_subj_model, no_bias=no_bias, depends_on=depends, debug=debug)
 
@@ -187,10 +187,10 @@ def parse_config_file(fname, mcmc=False, load=False, param_names=None):
 
     if plot_rt_fit:
         m.plot_rt_fit()
-        
+
     if plot_posteriors:
         m.plot_posteriors
-        
+
     return m
 
 def posterior_predictive_check(model, data):
@@ -201,18 +201,18 @@ def posterior_predictive_check(model, data):
         params['ster'] = 0
     if model.no_bias:
         params['z'] = params['a']/2.
-        
+
     data_sampled = _gen_rts_params(params)
 
     # Check
     return pm.discrepancy(data_sampled, data, .5)
-    
+
 def load_traces_from_db(mc, dbname):
     """Load samples from a database created by an earlier model
     """
     # Open database
     db = pm.database.hdf5.load(dbname)
-    
+
     # Loop through parameters and set traces
     for node in mc.nodes:
         #loop only not-observed
