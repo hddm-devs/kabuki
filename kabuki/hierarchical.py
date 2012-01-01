@@ -63,6 +63,7 @@ class Parameter(object):
         self.group_nodes = OrderedDict()
         self.var_nodes = OrderedDict()
         self.subj_nodes = OrderedDict()
+        self.bottom_nodes = OrderedDict()
 
         # Pointers that get overwritten
         self.group = None
@@ -241,7 +242,7 @@ class Hierarchical(object):
 
     def set_user_params(self, replace_params):
         """replace parameters with user defined parameters"""
-        if type(replace_params)==Parameter:
+        if isinstance(replace_params, Parameter):
             replace_params = [replace_params]
         for new_param in replace_params:
             for i in range(len(self.params)):
@@ -281,6 +282,10 @@ class Hierarchical(object):
         to depends_on.
 
         """
+
+        # Unfortunately, this function is quite complex as it
+        # recursively parcels the data.
+
         if len(depends_on) != 0: # If depends are present
             data_params = []
             # Get first param from depends_on
@@ -297,7 +302,7 @@ class Hierarchical(object):
                 # Add a key that is only the col_name that links to
                 # the correct dependent nodes. This is the central
                 # trick so that later on the get_bottom_node can use
-               # params[col_name] and the bottm node will get linked to
+                # params[col_name] and the bottm node will get linked to
                 # the correct nodes automatically.
                 param = self.params_include[param_name]
 
@@ -310,8 +315,8 @@ class Hierarchical(object):
                 data_param = self._get_data_depend_rec(data_dep,
                                                        depends_on=copy(depends_on),
                                                        params=copy(params),
-                                                       dep_name = copy(dep_name),
-                                                       param = param)
+                                                       dep_name=copy(dep_name),
+                                                       param=param)
                 data_params += data_param
                 # Remove last item (otherwise we would always keep
                 # adding the dep elems of in one column)
@@ -393,6 +398,7 @@ class Hierarchical(object):
         self.group_nodes = {}
         self.var_nodes = {}
         self.subj_nodes = {}
+        self.bottom_nodes = {}
 
         for name, param in self.params_include.iteritems():
             for tag, node in param.group_nodes.iteritems():
@@ -404,6 +410,9 @@ class Hierarchical(object):
             for tag, node in param.var_nodes.iteritems():
                 self.nodes[name+tag+'_var'] = node
                 self.var_nodes[name+tag] = node
+            for tag, node in param.bottom_nodes.iteritems():
+                self.nodes[name+tag+'_bottom'] = node
+                self.bottom_nodes[name+tag] = node
 
         return self.nodes
 
@@ -483,20 +492,21 @@ class Hierarchical(object):
 
         """
 
-        #init mc if needed
+        # init mc if needed
         if self.mc == None:
             self.mcmc()
 
-        #suppress annoying warnings
+        # suppress annoying warnings
         if ('hdf5' in dir(pm.database)) and \
            (type(self.mc.db) is pm.database.hdf5.Database):
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore', pm.database.hdf5.tables.NaturalNameWarning)
 
-        #sample
+        # sample
         self.mc.sample(*args, **kwargs)
 
         return self.mc
+
 
     def print_group_stats(self, fname=None):
         stats_str = kabuki.analyze.gen_group_stats(self.stats())
@@ -505,6 +515,7 @@ class Hierarchical(object):
         else:
             with open(fname) as fd:
                 fd.write(stats_str)
+
 
     def print_stats(self, fname=None):
         stats_str = kabuki.analyze.gen_stats(self.stats())
@@ -606,11 +617,12 @@ class Hierarchical(object):
         # Init
         param.subj_nodes[tag] = np.empty(self._num_subjs, dtype=object)
         # Create subj parameter distribution for each subject
-        for subj_idx,subj in enumerate(self._subjs):
+        for subj_idx, subj in enumerate(self._subjs):
             data_subj = data[data['subj_idx']==subj]
             param.data = data_subj
             param.group = param.group_nodes[tag]
-            param.var = param.var_nodes[tag]
+            if param.create_group_node:
+                param.var = param.var_nodes[tag]
             param.tag = tag
             param.idx = subj_idx
             param.subj_nodes[tag][subj_idx] = self.get_subj_node(param)
@@ -638,9 +650,9 @@ class Hierarchical(object):
             dep_name = dep_name_str
             if init:
                 if self.is_group_model and param.create_subj_nodes:
-                    param.subj_nodes[dep_name] = np.empty(self._num_subjs, dtype=object)
+                    param.bottom_nodes[dep_name] = np.empty(self._num_subjs, dtype=object)
                 else:
-                    param.subj_nodes[dep_name] = None
+                    param.bottom_nodes[dep_name] = None
             else:
                 self._create_bottom_node(param, data, params_dep, dep_name, i)
 
@@ -665,20 +677,29 @@ class Hierarchical(object):
                 Subject index.
 
         """
+
         if self.is_group_model:
-            for i,subj in enumerate(self._subjs):
+            for i, subj in enumerate(self._subjs):
                 # Select data belonging to subj
                 data_subj = data[data['subj_idx'] == subj]
                 # Skip if subject was not tested on this condition
                 if len(data_subj) == 0:
                     continue
-                # Select params belonging to subject
+
+                ########################################
+                # Unfortunately, this is a little hairy since we have
+                # to find the nodes of the right subject and the right
+                # condition.
+
+                # Here we'll store all nodes belonging to the subject
                 selected_subj_nodes = {}
-                # Create new params dict and copy over nodes
+                # Find and store corresponding nodes
                 for selected_param in self.params_include.itervalues():
                     # Since groupless nodes are not created in this function we
                     # have to search for the correct node and include it in
                     # the params.
+                    if selected_param.is_bottom_node:
+                        continue
                     if not selected_param.create_subj_nodes:
                         if selected_param.subj_nodes.has_key(dep_name):
                             selected_subj_nodes[selected_param.name] = selected_param.group_nodes[dep_name]
@@ -694,7 +715,7 @@ class Hierarchical(object):
                 param.tag = dep_name
                 param.idx = i
                 param.data = data_subj
-                param.subj_nodes[dep_name][i] = self.get_bottom_node(param, selected_subj_nodes)
+                param.bottom_nodes[dep_name][i] = self.get_bottom_node(param, selected_subj_nodes)
                 param.reset()
         else: # Do not use subj params, but group ones
             # Since group nodes are not created in this function we
@@ -706,7 +727,7 @@ class Hierarchical(object):
 
             param.tag = dep_name
             param.data = data
-            param.subj_nodes[dep_name] = self.get_bottom_node(param, params)
+            param.bottom_nodes[dep_name] = self.get_bottom_node(param, params)
             param.reset()
 
         return self
@@ -792,6 +813,9 @@ class Hierarchical(object):
 
         # Create mcmc instance reading from the opened database
         self.mc = pm.MCMC(self.nodes, db=db, verbose=verbose)
+
+        # Not sure if this does anything useful, but calling for good luck
+        self.mc.restore_sampler_state()
 
         # Take the traces from the database and feed them into our
         # distribution variables (needed for _gen_stats())
