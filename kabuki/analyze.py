@@ -4,7 +4,7 @@ import pymc as pm
 import re
 from matplotlib.pylab import show, figure
 import matplotlib.pyplot as plt
-import sys
+import sys, os
 import scipy as sc
 
 def convert_model_to_dictionary(model):
@@ -184,6 +184,47 @@ def group_plot(model, params_to_plot=(), n_bins=50, save_to=None):
             if save_to is not None:
                 plt.savefig(os.path.join(save_to, "%s.png" % name))
     show()
+
+def compare_all_pairwise(model):
+    """Perform all pairwise comparisons of dependent parameter
+    distributions (as indicated by depends_on).
+     :Stats generated:
+        * Mean difference
+        * 5th and 95th percentile
+    """
+    from scipy.stats import scoreatpercentile
+    from itertools import combinations
+    print "Parameters\tMean difference\t5%\t95%"
+    # Loop through dependent parameters and generate stats
+    for params in model.group_nodes_dep.itervalues():
+        # Loop through all pairwise combinations
+        for p0,p1 in combinations(params, 2):
+            diff = model.group_nodes[p0].trace() - model.group_nodes[p1].trace()
+            perc_5 = scoreatpercentile(diff, 5)
+            perc_95 = scoreatpercentile(diff, 95)
+            print "%s vs %s\t%.3f\t%.3f\t%.3f" %(p0, p1, np.mean(diff), perc_5, perc_95)
+
+
+def plot_all_pairwise(model):
+    """Plot all pairwise posteriors to find correlations."""
+    import matplotlib.pyplot as plt
+    import scipy as sp
+    import scipy.stats
+    from itertools import combinations
+    #size = int(np.ceil(np.sqrt(len(data_deps))))
+    fig = plt.figure()
+    fig.subplots_adjust(wspace=0.4, hspace=0.4)
+    # Loop through all pairwise combinations
+    for i, (p0, p1) in enumerate(combinations(model.group_nodes.values())):
+        fig.add_subplot(6,6,i+1)
+        plt.plot(p0.trace(), p1.trace(), '.')
+        (a_s, b_s, r, tt, stderr) = sp.stats.linregress(p0.trace(), p1.trace())
+        reg = sp.polyval((a_s, b_s), (np.min(p0.trace()), np.max(p0.trace())))
+        plt.plot((np.min(p0.trace()), np.max(p0.trace())), reg, '-')
+        plt.xlabel(p0.__name__)
+        plt.ylabel(p1.__name__)
+
+    plt.draw()
 
 def savage_dickey(pos, post_trace, range=(-.3,.3), bins=40, prior_trace=None, prior_y=None):
     """Calculate Savage-Dickey density ratio test, see Wagenmakers et

@@ -711,49 +711,6 @@ class Hierarchical(object):
 
         return self
 
-    def compare_all_pairwise(self):
-        """Perform all pairwise comparisons of dependent parameter
-        distributions (as indicated by depends_on).
-
-        :Stats generated:
-            * Mean difference
-            * 5th and 95th percentile
-
-        """
-        from scipy.stats import scoreatpercentile
-        from itertools import combinations
-
-        print "Parameters\tMean difference\t5%\t95%"
-        # Loop through dependent parameters and generate stats
-        for params in self.group_nodes_dep.itervalues():
-            # Loop through all pairwise combinations
-            for p0,p1 in combinations(params, 2):
-                diff = self.group_nodes[p0].trace()-self.group_nodes[p1].trace()
-                perc_5 = scoreatpercentile(diff, 5)
-                perc_95 = scoreatpercentile(diff, 95)
-                print "%s vs %s\t%.3f\t%.3f\t%.3f" %(p0, p1, np.mean(diff), perc_5, perc_95)
-
-    def plot_all_pairwise(self):
-        """Plot all pairwise posteriors to find correlations."""
-        import matplotlib.pyplot as plt
-        import scipy as sp
-        import scipy.stats
-        from itertools import combinations
-        #size = int(np.ceil(np.sqrt(len(data_deps))))
-        fig = plt.figure()
-        fig.subplots_adjust(wspace=0.4, hspace=0.4)
-        # Loop through all pairwise combinations
-        for i, (p0, p1) in enumerate(combinations(self.group_nodes.values())):
-            fig.add_subplot(6,6,i+1)
-            plt.plot(p0.trace(), p1.trace(), '.')
-            (a_s, b_s, r, tt, stderr) = sp.stats.linregress(p0.trace(), p1.trace())
-            reg = sp.polyval((a_s, b_s), (np.min(p0.trace()), np.max(p0.trace())))
-            plt.plot((np.min(p0.trace()), np.max(p0.trace())), reg, '-')
-            plt.xlabel(p0.__name__)
-            plt.ylabel(p1.__name__)
-
-        plt.draw()
-
 
     def get_node(self, node_name, params):
         """Returns the node object with node_name from params if node
@@ -765,6 +722,7 @@ class Hierarchical(object):
         else:
             assert self.params_dict[node_name].default is not None, "Default value of not-included parameter not set."
             return self.params_dict[node_name].default
+
 
     def stats(self, *args, **kwargs):
         """
@@ -892,7 +850,7 @@ class Hierarchical(object):
                                   trace=self.trace_subjs,
                                   value=param.init)
 
-    def init_from_existing_model(self, pre_model, step_method,**kwargs):
+    def init_from_existing_model(self, pre_model, step_method, **kwargs):
         """
         initialize the value and step methods of the model using an existing model
         """
