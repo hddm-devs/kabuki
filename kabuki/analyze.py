@@ -182,7 +182,7 @@ def group_plot(model, params_to_plot=(), n_bins=50, save_to=None):
             plt.gcf().canvas.set_window_title(name)
 
             if save_to is not None:
-                plt.savefig(os.path.join(save_to, "%s.png" % name))
+                plt.savefig(os.path.join(save_to, "group_%s.png" % name))
     show()
 
 def compare_all_pairwise(model):

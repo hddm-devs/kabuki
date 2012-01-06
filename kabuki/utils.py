@@ -171,7 +171,6 @@ def parse_config_file(fname, mcmc=False, load=False, param_names=None):
 
 
     print "Creating model..."
-    m = hddm.models.Multi(data, model_type=model_type, is_subj_model=is_subj_model, no_bias=no_bias, depends_on=depends, debug=debug)
 
     if mcmc:
         if not load:
