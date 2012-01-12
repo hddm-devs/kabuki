@@ -389,3 +389,29 @@ def get_traces(model):
         traces[name] = node.trace()[:]
 
     return traces
+
+def logp_trace(model):
+    """
+    return a trace of logp for model
+    """
+
+    #init
+    db = model.mc.db
+    n_samples = db.trace('deviance').length()
+    logp = np.empty(n_samples, np.double)
+
+    #loop over all samples
+    for i_sample in xrange(n_samples):
+        #set the value of all stochastic to their 'i_sample' value
+        for stochastic in model.mc.stochastics:
+            try:
+                value = db.trace(stochastic.__name__)[i_sample]
+                stochastic.value = value
+
+            except KeyError:
+                print "No trace available for %s. " % stochastic.__name__
+
+        #get logp
+        logp[i_sample] = model.mc.logp
+
+    return logp

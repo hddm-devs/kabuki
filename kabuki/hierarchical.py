@@ -14,6 +14,9 @@ import pymc as pm
 import warnings
 
 import kabuki
+from copy import copy, deepcopy
+from matplotlib.mlab import rec_drop_fields
+
 
 class Parameter(object):
     """Specify a parameter of a model.
@@ -887,3 +890,48 @@ class Hierarchical(object):
 
     def plot_posteriors(self):
         pm.Matplot.plot(self.mc)
+
+    def subj_by_subj_map_init(self, runs=2, **map_kwargs):
+        """
+        initializing nodes by finding the MAP for each subject separately
+        Input:
+            runs - number of MAP runs for each subject
+            map_kwargs - other arguments that will be passes on to the map function
+
+        Note: This function should be run prior to the nodes creation, i.e.
+        before running mcmc() or map()
+        """
+
+        #check if nodes were created. if they were it cause problems for deepcopy
+        assert (not self.nodes), "function should be used before nodes are initialized."
+
+        #init
+        subjs = self._subjs
+        n_subjs = len(subjs)
+
+        empty_s_model = deepcopy(self)
+        empty_s_model.is_group_model = False
+        del empty_s_model._num_subjs, empty_s_model._subjs, empty_s_model.data
+
+        self.create_nodes()
+
+        #loop over subjects
+        for i_subj in range(n_subjs):
+            #create and fit single subject
+            print "*!*!* fitting subject %d *!*!*" % subjs[i_subj]
+            t_data = self.data[self.data['subj_idx'] == subjs[i_subj]]
+            t_data = rec_drop_fields(t_data, ['data_idx'])
+            s_model = deepcopy(empty_s_model)
+            s_model.data = t_data
+            s_model.map(method='fmin_powell', runs=runs, **map_kwargs)
+
+            # copy to original model
+            for (name, node) in s_model.group_nodes.iteritems():
+                self.subj_nodes[name][i_subj].value = node.value
+
+        #set group nodes
+        for (name, node) in self.group_nodes.iteritems():
+            subj_values = [self.subj_nodes[name][x].value for x in range(n_subjs)]
+            node.value = np.mean(subj_values)
+            self.var_nodes[name].value = np.std(subj_values)
+
