@@ -219,6 +219,157 @@ def load_traces_from_db(mc, dbname):
             continue
         node.trace = db.trace(node.__name__)
 
+def stochastic_from_scipy_dist(scipy_dist, **kwargs):
+    """
+    Return a Stochastic subclass made from a particular SciPy distribution.
+    """
+    import inspect
+    import scipy.stats.distributions as sc_dst
+    from pymc.ScipyDistributions import separate_shape_args
+    from pymc.distributions import new_dist_class, bind_size
+
+    if scipy_dist.__class__.__name__.find('_gen'):
+        scipy_dist = scipy_dist(**kwargs)
+
+    name = scipy_dist.__class__.__name__.replace('_gen','').capitalize()
+
+    (args, varargs, varkw, defaults) = inspect.getargspec(scipy_dist._pdf)
+
+    shape_args = args[2:]
+    if isinstance(scipy_dist, sc_dst.rv_continuous):
+        dtype=float
+
+        def logp(value, **kwds):
+            args, zkwds = separate_shape_args(kwds, shape_args)
+            if hasattr(scipy_dist, '_logp'):
+                return scipy_dist._logp(value, *args)
+            else:
+                return np.sum(scipy_dist.logpdf(value,*args,**kwds))
+
+        parent_names = shape_args + ['loc', 'scale']
+        defaults = [None] * (len(parent_names)-2) + [0., 1.]
+
+    elif isinstance(scipy_dist, sc_dst.rv_discrete):
+        dtype=int
+
+        def logp(value, **kwds):
+            args, kwds = separate_shape_args(kwds, shape_args)
+            if hasattr(scipy_dist, '_logp'):
+                return scipy_dist._logp(value, *args)
+            else:
+                return np.sum(scipy_dist.logpmf(value,*args,**kwds))
+
+        parent_names = shape_args + ['loc']
+        defaults = [None] * (len(parent_names)-1) + [0]
+    else:
+        return None
+
+    parents_default = dict(zip(parent_names, defaults))
+
+    def random(shape=None, **kwds):
+        args, kwds = separate_shape_args(kwds, shape_args)
+
+        if shape is None:
+            return scipy_dist.rvs(*args, **kwds)
+        else:
+            return np.reshape(scipy_dist.rvs(*args, **kwds), shape)
+
+    # Build docstring from distribution
+    docstr = name[0]+' = '+name + '(name, '+', '.join(parent_names)+', value=None, shape=None, trace=True, rseed=True, doc=None)\n\n'
+    docstr += 'Stochastic variable with '+name+' distribution.\nParents are: '+', '.join(parent_names) + '.\n\n'
+    docstr += """
+Methods:
+
+    random()
+        - draws random value
+          sets value to return value
+
+    ppf(q)
+        - percent point function (inverse of cdf --- percentiles)
+          sets value to return value
+
+    isf(q)
+        - inverse survival function (inverse of sf)
+          sets value to return value
+
+    stats(moments='mv')
+        - mean('m',axis=0), variance('v'), skew('s'), and/or kurtosis('k')
+
+
+Attributes:
+
+    logp
+        - sum(log(pdf())) or sum(log(pmf()))
+
+    cdf
+        - cumulative distribution function
+
+    sf
+        - survival function (1-cdf --- sometimes more accurate)
+
+    entropy
+        - (differential) entropy of the RV.
+
+
+NOTE: If you encounter difficulties with this object, please try the analogous
+computation using the rv objects in scipy.stats.distributions directly before
+reporting the bug.
+    """
+
+    new_class = new_dist_class(dtype, name, parent_names, parents_default, docstr, logp, random, True, None)
+    class newer_class(new_class):
+        __doc__ = docstr
+        rv = scipy_dist
+        def __init__(self, *args, **kwds):
+            new_class.__init__(self, *args, **kwds)
+            self.args, self.kwds = separate_shape_args(self.parents, shape_args)
+            self.frozen_rv = self.rv(self.args, self.kwds)
+            self._random = bind_size(self._random, self.shape)
+
+        def _cdf(self):
+            """
+            The cumulative distribution function of self conditional on parents
+            evaluated at self's current value
+            """
+            return self.rv.cdf(self.value, *self.args, **self.kwds)
+        cdf = property(_cdf, doc=_cdf.__doc__)
+
+        def _sf(self):
+            """
+            The survival function of self conditional on parents
+            evaluated at self's current value
+            """
+            return self.rv.sf(self.value, *self.args, **self.kwds)
+        sf = property(_sf, doc=_sf.__doc__)
+
+        def ppf(self, q):
+            """
+            The percentile point function (inverse cdf) of self conditional on parents.
+            Self's value will be set to the return value.
+            """
+            self.value = self.rv.ppf(q, *self.args, **self.kwds)
+            return self.value
+
+        def isf(self, q):
+            """
+            The inverse survival function of self conditional on parents.
+            Self's value will be set to the return value.
+            """
+            self.value = self.rv.isf(q, *self.args, **self.kwds)
+            return self.value
+
+        def stats(self, moments='mv'):
+            """The first few moments of self's distribution conditional on parents"""
+            return self.rv.stats(moments=moments, *self.args, **self.kwds)
+
+        def _entropy(self):
+            """The entropy of self's distribution conditional on its parents"""
+            return self.rv.entropy(*self.args, **self.kwds)
+        entropy = property(_entropy, doc=_entropy.__doc__)
+
+    newer_class.__name__ = new_class.__name__
+    return newer_class
+
 def set_proposal_sd(mc, tau=.1):
     for var in mc.variables:
         if var.__name__.endswith('var'):
@@ -226,6 +377,7 @@ def set_proposal_sd(mc, tau=.1):
             mc.use_step_method(pm.Metropolis, var, proposal_sd = tau)
 
     return
+
 
 if __name__ == "__main__":
     import doctest
