@@ -37,11 +37,13 @@ class Parameter(object):
             Otherwise, set to default value (see below).
         default <float>: Default value if optional=True.
         verbose <int=0>: Verbosity.
+        var_type <string>: type of the var node, can be one of ['std', 'precision', 'sample_size']
     """
 
     def __init__(self, name, create_group_node=True, create_subj_nodes=True,
                  is_bottom_node=False, lower=None, upper=None, init=None,
-                 vars=None, default=None, optional=False, var_lower=1e-3, var_upper=10, verbose=0):
+                 vars=None, default=None, optional=False, var_lower=1e-3,
+                 var_upper=10, var_type='std', verbose=0):
         self.name = name
         self.create_group_node = create_group_node
         self.create_subj_nodes = create_subj_nodes
@@ -55,6 +57,7 @@ class Parameter(object):
         self.verbose = verbose
         self.var_lower = var_lower
         self.var_upper = var_upper
+        self.var_type = var_type
 
         if self.optional and self.default is None:
             raise ValueError("Optional parameters have to have a default value.")
@@ -929,9 +932,23 @@ class Hierarchical(object):
             for (name, node) in s_model.group_nodes.iteritems():
                 self.subj_nodes[name][i_subj].value = node.value
 
-        #set group nodes
-        for (name, node) in self.group_nodes.iteritems():
-            subj_values = [self.subj_nodes[name][x].value for x in range(n_subjs)]
-            node.value = np.mean(subj_values)
-            self.var_nodes[name].value = np.std(subj_values)
+        #set group and var nodes
+        for (param_name, d) in self.params_dict.iteritems():
+            for (tag, nodes) in d.subj_nodes.iteritems():
+                subj_values = [x.value for x in nodes]
+                #set group node
+                if d.group_nodes:
+                    d.group_nodes[tag].value = np.mean(subj_values)
+                #set var node
+                if d.var_nodes:
+                    if d.var_type == 'std':
+                        d.var_nodes[tag].value = np.std(subj_values)
+                    elif d.var_type == 'precision':
+                        d.var_nodes[tag].value = np.std(subj_values)**-2
+                    elif d.var_type == 'sample_size':
+                        v = np.var(subj_values)
+                        m = np.mean(subj_values)
+                        d.var_nodes[tag].value = (m * (1 - m)) / v - 1
+                    else:
+                        raise ValueError, "unknown var_type"
 
