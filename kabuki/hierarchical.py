@@ -14,6 +14,9 @@ import pymc as pm
 import warnings
 
 import kabuki
+from copy import copy, deepcopy
+from matplotlib.mlab import rec_drop_fields
+
 
 class Parameter(object):
     """Specify a parameter of a model.
@@ -34,11 +37,13 @@ class Parameter(object):
             Otherwise, set to default value (see below).
         default <float>: Default value if optional=True.
         verbose <int=0>: Verbosity.
+        var_type <string>: type of the var node, can be one of ['std', 'precision', 'sample_size']
     """
 
     def __init__(self, name, create_group_node=True, create_subj_nodes=True,
                  is_bottom_node=False, lower=None, upper=None, init=None,
-                 vars=None, default=None, optional=False, var_lower=1e-3, var_upper=10, verbose=0):
+                 vars=None, default=None, optional=False, var_lower=1e-3,
+                 var_upper=10, var_type='std', verbose=0):
         self.name = name
         self.create_group_node = create_group_node
         self.create_subj_nodes = create_subj_nodes
@@ -52,6 +57,7 @@ class Parameter(object):
         self.verbose = verbose
         self.var_lower = var_lower
         self.var_upper = var_upper
+        self.var_type = var_type
 
         if self.optional and self.default is None:
             raise ValueError("Optional parameters have to have a default value.")
@@ -911,3 +917,62 @@ class Hierarchical(object):
 
     def plot_posteriors(self):
         pm.Matplot.plot(self.mc)
+
+    def subj_by_subj_map_init(self, runs=2, **map_kwargs):
+        """
+        initializing nodes by finding the MAP for each subject separately
+        Input:
+            runs - number of MAP runs for each subject
+            map_kwargs - other arguments that will be passes on to the map function
+
+        Note: This function should be run prior to the nodes creation, i.e.
+        before running mcmc() or map()
+        """
+
+        #check if nodes were created. if they were it cause problems for deepcopy
+        assert (not self.nodes), "function should be used before nodes are initialized."
+
+        #init
+        subjs = self._subjs
+        n_subjs = len(subjs)
+
+        empty_s_model = deepcopy(self)
+        empty_s_model.is_group_model = False
+        del empty_s_model._num_subjs, empty_s_model._subjs, empty_s_model.data
+
+        self.create_nodes()
+
+        #loop over subjects
+        for i_subj in range(n_subjs):
+            #create and fit single subject
+            print "*!*!* fitting subject %d *!*!*" % subjs[i_subj]
+            t_data = self.data[self.data['subj_idx'] == subjs[i_subj]]
+            t_data = rec_drop_fields(t_data, ['data_idx'])
+            s_model = deepcopy(empty_s_model)
+            s_model.data = t_data
+            s_model.map(method='fmin_powell', runs=runs, **map_kwargs)
+
+            # copy to original model
+            for (name, node) in s_model.group_nodes.iteritems():
+                self.subj_nodes[name][i_subj].value = node.value
+
+        #set group and var nodes
+        for (param_name, d) in self.params_dict.iteritems():
+            for (tag, nodes) in d.subj_nodes.iteritems():
+                subj_values = [x.value for x in nodes]
+                #set group node
+                if d.group_nodes:
+                    d.group_nodes[tag].value = np.mean(subj_values)
+                #set var node
+                if d.var_nodes:
+                    if d.var_type == 'std':
+                        d.var_nodes[tag].value = np.std(subj_values)
+                    elif d.var_type == 'precision':
+                        d.var_nodes[tag].value = np.std(subj_values)**-2
+                    elif d.var_type == 'sample_size':
+                        v = np.var(subj_values)
+                        m = np.mean(subj_values)
+                        d.var_nodes[tag].value = (m * (1 - m)) / v - 1
+                    else:
+                        raise ValueError, "unknown var_type"
+
