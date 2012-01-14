@@ -2,7 +2,7 @@ from __future__ import division
 import numpy as np
 import matplotlib.pyplot as plt
 import pymc as pm
-from copy import copy
+from copy import copy, deepcopy
 import kabuki
 
 def interpolate_trace(x, trace, range=(-1,1), bins=100):
@@ -192,19 +192,6 @@ def parse_config_file(fname, mcmc=False, load=False, param_names=None):
 
     return m
 
-def posterior_predictive_check(model, data):
-    params = copy(model.params_est)
-    if model.model_type.startswith('simple'):
-        params['sv'] = 0
-        params['sz'] = 0
-        params['ster'] = 0
-    if model.no_bias:
-        params['z'] = params['a']/2.
-
-    data_sampled = _gen_rts_params(params)
-
-    # Check
-    return pm.discrepancy(data_sampled, data, .5)
 
 def load_traces_from_db(mc, dbname):
     """Load samples from a database created by an earlier model
@@ -219,7 +206,7 @@ def load_traces_from_db(mc, dbname):
             continue
         node.trace = db.trace(node.__name__)
 
-def stochastic_from_scipy_dist(scipy_dist, **kwargs):
+def scipy_stochastic(scipy_dist, **kwargs):
     """
     Return a Stochastic subclass made from a particular SciPy distribution.
     """
@@ -326,21 +313,32 @@ reporting the bug.
             self.frozen_rv = self.rv(self.args, self.kwds)
             self._random = bind_size(self._random, self.shape)
 
-        def _cdf(self):
+        def pdf(self, value=None):
+            """
+            The probability distribution function of self conditional on parents
+            evaluated at self's current value
+            """
+            if value is None:
+                value = self.value
+            return self.rv.pdf(value, *self.args, **self.kwds)
+
+        def cdf(self, value=None):
             """
             The cumulative distribution function of self conditional on parents
             evaluated at self's current value
             """
-            return self.rv.cdf(self.value, *self.args, **self.kwds)
-        cdf = property(_cdf, doc=_cdf.__doc__)
+            if value is None:
+                value = self.value
+            return self.rv.cdf(value, *self.args, **self.kwds)
 
-        def _sf(self):
+        def sf(self, value=None):
             """
             The survival function of self conditional on parents
             evaluated at self's current value
             """
+            if value is None:
+                value = self.value
             return self.rv.sf(self.value, *self.args, **self.kwds)
-        sf = property(_sf, doc=_sf.__doc__)
 
         def ppf(self, q):
             """

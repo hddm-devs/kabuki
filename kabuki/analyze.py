@@ -415,3 +415,58 @@ def logp_trace(model):
         logp[i_sample] = model.mc.logp
 
     return logp
+
+
+def _parents_to_random_posterior_sample(bottom_node, pos=None):
+    """Walks through parents and sets them to pos sample."""
+    # Create parent iterator
+    for i, parent in enumerate(bottom_node.parents.itervalues()):
+        if not hasattr(parent, '_trace'): # Skip non-stochastic nodes
+            continue
+
+        trace = parent.trace()
+        if pos is None:
+            pos = np.random.randint(0, len(trace))
+
+        assert len(trace) >= pos, "pos larger than posterior sample size"
+        parent.value = trace[pos]
+
+
+def _post_pred_bottom_node(bottom_node, value_range, samples=10, bins=100, axis=None):
+    like = np.empty((samples, len(value_range)), dtype=np.float32)
+
+    for sample in range(samples):
+        _parents_to_random_posterior_sample(bottom_node)
+        # Generate likelihood for parents parameters
+        like[sample,:] = bottom_node.pdf(value_range)
+
+    if axis is not None:
+        # Plot pp
+        y = like.mean(axis=0)
+        yerr = like.std(axis=0)
+        axis.plot(value_range, y, label='pp', color='b')
+        axis.fill_between(value_range, y-yerr, y+yerr, color='b', alpha=.3)
+
+        # Plot data
+        axis.hist(bottom_node.value, normed=True,
+                  range=(value_range[0], value_range[-1]), label='data',
+                  bins=100, histtype='step')
+
+def plot_posterior_predictive(model, value_range, posterior_samples=10, columns=3, bins=100):
+    from copy import copy
+    model = copy(model)
+    for name, bottom_node in model.bottom_nodes.iteritems():
+        fig = plt.figure()
+        fig.suptitle(name)
+        if isinstance(bottom_node, np.ndarray):
+            # Group model
+            for i_subj, bottom_node_subj in enumerate(bottom_node):
+                ax = fig.add_subplot(columns, len(bottom_node)//columns, i_subj)
+                _post_pred_bottom_node(bottom_node_subj, value_range,
+                                       axis=ax,
+                                       bins=bins)
+        else:
+            # Flat mode
+            _post_pred_bottom_node(bottom_node, value_range,
+                                   axis=fig.add_subplot(111),
+                                   bins=bins)
