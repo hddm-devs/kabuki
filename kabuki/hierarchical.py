@@ -51,7 +51,7 @@ class Parameter(object):
             new group and var nodes. for instance if the var node is define as a prior
             over the standard devision and one would like to get a prior on the precision
             then one will define lambda mu,var:(mu, var**-2).
-        
+
         bottom_stoch
 
         vars <dict>: User-defined variables, can be anything you later
@@ -60,7 +60,7 @@ class Parameter(object):
         optional <bool=False>: Only create distribution when included.
             Otherwise, set to default value (see below).
 
-        default <float>: Default value if optional=True.        
+        default <float>: Default value if optional=True.
 
         verbose <int=0>: Verbosity.
 
@@ -74,7 +74,8 @@ class Parameter(object):
                  var_stoch = pm.Uniform, var_stoch_params = None,
                  bottom_stoch = None, bottom_stoch_params = None,
                  group_label = 'mu', var_label = 'tau', var_type='std',
-                 transform = None, verbose=0):
+                 group_step_method = None, var_step_method= None,
+                 subj_step_method = None, transform = None, verbose=0):
 
         for (attr, value) in locals().iteritems():
             setattr(self, attr, value)
@@ -504,6 +505,19 @@ class Hierarchical(object):
             self.create_nodes()
 
         self.mc = pm.MCMC(self.nodes, *args, **kwargs)
+
+        #assign step methods
+        if self.is_group_model:
+            for param in self.params:
+                if param.group_step_method != None:
+                    for node in param.group_nodes.itervalues():
+                        self.mc.use_step_method(param.group_step_method, node)
+                if param.var_step_method != None:
+                    for node in param.var_nodes.itervalues():
+                        self.mc.use_step_method(param.var_step_method, node)
+                if param.subj_step_method != None:
+                    for node_array in param.subj_nodes.itervalues():
+                        [self.mc.use_step_method(param.subj_step_method, node) for node in node_array]
 
         return self.mc
 
