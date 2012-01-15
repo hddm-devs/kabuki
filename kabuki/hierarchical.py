@@ -26,38 +26,58 @@ class Parameter(object):
 
     :Optional:
         create_group_node <bool=True>: Create group nodes for parameter.
+
         create_subj_nodes <bool=True>: Create subj nodes for parameter.
+
         is_bottom_node <bool=False>: Is node at the bottom of the hierarchy (e.g. likelihoods)
-        lower <float>: Lower bound (e.g. for a uniform distribution).
-        upper <float>: Upper bound (e.g. for a uniform distribution).
-        init <float>: Initialize to value.
+
+        subj_stoch <Stochatic>: the class of the stochastic node for the subject
+
+        group_stoch <Stochatic>: the class of the stochastic node for the group
+
+        var_stoch <Stochatic>: the class of the stochastic node for the var
+
+        group_stoch_params <dictionary>: parameters which will be passed to the group node
+
+        var_stoch_params <dictionary>: parameters which will be passed to the var node
+
+        subj_stoch_params <dictionary>: parameters which will be passed to the subject node
+
+        group_label <string>: the label that the subj node gives to the group parameter
+
+        var_label <string>: the label that the subj node gives to the var parameter
+
+        transform <function> : a function which take the group and var nodes and return
+            new group and var nodes. for instance if the var node is define as a prior
+            over the standard devision and one would like to get a prior on the precision
+            then one will define lambda mu,var:(mu, var**-2).
+        
+        bottom_stoch
+
         vars <dict>: User-defined variables, can be anything you later
             want to access.
+
         optional <bool=False>: Only create distribution when included.
             Otherwise, set to default value (see below).
-        default <float>: Default value if optional=True.
+
+        default <float>: Default value if optional=True.        
+
         verbose <int=0>: Verbosity.
+
         var_type <string>: type of the var node, can be one of ['std', 'precision', 'sample_size']
     """
 
     def __init__(self, name, create_group_node=True, create_subj_nodes=True,
-                 is_bottom_node=False, lower=None, upper=None, init=None,
-                 vars=None, default=None, optional=False, var_lower=1e-3,
-                 var_upper=10, var_type='std', verbose=0):
-        self.name = name
-        self.create_group_node = create_group_node
-        self.create_subj_nodes = create_subj_nodes
-        self.is_bottom_node = is_bottom_node
-        self.lower = lower
-        self.upper = upper
-        self.init = init
-        self.vars = vars
-        self.optional = optional
-        self.default = default
-        self.verbose = verbose
-        self.var_lower = var_lower
-        self.var_upper = var_upper
-        self.var_type = var_type
+                 is_bottom_node=False, vars=None, default=None, optional=False,
+                 subj_stoch = pm.Normal, subj_stoch_params = None,
+                 group_stoch = pm.Uniform, group_stoch_params = None,
+                 var_stoch = pm.Uniform, var_stoch_params = None,
+                 bottom_stoch = None, bottom_stoch_params = None,
+                 group_label = 'mu', var_label = 'tau', var_type='std',
+                 transform = None, verbose=0):
+
+        for (attr, value) in locals().iteritems():
+            setattr(self, attr, value)
 
         if self.optional and self.default is None:
             raise ValueError("Optional parameters have to have a default value.")
@@ -180,9 +200,6 @@ class Hierarchical(object):
 
         self.nodes = {}
         self.mc = None
-        self.trace_subjs = trace_subjs
-        self.plot_subjs = plot_subjs
-        self.plot_var = plot_var
 
         # Add data_idx field to data. Since we are restructuring the
         # data, this provides a means of getting the data out of
@@ -236,9 +253,18 @@ class Hierarchical(object):
 
         #set Parameters
         self.params = self.get_params()
-
         if replace_params != None:
             self.set_user_params(replace_params)
+
+        for param in self.params:
+            if param.is_bottom_node:
+                continue
+            if not trace_subjs:
+                param.subj_stoch_params['trace'] = False
+            if not plot_subjs:
+                param.subj_stoch_params['plot'] = False
+            if not plot_var:
+                param.var_stoch_params['var'] = False
 
         self.params_dict = {}
         for param in self.params:
@@ -391,7 +417,7 @@ class Hierarchical(object):
             break
         else:
             print "After %f retries, still not good fit found." %(tries)
-            raise e
+            _create()
 
 
         # Create model dictionary
@@ -615,8 +641,17 @@ class Hierarchical(object):
         for subj_idx,subj in enumerate(self._subjs):
             data_subj = data[data['subj_idx']==subj]
             param.data = data_subj
+            #set group parent
             param.group = param.group_nodes[tag]
             param.var = param.var_nodes[tag]
+
+            if param.transform == None:
+                group_node = param.group
+                var_node = param.var
+            else:
+                group_node, var_node = param.transform(param.group, param.var)
+            param.subj_stoch_params[param.group_label] = group_node
+            param.subj_stoch_params[param.var_label] = var_node
             param.tag = tag
             param.idx = subj_idx
             param.subj_nodes[tag][subj_idx] = self.get_subj_node(param)
@@ -819,11 +854,7 @@ class Hierarchical(object):
         This is used for the group distributions.
 
         """
-        return pm.Uniform(param.full_name,
-                          lower=param.lower,
-                          upper=param.upper,
-                          value=param.init,
-                          verbose=param.verbose)
+        return param.group_stoch(param.full_name, **param.group_stoch_params)
 
     def get_var_node(self, param):
         """Create and return a Uniform prior distribution for the
@@ -836,8 +867,7 @@ class Hierarchical(object):
         This is used for the variability fo the group distribution.
 
         """
-        return pm.Uniform(param.full_name, lower=param.var_lower, upper=param.var_upper,
-                          value=.3, plot=self.plot_var)
+        return param.var_stoch(param.full_name, **param.var_stoch_params)
 
     def get_subj_node(self, param):
         """Create and return a Truncated Normal distribution for
@@ -847,14 +877,8 @@ class Hierarchical(object):
         This is used for the individual subject distributions.
 
         """
-        return pm.TruncatedNormal(param.full_name,
-                                  a=param.lower,
-                                  b=param.upper,
-                                  mu=param.group,
-                                  tau=param.var**-2,
-                                  plot=self.plot_subjs,
-                                  trace=self.trace_subjs,
-                                  value=param.init)
+        return param.subj_stoch(param.full_name, **param.subj_stoch_params)
+
 
     def init_from_existing_model(self, pre_model, step_method, **kwargs):
         """
