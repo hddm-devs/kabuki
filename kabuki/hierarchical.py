@@ -177,6 +177,16 @@ class Hierarchical(object):
 
         replace_params : list of Parameters
             User defined parameters to replace the default ones.
+            
+        update_params : dictionary that holds dictionaries
+            User defined parameters that to update files in the default ones.
+            the keys of the dictionary should be the names of the parameters that
+            one wants to update. The values are another dictionary with keys for the
+            attributes the will be updated to the associated values.
+            e.g., to change parameter x's group_step_method to Metropolis
+            one should pass the following 
+            {'x' : {'group_step_method': Metropolis}}
+
 
     :Note:
         This class must be inherited. The child class must provide
@@ -195,7 +205,8 @@ class Hierarchical(object):
     """
 
     def __init__(self, data, is_group_model=None, depends_on=None, trace_subjs=True,
-                 plot_subjs=False, plot_var=False, include=(), replace_params = None):
+                 plot_subjs=False, plot_var=False, include=(), replace_params = (),
+                 update_params = None):
         # Init
         self.include = set(include)
 
@@ -254,8 +265,7 @@ class Hierarchical(object):
 
         #set Parameters
         self.params = self.get_params()
-        if replace_params != None:
-            self.set_user_params(replace_params)
+        self.set_user_params(replace_params, update_params)
 
         for param in self.params:
             if param.is_bottom_node:
@@ -265,21 +275,32 @@ class Hierarchical(object):
             if not plot_subjs:
                 param.subj_stoch_params['plot'] = False
             if not plot_var:
-                param.var_stoch_params['var'] = False
+                param.var_stoch_params['plot'] = False
 
         self.params_dict = {}
         for param in self.params:
             self.params_dict[param.name] = param
 
 
-    def set_user_params(self, replace_params):
-        """replace parameters with user defined parameters"""
+    def set_user_params(self, replace_params, update_params):
+        """replace/update parameters with user defined parameters"""
+        #replace params
         if type(replace_params)==Parameter:
             replace_params = [replace_params]
         for new_param in replace_params:
             for i in range(len(self.params)):
                 if self.params[i].name == new_param.name:
                     self.params[i] = new_param
+
+        #update params
+        if update_params == None:
+            return
+        
+        for (param_name, dict) in update_params.iteritems():
+            for i in range(len(self.params)):
+                if self.params[i].name == param_name:
+                    for (key, new_value) in dict.iteritems():
+                        setattr(self.params[i], key, new_value)
 
 
     def _get_data_depend(self):
