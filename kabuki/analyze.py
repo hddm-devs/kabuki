@@ -419,20 +419,38 @@ def logp_trace(model):
 
 def _parents_to_random_posterior_sample(bottom_node, pos=None):
     """Walks through parents and sets them to pos sample."""
-    # Create parent iterator
     for i, parent in enumerate(bottom_node.parents.itervalues()):
-        if not hasattr(parent, '_trace'): # Skip non-stochastic nodes
+        if not hasattr(parent, '_logp'): # Skip non-stochastic nodes
             continue
 
-        trace = parent.trace()
         if pos is None:
-            pos = np.random.randint(0, len(trace))
+            # Set to random posterior position
+            pos = np.random.randint(0, len(parent.trace()))
 
-        assert len(trace) >= pos, "pos larger than posterior sample size"
-        parent.value = trace[pos]
+        assert len(parent.trace()) >= pos, "pos larger than posterior sample size"
+        parent.value = parent.trace()[pos]
 
 
 def _post_pred_bottom_node(bottom_node, value_range, samples=10, bins=100, axis=None):
+    """Calculate posterior predictive for a certain bottom node.
+
+    :Arguments:
+        bottom_node : pymc.stochastic
+            Bottom node to compute posterior over.
+
+        value_range : numpy.ndarray
+            Range over which to evaluate the likelihood.
+
+    :Optional:
+        samples : int (default=10)
+            Number of posterior samples to use.
+
+        bins : int (default=100)
+            Number of bins to compute histogram over.
+
+        axis : matplotlib.axis (default=None)
+            If provided, will plot into axis.
+    """
     like = np.empty((samples, len(value_range)), dtype=np.float32)
 
     for sample in range(samples):
@@ -440,28 +458,69 @@ def _post_pred_bottom_node(bottom_node, value_range, samples=10, bins=100, axis=
         # Generate likelihood for parents parameters
         like[sample,:] = bottom_node.pdf(value_range)
 
+    y = like.mean(axis=0)
+    y_std = like.std(axis=0)
+
+    hist, ranges = np.histogram(bottom_node.value, normed=True, bins=bins)
+
     if axis is not None:
         # Plot pp
-        y = like.mean(axis=0)
-        yerr = like.std(axis=0)
         axis.plot(value_range, y, label='pp', color='b')
-        axis.fill_between(value_range, y-yerr, y+yerr, color='b', alpha=.3)
+        axis.fill_between(value_range, y-y_std, y+y_std, color='b', alpha=.8)
 
         # Plot data
         axis.hist(bottom_node.value, normed=True,
                   range=(value_range[0], value_range[-1]), label='data',
-                  bins=100, histtype='step')
+                  bins=100, histtype='step', lw=2.)
 
-def plot_posterior_predictive(model, value_range, posterior_samples=10, columns=3, bins=100):
-    from copy import copy
-    model = copy(model)
+        axis.set_ylim(bottom=0) # Likelihood and histogram can only be positive
+
+    return (y, y_std, hist, ranges)
+
+def plot_posterior_predictive(model, value_range, samples=10, columns=3, bins=100, save_to=None):
+    """Plot the posterior predictive of a kabuki hierarchical model.
+
+    :Arguments:
+
+        model : kabuki.Hierarchical
+            The (constructed and sampled) kabuki hierarchical model to
+            create the posterior preditive from.
+
+        value_range : numpy.ndarray
+            Array to evaluate the likelihood over.
+
+    :Optional:
+
+        samples : int (default=10)
+            How many posterior samples to generate the posterior predictive over.
+
+        columns : int (default=3)
+            How many columns to use for plotting the subjects.
+
+        bins : int (default=100)
+            How many bins to compute the data histogram over.
+
+        save_to : str (default=None)
+            Save figure to fname save_to (format is detected)
+
+    :Note:
+
+        This function changes the current value and logp of the nodes.
+
+    """
+
     for name, bottom_node in model.bottom_nodes.iteritems():
+        if not hasattr(bottom_node, 'pdf'):
+            continue # skip nodes that do not define pdf function
+
         fig = plt.figure()
-        fig.suptitle(name)
+        fig.suptitle(name, fontsize=12)
+        fig.subplots_adjust(top=0.9, hspace=.4, wspace=.3)
         if isinstance(bottom_node, np.ndarray):
             # Group model
             for i_subj, bottom_node_subj in enumerate(bottom_node):
-                ax = fig.add_subplot(columns, len(bottom_node)//columns, i_subj)
+                ax = fig.add_subplot(np.ceil(len(bottom_node+1)/columns), columns, i_subj+1)
+                ax.set_title(str(i_subj))
                 _post_pred_bottom_node(bottom_node_subj, value_range,
                                        axis=ax,
                                        bins=bins)
@@ -470,3 +529,7 @@ def plot_posterior_predictive(model, value_range, posterior_samples=10, columns=
             _post_pred_bottom_node(bottom_node, value_range,
                                    axis=fig.add_subplot(111),
                                    bins=bins)
+
+        if save_to is not None:
+            fig.savefig(save_to)
+
