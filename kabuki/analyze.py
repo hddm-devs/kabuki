@@ -477,7 +477,7 @@ def _post_pred_bottom_node(bottom_node, value_range, samples=10, bins=100, axis=
 
     return (y, y_std, hist, ranges)
 
-def plot_posterior_predictive(model, value_range, samples=10, columns=3, bins=100, save_to=None):
+def plot_posterior_predictive(model, value_range, samples=10, columns=3, bins=100, prefix=None):
     """Plot the posterior predictive of a kabuki hierarchical model.
 
     :Arguments:
@@ -530,6 +530,6 @@ def plot_posterior_predictive(model, value_range, samples=10, columns=3, bins=10
                                    axis=fig.add_subplot(111),
                                    bins=bins)
 
-        if save_to is not None:
-            fig.savefig(save_to)
+        if prefix is not None:
+            fig.savefig(os.path.join(prefix, name))
 
