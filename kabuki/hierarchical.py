@@ -399,6 +399,10 @@ class Hierarchical(object):
                 How often to retry when model creation
                 failed (due to bad starting values).
 
+        TODO: max_retries is causing bugs, so it was commented out.
+            we need to delete the nodes that are created using _create before the next retry.
+            I would like to check if we actually need this option
+
         """
         def _create():
             for name, param in self.params_include.iteritems():
@@ -436,15 +440,16 @@ class Hierarchical(object):
             if param.name in self.include or not param.optional:
                 self.params_include[param.name] = param
 
-        for tries in range(max_retries):
-            try:
-                _create()
-            except (pm.ZeroProbability, ValueError) as e:
-                continue
-            break
-        else:
-            print "After %f retries, still not good fit found." %(tries)
-            _create()
+#        for tries in range(max_retries):
+#            try:
+#                _create()
+#            except (pm.ZeroProbability, ValueError) as e:
+#                continue
+#            break
+#        else:
+#            print "After %f retries, still not good fit found." %(tries)
+#            _create()
+        _create()
 
 
         # Create model dictionary
@@ -1007,8 +1012,10 @@ class Hierarchical(object):
                 if d.var_nodes:
                     if d.var_type == 'std':
                         d.var_nodes[tag].value = np.std(subj_values)
+                    elif d.var_type == 'var':
+                        d.var_nodes[tag].value = np.std(subj_values) ** 2
                     elif d.var_type == 'precision':
-                        d.var_nodes[tag].value = np.std(subj_values)**-2
+                        d.var_nodes[tag].value = np.std(subj_values) ** -2
                     elif d.var_type == 'sample_size':
                         v = np.var(subj_values)
                         m = np.mean(subj_values)
