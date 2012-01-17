@@ -177,14 +177,14 @@ class Hierarchical(object):
 
         replace_params : list of Parameters
             User defined parameters to replace the default ones.
-            
+
         update_params : dictionary that holds dictionaries
             User defined parameters that to update files in the default ones.
             the keys of the dictionary should be the names of the parameters that
             one wants to update. The values are another dictionary with keys for the
             attributes the will be updated to the associated values.
             e.g., to change parameter x's group_step_method to Metropolis
-            one should pass the following 
+            one should pass the following
             {'x' : {'group_step_method': Metropolis}}
 
 
@@ -297,12 +297,15 @@ class Hierarchical(object):
         #update params
         if update_params == None:
             return
-        
+
         for (param_name, dict) in update_params.iteritems():
             for i in range(len(self.params)):
                 if self.params[i].name == param_name:
                     for (key, new_value) in dict.iteritems():
-                        setattr(self.params[i], key, new_value)
+                        if hasattr(self.params[i], key):
+                            setattr(self.params[i], key, new_value)
+                        else:
+                            raise ValueError, "An invalid key (%s) was found in update_params for Parameter %s" % (key, param_name)
 
 
     def _get_data_depend(self):
