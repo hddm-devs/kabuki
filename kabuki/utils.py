@@ -244,6 +244,22 @@ HalfCauchy = pm.stochastic_from_dist(name="Half Cauchy",
                                      logp=half_cauchy_logp,
                                      dtype=np.double)
 
+def invgamma_logp(value, alpha, beta):
+    """ sample from an Inverse-gamma distrbution with shape alpha
+    and rate beta"""
+    return pm.gamma_like(1./value, alpha, beta) - np.log(value**2)
+
+def invgamma_rand(value, alpha, beta):
+    """ logp of an Inverse-gamma distrbution with shape alpha
+    and rate beta"""
+    return 1./ np.random.gamma(alpha, 1./beta)
+
+InvGamma = pm.stochastic_from_dist(name="Inverse Gamma",
+                                     random=invgamma_rand,
+                                     logp=invgamma_logp,
+                                     dtype=np.double)
+
+
 if __name__ == "__main__":
     import doctest
     doctest.testmod()
