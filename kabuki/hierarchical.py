@@ -205,7 +205,7 @@ class Hierarchical(object):
     """
 
     def __init__(self, data, is_group_model=None, depends_on=None, trace_subjs=True,
-                 plot_subjs=False, plot_var=False, include=(), replace_params = (),
+                 plot_subjs=False, plot_var=False, include=(), replace_params = None,
                  update_params = None):
         # Init
         self.include = set(include)
@@ -265,6 +265,8 @@ class Hierarchical(object):
 
         #set Parameters
         self.params = self.get_params()
+        if replace_params == None:
+            replace_params = ()
         self.set_user_params(replace_params, update_params)
 
         for param in self.params:

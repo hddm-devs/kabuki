@@ -228,13 +228,18 @@ def set_proposal_sd(mc, tau=.1):
 
     return
 
+def half_cauchy_rand(S):
+    """sample from a half Cauchy distribution with scale S"""
+    return np.abs(np.tan(np.pi * (np.random.rand() - 0.5)) * S)
+
 def half_cauchy_logp(value, S):
-    """logp of half cauchy with scale S"""
+    """logp of half Cauchy with scale S"""
     return np.log(2.*S/np.pi) - np.log(value**2 + S**2)
 
 HalfCauchy = pm.stochastic_from_dist(name="Half Cauchy",
-                                      logp=half_cauchy_logp,
-                                      dtype=np.double)
+                                     random=half_cauchy_rand,
+                                     logp=half_cauchy_logp,
+                                     dtype=np.double)
 
 if __name__ == "__main__":
     import doctest
