@@ -416,6 +416,47 @@ def logp_trace(model):
 
     return logp
 
+def _post_pred_summary_bottom_node(bottom_node, samples=10, stats=None):
+    def _calc_stats(data, stats):
+        out = {}
+        for name, func in stats.itervalues():
+            out[name] = func(data)
+
+    if stats is None:
+        stats = {'mean': np.mean, 'std': np.std}
+
+    # Compute stats over data
+    data = bottom_node.value
+    summary_stats = {}
+    summary_stats_data = _calc_stats(data, stats)
+
+    for i_stat in xrange(len(stats)):
+        res[i_stat] = stats[i_stat]
+
+
+    for sample in range(samples):
+        _parents_to_random_posterior_sample(bottom_node)
+        # Generate data from bottom node
+        sampled = bottom_node.random()
+
+
+
+
+
+def post_pred_check(model, stats=()):
+    for name, bottom_node in model.bottom_nodes.iteritems():
+        if isinstance(bottom_node, np.ndarray):
+            # Group model
+            for i_subj, bottom_node_subj in enumerate(bottom_node):
+                if bottom_node_subj is None or not hasattr(bottom_node_subj, 'random'):
+                    continue # Skip non-existant nodes
+                _post_pred_summary_bottom_node(bottom_node_subj)
+        else:
+            # Flat model
+            if bottom_node is None or not hasattr(bottom_node, 'random'):
+                continue
+            _post_pred_summary_bottom_node(bottom_node)
+
 
 def _parents_to_random_posterior_sample(bottom_node, pos=None):
     """Walks through parents and sets them to pos sample."""
@@ -461,7 +502,11 @@ def _post_pred_bottom_node(bottom_node, value_range, samples=10, bins=100, axis=
     y = like.mean(axis=0)
     y_std = like.std(axis=0)
 
-    hist, ranges = np.histogram(bottom_node.value, normed=True, bins=bins)
+    #if len(bottom_node.value) != 0:
+        # No data assigned to node
+    #    return y, y_std
+
+    #hist, ranges = np.histogram(bottom_node.value, normed=True, bins=bins)
 
     if axis is not None:
         # Plot pp
@@ -469,15 +514,16 @@ def _post_pred_bottom_node(bottom_node, value_range, samples=10, bins=100, axis=
         axis.fill_between(value_range, y-y_std, y+y_std, color='b', alpha=.8)
 
         # Plot data
-        axis.hist(bottom_node.value, normed=True,
-                  range=(value_range[0], value_range[-1]), label='data',
-                  bins=100, histtype='step', lw=2.)
+        if len(bottom_node.value) != 0:
+            axis.hist(bottom_node.value, normed=True,
+                      range=(value_range[0], value_range[-1]), label='data',
+                      bins=100, histtype='step', lw=2.)
 
         axis.set_ylim(bottom=0) # Likelihood and histogram can only be positive
 
-    return (y, y_std, hist, ranges)
+    return (y, y_std) #, hist, ranges)
 
-def plot_posterior_predictive(model, value_range, samples=10, columns=3, bins=100, prefix=None):
+def plot_posterior_predictive(model, value_range=None, samples=10, columns=3, bins=100, prefix=None, figsize=(8,6)):
     """Plot the posterior predictive of a kabuki hierarchical model.
 
     :Arguments:
@@ -509,27 +555,77 @@ def plot_posterior_predictive(model, value_range, samples=10, columns=3, bins=10
 
     """
 
-    for name, bottom_node in model.bottom_nodes.iteritems():
-        if not hasattr(bottom_node, 'pdf'):
-            continue # skip nodes that do not define pdf function
+    if value_range is None:
+        # Infer from data
+        value_range = np.linspace(model.data)
 
-        fig = plt.figure()
+    for name, bottom_node in model.bottom_nodes.iteritems():
+        if isinstance(bottom_node, np.ndarray):
+            if not hasattr(bottom_node[0], 'pdf'):
+                continue # skip nodes that do not define pdf function
+        else:
+            if not hasattr(bottom_node, 'pdf'):
+                continue # skip nodes that do not define pdf function
+
+        fig = plt.figure(figsize=figsize)
+
         fig.suptitle(name, fontsize=12)
         fig.subplots_adjust(top=0.9, hspace=.4, wspace=.3)
         if isinstance(bottom_node, np.ndarray):
             # Group model
             for i_subj, bottom_node_subj in enumerate(bottom_node):
-                ax = fig.add_subplot(np.ceil(len(bottom_node+1)/columns), columns, i_subj+1)
+                if bottom_node_subj is None:
+                    continue # Skip non-existant nodes
+                ax = fig.add_subplot(np.ceil(len(bottom_node)/columns), columns, i_subj+1)
                 ax.set_title(str(i_subj))
                 _post_pred_bottom_node(bottom_node_subj, value_range,
                                        axis=ax,
                                        bins=bins)
         else:
-            # Flat mode
+            # Flat model
             _post_pred_bottom_node(bottom_node, value_range,
                                    axis=fig.add_subplot(111),
                                    bins=bins)
 
         if prefix is not None:
             fig.savefig(os.path.join(prefix, name))
+
+
+def _check_bottom_node(bottom_node):
+    if bottom_node is None:
+        print "Bottom node is None!!"
+        return False
+
+    # Check if node has name
+    if not hasattr(bottom_node, '__name__'):
+        print "bottom node has missing __name__ attribute."
+
+    name = bottom_node.__name__
+
+    # Check if parents exist
+    if not hasattr(bottom_node, 'parents'):
+        print "bottom node %s is missing parents attribute." % name
+
+    # Check if node has value
+    if not hasattr(bottom_node, 'value'):
+        print "bottom node %s is missing value." % name
+
+    # Check if data is empty
+    if len(bottom_node.value) == 0:
+        print "values of bottom node %s is emtpy!" % name
+
+    for i, parent in enumerate(bottom_node.parents.itervalues()):
+        if not hasattr(parent, '_logp'): # Skip non-stochastic nodes
+            continue
+
+
+def check_model(model):
+    for name, bottom_node in model.bottom_nodes.iteritems():
+        if isinstance(bottom_node, np.ndarray):
+            # Group model
+            for i_subj, bottom_node_subj in enumerate(bottom_node):
+                _check_bottom_node(bottom_node_subj)
+        else:
+            # Flat mode
+            _check_bottom_node(bottom_node)
 
