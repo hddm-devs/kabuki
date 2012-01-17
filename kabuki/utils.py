@@ -234,7 +234,10 @@ def half_cauchy_rand(S):
 
 def half_cauchy_logp(value, S):
     """logp of half Cauchy with scale S"""
-    return np.log(2.*S/np.pi) - np.log(value**2 + S**2)
+    if value < 0:
+        return -np.inf
+    else:
+        return np.log(2.*S/np.pi) - np.log(value**2 + S**2)
 
 HalfCauchy = pm.stochastic_from_dist(name="Half Cauchy",
                                      random=half_cauchy_rand,
