@@ -471,7 +471,7 @@ class Hierarchical(object):
 
         return self.nodes
 
-    def map(self, runs=2, warn_crit=5, **kwargs):
+    def map(self, runs=2, warn_crit=5, method='fmin_powell', **kwargs):
         """
         Find MAP and set optimized values to nodes.
 
@@ -494,10 +494,13 @@ class Hierarchical(object):
         maps = []
 
         for i in range(runs):
-            # (re)create nodes to get new initival values
-            self.create_nodes()
+            # (re)create nodes to get new initival values.
+            #nodes are not created for the first iteration if they already exist
+            if (i > 0) or (not self.nodes):
+                self.create_nodes()
+
             m = pm.MAP(self.nodes)
-            m.fit(**kwargs)
+            m.fit(method, **kwargs)
             print m.logp
             maps.append(m)
 
@@ -899,7 +902,10 @@ class Hierarchical(object):
         This is used for the group distributions.
 
         """
-        return param.group_stoch(param.full_name, **param.group_stoch_params)
+        if param.group_stoch == None:
+            return None
+        else:
+            return param.group_stoch(param.full_name, **param.group_stoch_params)
 
     def get_var_node(self, param):
         """Create and return a Uniform prior distribution for the
@@ -912,7 +918,10 @@ class Hierarchical(object):
         This is used for the variability fo the group distribution.
 
         """
-        return param.var_stoch(param.full_name, **param.var_stoch_params)
+        if param.var_stoch == None:
+            return None
+        else:
+            return param.var_stoch(param.full_name, **param.var_stoch_params)
 
     def get_subj_node(self, param):
         """Create and return a Truncated Normal distribution for
