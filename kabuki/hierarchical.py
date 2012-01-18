@@ -762,7 +762,7 @@ class Hierarchical(object):
                         if selected_param.subj_nodes.has_key(dep_name):
                             selected_subj_nodes[selected_param.name] = selected_param.subj_nodes[dep_name][i]
                         else:
-                            selected_subj_nodes[selected_param.name] = params[selected_param.name]
+                            selected_subj_nodes[selected_param.name] = params[selected_param.name][i]
 
                 # Call to the user-defined function!
                 param.tag = dep_name
