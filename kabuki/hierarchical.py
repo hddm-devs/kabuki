@@ -25,10 +25,6 @@ class Parameter(object):
         name <str>: Name of parameter.
 
     :Optional:
-        create_group_node <bool=True>: Create group nodes for parameter.
-
-        create_subj_nodes <bool=True>: Create subj nodes for parameter.
-
         is_bottom_node <bool=False>: Is node at the bottom of the hierarchy (e.g. likelihoods)
 
         subj_stoch <Stochatic>: the class of the stochastic node for the subject
@@ -67,8 +63,7 @@ class Parameter(object):
         var_type <string>: type of the var node, can be one of ['std', 'precision', 'sample_size']
     """
 
-    def __init__(self, name, create_group_node=True, create_subj_nodes=True,
-                 is_bottom_node=False, vars=None, default=None, optional=False,
+    def __init__(self, name, is_bottom_node=False, vars=None, default=None, optional=False,
                  subj_stoch = pm.Normal, subj_stoch_params = None,
                  group_stoch = pm.Uniform, group_stoch_params = None,
                  var_stoch = pm.Uniform, var_stoch_params = None,
@@ -82,10 +77,6 @@ class Parameter(object):
 
         if self.optional and self.default is None:
             raise ValueError("Optional parameters have to have a default value.")
-
-        if self.is_bottom_node:
-            self.create_group_node = False
-            self.create_subj_nodes = True
 
         self.group_nodes = OrderedDict()
         self.var_nodes = OrderedDict()
@@ -323,7 +314,7 @@ class Hierarchical(object):
             # Bottom nodes are created later
             if name in self.depends_on or param.is_bottom_node:
                 continue
-            if self.is_group_model and param.create_subj_nodes:
+            if self.is_group_model and not param.subj_stoch:
                 params[name] = param.subj_nodes['']
             else:
                 params[name] = param.group_nodes['']
@@ -361,7 +352,7 @@ class Hierarchical(object):
                 param = self.params_include[param_name]
 
                 # Add the node
-                if self.is_group_model and param.create_subj_nodes:
+                if self.is_group_model and not param.subj_stoch:
                     params[param_name] = param.subj_nodes[str(depend_element)]
                 else:
                     params[param_name] = param.group_nodes[str(depend_element)]
@@ -626,13 +617,10 @@ class Hierarchical(object):
             # Create parameter distribution from factory
             param.tag = tag
             param.data = data_dep_select
-            if param.create_group_node:
-                param.group_nodes[tag] = self.get_group_node(param)
-            else:
-                param.group_nodes[tag] = None
+            param.group_nodes[tag] = self.get_group_node(param)
             param.reset()
 
-            if self.is_group_model and param.create_subj_nodes:
+            if self.is_group_model and (param.subj_stoch != None):
                 # Create appropriate subj parameter
                 self._set_subj_nodes(param, tag, data_dep_select)
 
@@ -650,13 +638,10 @@ class Hierarchical(object):
         # Parameter does not depend on data
         # Set group parameter
         param.tag = ''
-        if param.create_group_node:
-            param.group_nodes[''] = self.get_group_node(param)
-        else:
-            param.group_nodes[''] = None
+        param.group_nodes[''] = self.get_group_node(param)
         param.reset()
 
-        if self.is_group_model and param.create_subj_nodes:
+        if self.is_group_model and (param.subj_stoch != None):
             self._set_subj_nodes(param, '', self.data)
 
         return self
@@ -675,12 +660,9 @@ class Hierarchical(object):
 
         """
         # Generate subj variability parameter var
-        param.tag = 'var'+tag
+        param.tag = tag + '_' + param.var_type
         param.data = data
-        if param.create_group_node:
-            param.var_nodes[tag] = self.get_var_node(param)
-        else:
-            param.var_nodes[''] = None
+        param.var_nodes[tag] = self.get_var_node(param)
         param.reset()
 
         # Init
@@ -698,8 +680,11 @@ class Hierarchical(object):
                 var_node = param.var
             else:
                 group_node, var_node = param.transform(param.group, param.var)
-            param.subj_stoch_params[param.group_label] = group_node
-            param.subj_stoch_params[param.var_label] = var_node
+            
+            if param.group_label != None:
+                param.subj_stoch_params[param.group_label] = group_node
+            if param.var_label != None:
+                param.subj_stoch_params[param.var_label] = var_node
             param.tag = tag
             param.idx = subj_idx
             param.subj_nodes[tag][subj_idx] = self.get_subj_node(param)
@@ -726,7 +711,7 @@ class Hierarchical(object):
         for i, (data, params_dep, dep_name_list, dep_name_str) in enumerate(data_dep):
             dep_name = dep_name_str
             if init:
-                if self.is_group_model and param.create_subj_nodes:
+                if self.is_group_model and (param.subj_stoch != None):
                     param.subj_nodes[dep_name] = np.empty(self._num_subjs, dtype=object)
                 else:
                     param.subj_nodes[dep_name] = None
@@ -768,7 +753,7 @@ class Hierarchical(object):
                     # Since groupless nodes are not created in this function we
                     # have to search for the correct node and include it in
                     # the params.
-                    if not selected_param.create_subj_nodes:
+                    if selected_param.subj_stoch == None:
                         if selected_param.subj_nodes.has_key(dep_name):
                             selected_subj_nodes[selected_param.name] = selected_param.group_nodes[dep_name]
                         else:
@@ -777,7 +762,7 @@ class Hierarchical(object):
                         if selected_param.subj_nodes.has_key(dep_name):
                             selected_subj_nodes[selected_param.name] = selected_param.subj_nodes[dep_name][i]
                         else:
-                            selected_subj_nodes[selected_param.name] = params[selected_param.name][i]
+                            selected_subj_nodes[selected_param.name] = params[selected_param.name]
 
                 # Call to the user-defined function!
                 param.tag = dep_name
