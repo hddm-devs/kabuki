@@ -314,7 +314,7 @@ class Hierarchical(object):
             # Bottom nodes are created later
             if name in self.depends_on or param.is_bottom_node:
                 continue
-            if self.is_group_model and not param.subj_stoch:
+            if self.is_group_model and (param.subj_stoch != None):
                 params[name] = param.subj_nodes['']
             else:
                 params[name] = param.group_nodes['']
@@ -352,7 +352,7 @@ class Hierarchical(object):
                 param = self.params_include[param_name]
 
                 # Add the node
-                if self.is_group_model and not param.subj_stoch:
+                if self.is_group_model and (param.subj_stoch != None):
                     params[param_name] = param.subj_nodes[str(depend_element)]
                 else:
                     params[param_name] = param.group_nodes[str(depend_element)]
@@ -529,20 +529,30 @@ class Hierarchical(object):
         if not self.nodes:
             self.create_nodes()
 
-        self.mc = pm.MCMC(self.nodes, *args, **kwargs)
+        nodes ={}
+        for (name, value) in self.nodes.iteritems():
+            if value != None:
+                nodes[name] = value
+
+        self.mc = pm.MCMC(nodes, *args, **kwargs)
 
         #assign step methods
         if self.is_group_model:
             for param in self.params:
+                #assign to group params
                 if param.group_step_method != None:
                     for node in param.group_nodes.itervalues():
-                        self.mc.use_step_method(param.group_step_method, node)
+                            if node != None:
+                                self.mc.use_step_method(param.group_step_method, node)
+                #assign to var params
                 if param.var_step_method != None:
                     for node in param.var_nodes.itervalues():
-                        self.mc.use_step_method(param.var_step_method, node)
+                        if node != None:
+                            self.mc.use_step_method(param.var_step_method, node)
                 if param.subj_step_method != None:
                     for node_array in param.subj_nodes.itervalues():
-                        [self.mc.use_step_method(param.subj_step_method, node) for node in node_array]
+                        if node_array != None:
+                            [self.mc.use_step_method(param.subj_step_method, node) for node in node_array]
 
         return self.mc
 
@@ -660,7 +670,7 @@ class Hierarchical(object):
 
         """
         # Generate subj variability parameter var
-        param.tag = tag + '_' + param.var_type
+        param.tag = 'var' + tag
         param.data = data
         param.var_nodes[tag] = self.get_var_node(param)
         param.reset()
@@ -680,7 +690,7 @@ class Hierarchical(object):
                 var_node = param.var
             else:
                 group_node, var_node = param.transform(param.group, param.var)
-            
+
             if param.group_label != None:
                 param.subj_stoch_params[param.group_label] = group_node
             if param.var_label != None:
