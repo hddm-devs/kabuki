@@ -14,7 +14,7 @@ class NormalPriorNormal(pm.Gibbs):
         self.stochastic = stochastic
         self.mu_0 = stochastic.parents['mu']
         self.tau_0 = stochastic.parents['tau']
-        self.tau_node = list(stochastic.children)[0].parents['tau']
+        self.tau_node = list(stochastic.extended_children)[0].parents['tau']
         self.children = stochastic.children
         self.n_subj = len(self.children)
 

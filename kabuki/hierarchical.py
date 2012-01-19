@@ -517,13 +517,14 @@ class Hierarchical(object):
 
         return max_map
 
-    def mcmc(self, *args, **kwargs):
+    def mcmc(self, assign_step_methods = True, *args, **kwargs):
         """
         Returns pymc.MCMC object of model.
 
-        :Note:
-            Forwards arguments to pymc.MCMC().
+        Input:
+            assign_step_metheds <bool> : assign the step methods in params to the nodes
 
+            The rest of the arguments are forwards to pymc.MCMC
         """
 
         if not self.nodes:
@@ -535,6 +536,9 @@ class Hierarchical(object):
                 nodes[name] = value
 
         self.mc = pm.MCMC(nodes, *args, **kwargs)
+
+        if not assign_step_methods:
+            return self.mc
 
         #assign step methods
         if self.is_group_model:
