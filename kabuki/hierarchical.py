@@ -64,10 +64,9 @@ class Parameter(object):
     """
 
     def __init__(self, name, is_bottom_node=False, vars=None, default=None, optional=False,
-                 subj_stoch = pm.Normal, subj_stoch_params = None,
-                 group_stoch = pm.Uniform, group_stoch_params = None,
-                 var_stoch = pm.Uniform, var_stoch_params = None,
-                 bottom_stoch = None, bottom_stoch_params = None,
+                 subj_stoch = None, subj_stoch_params = None,
+                 group_stoch = None, group_stoch_params = None,
+                 var_stoch = None, var_stoch_params = None,
                  group_label = 'mu', var_label = 'tau', var_type='std',
                  group_step_method = None, var_step_method= None,
                  subj_step_method = None, transform = None, verbose=0):
@@ -254,28 +253,46 @@ class Hierarchical(object):
             self._subjs = np.unique(data['subj_idx'])
             self._num_subjs = self._subjs.shape[0]
 
-        #set Parameters
+        self._init_params(replace_params, update_params, trace_subjs, plot_subjs, plot_var)
+
+
+
+    def _init_params(self, replace_params, update_params, trace_subjs, plot_subjs, plot_var):
+        """initialize self.params"""
+
+       #set Parameters
         self.params = self.get_params()
         if replace_params == None:
             replace_params = ()
-        self.set_user_params(replace_params, update_params)
+
+        #change the default parametrs
+        self._change_default_params(replace_params, update_params)
 
         for param in self.params:
+            #set has_x_node
+            param.has_group_nodes = (param.group_stoch is not None)
+            param.has_var_nodes = (param.var_stoch is not None)
+            param.has_subj_nodes = (param.subj_stoch is not None)
+
+            #set other attributes
             if param.is_bottom_node:
+                param.has_subj_nodes = True
                 continue
-            if not trace_subjs:
+            if not trace_subjs and param.has_subj_nodes:
                 param.subj_stoch_params['trace'] = False
-            if not plot_subjs:
+            if not plot_subjs and param.has_subj_nodes:
                 param.subj_stoch_params['plot'] = False
-            if not plot_var:
+            if not plot_var and param.has_var_nodes:
                 param.var_stoch_params['plot'] = False
 
+        #set params_dict
         self.params_dict = {}
         for param in self.params:
             self.params_dict[param.name] = param
 
 
-    def set_user_params(self, replace_params, update_params):
+
+    def _change_default_params(self, replace_params, update_params):
         """replace/update parameters with user defined parameters"""
         #replace params
         if type(replace_params)==Parameter:
@@ -767,7 +784,7 @@ class Hierarchical(object):
                     # Since groupless nodes are not created in this function we
                     # have to search for the correct node and include it in
                     # the params.
-                    if selected_param.subj_stoch == None:
+                    if not selected_param.has_subj_nodes:
                         if selected_param.subj_nodes.has_key(dep_name):
                             selected_subj_nodes[selected_param.name] = selected_param.group_nodes[dep_name]
                         else:
