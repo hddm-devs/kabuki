@@ -69,7 +69,8 @@ class Parameter(object):
                  var_stoch = None, var_stoch_params = None,
                  group_label = 'mu', var_label = 'tau', var_type='std',
                  group_step_method = None, var_step_method= None,
-                 subj_step_method = None, transform = None, verbose=0):
+                 subj_step_method = None, transform = None, share_var = False,
+                 verbose=0):
 
         for (attr, value) in locals().iteritems():
             setattr(self, attr, value)
@@ -691,9 +692,19 @@ class Hierarchical(object):
 
         """
         # Generate subj variability parameter var
-        param.tag = 'var' + tag
+
+        #Gen variance parameter
         param.data = data
-        param.var_nodes[tag] = self.get_var_node(param)
+        if param.share_var:
+            param.tag = 'var'
+        else:
+            param.tag = 'var' + tag
+        #if param does not share variance or this is the first node created
+        # then we create the node
+        if (len(param.var_nodes) == 0) or (not param.share_var):
+            param.var_nodes[tag] = self.get_var_node(param)
+        else: #we copy the first node
+            param.var_nodes[tag] = param.var_nodes.values()[0]
         param.reset()
 
         # Init
