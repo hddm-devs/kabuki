@@ -308,6 +308,7 @@ class Hierarchical(object):
             return
 
         for (param_name, dict) in update_params.iteritems():
+            found_param = False
             for i in range(len(self.params)):
                 if self.params[i].name == param_name:
                     for (key, new_value) in dict.iteritems():
@@ -315,6 +316,10 @@ class Hierarchical(object):
                             setattr(self.params[i], key, new_value)
                         else:
                             raise ValueError, "An invalid key (%s) was found in update_params for Parameter %s" % (key, param_name)
+                    found_param = True
+                    break
+            if not found_param:
+                raise ValueError, "An invalid parameter (%s) was found in update_params" % (param_name)
 
 
     def _get_data_depend(self):
