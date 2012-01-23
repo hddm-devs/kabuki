@@ -415,42 +415,48 @@ def logp_trace(model):
 
     return logp
 
-def _post_pred_summary_bottom_node(bottom_node, samples=10, stats=None, plot=True):
+def _post_pred_summary_bottom_node(bottom_node, samples=500, stats=None, plot=True, bins=100):
     def _calc_stats(data, stats):
         out = {}
-        for name, func in stats.itervalues():
+        for name, func in stats.iteritems():
             out[name] = func(data)
+
+        return out
 
     if stats is None:
         stats = {'mean': np.mean, 'std': np.std}
 
+    ############################
     # Compute stats over data
     data = bottom_node.value
     data_stats = _calc_stats(data, stats)
 
+    ###############################################
     # Initialize posterior sample stats container
     sampled_stats = {}
     for name in stats.iterkeys():
         sampled_stats[name] = np.empty(samples)
 
+    ##############################
+    # Sample and generate stats
     for sample in range(samples):
         _parents_to_random_posterior_sample(bottom_node)
         # Generate data from bottom node
         sampled = bottom_node.random()
-        sampled_stats = _calc_stats(sampled, stats)
+        sampled_stat = _calc_stats(sampled, stats)
 
         # Add it the results container
-        for name, value in sampled_stats.iteritems():
+        for name, value in sampled_stat.iteritems():
             sampled_stats[name][sample] = value
 
     if plot:
-        from pm.Matplot import gof_plot
+        from pymc.Matplot import gof_plot
         for name, value in sampled_stats.iteritems():
-            gof_plot(sampled_stats[name], data_stats[name], nbins=30, name=name, verbose=0)
+            gof_plot(sampled_stats[name], data_stats[name], nbins=bins, name=name, verbose=0)
 
     return data_stats, sampled_stats
 
-def post_pred_check(model, stats=None, confidence=95):
+def post_pred_check(model, stats=None, confidence=95, samples=500):
     if stats is None:
         stats = {'mean': np.mean, 'std': np.std}
 
@@ -460,18 +466,18 @@ def post_pred_check(model, stats=None, confidence=95):
             for i_subj, bottom_node_subj in enumerate(bottom_node):
                 if bottom_node_subj is None or not hasattr(bottom_node_subj, 'random'):
                     continue # Skip non-existant nodes
-                data_stats, sampled_stats = _post_pred_summary_bottom_node(bottom_node_subj)
+                data_stats, sampled_stats = _post_pred_summary_bottom_node(bottom_node_subj, samples=samples)
         else:
             # Flat model
             if bottom_node is None or not hasattr(bottom_node, 'random'):
                 continue # Skip
-            data_stats, sampled_stats = _post_pred_summary_bottom_node(bottom_node)
+            data_stats, sampled_stats = _post_pred_summary_bottom_node(bottom_node, samples=samples)
 
 
 def _parents_to_random_posterior_sample(bottom_node, pos=None):
     """Walks through parents and sets them to pos sample."""
     for i, parent in enumerate(bottom_node.parents.itervalues()):
-        if not hasattr(parent, '_logp'): # Skip non-stochastic nodes
+        if not isinstance(parent, pm.Node): # Skip non-stochastic nodes
             continue
 
         if pos is None:
