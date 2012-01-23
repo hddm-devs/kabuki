@@ -737,7 +737,7 @@ class Hierarchical(object):
                 if selected_param.subj_nodes.has_key(dep_name):
                     params[selected_param.name] = selected_param.subj_nodes[dep_name]
 
-            if len(data_subj) == 0:
+            if len(data) == 0:
                 # If no data is present, do not create node.
                 param.bottom_nodes[dep_name][i] = None
             else:
@@ -820,7 +820,7 @@ class Hierarchical(object):
                         else:
                             subj_param.trace = mc_model.trace(subj_param.__name__)
 
-    def mcmc_load_from_db(self, dbname, verbose=0, db_loader=None):
+    def load_db(self, dbname, verbose=0, db_loader=None):
         """Load samples from a database created by an earlier model
         run (e.g. by calling .mcmc(dbname='test'))
         """

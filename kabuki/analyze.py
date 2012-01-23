@@ -2,7 +2,7 @@ from __future__ import division
 import numpy as np
 import pymc as pm
 import re
-from matplotlib.pylab import show, figure
+from matplotlib.pylab import figure
 import matplotlib.pyplot as plt
 import sys, os
 import scipy as sc
@@ -183,7 +183,6 @@ def group_plot(model, params_to_plot=(), n_bins=50, save_to=None):
 
             if save_to is not None:
                 plt.savefig(os.path.join(save_to, "group_%s.png" % name))
-    show()
 
 def compare_all_pairwise(model):
     """Perform all pairwise comparisons of dependent parameter
@@ -315,7 +314,7 @@ def check_geweke(model, assert_=True):
 
     return True
 
-def group_cond_diff(hm, node, cond1, cond2, threshold = 0):
+def group_cond_diff(hm, node, cond1, cond2, threshold=0):
     """
     compute the difference between different condition in a group analysis.
     The function compute for each subject the difference between 'node' under
@@ -416,7 +415,7 @@ def logp_trace(model):
 
     return logp
 
-def _post_pred_summary_bottom_node(bottom_node, samples=10, stats=None):
+def _post_pred_summary_bottom_node(bottom_node, samples=10, stats=None, plot=True):
     def _calc_stats(data, stats):
         out = {}
         for name, func in stats.itervalues():
@@ -427,35 +426,46 @@ def _post_pred_summary_bottom_node(bottom_node, samples=10, stats=None):
 
     # Compute stats over data
     data = bottom_node.value
-    summary_stats = {}
-    summary_stats_data = _calc_stats(data, stats)
+    data_stats = _calc_stats(data, stats)
 
-    for i_stat in xrange(len(stats)):
-        res[i_stat] = stats[i_stat]
-
+    # Initialize posterior sample stats container
+    sampled_stats = {}
+    for name in stats.iterkeys():
+        sampled_stats[name] = np.empty(samples)
 
     for sample in range(samples):
         _parents_to_random_posterior_sample(bottom_node)
         # Generate data from bottom node
         sampled = bottom_node.random()
+        sampled_stats = _calc_stats(sampled, stats)
 
+        # Add it the results container
+        for name, value in sampled_stats.iteritems():
+            sampled_stats[name][sample] = value
 
+    if plot:
+        from pm.Matplot import gof_plot
+        for name, value in sampled_stats.iteritems():
+            gof_plot(sampled_stats[name], data_stats[name], nbins=30, name=name, verbose=0)
 
+    return data_stats, sampled_stats
 
+def post_pred_check(model, stats=None, confidence=95):
+    if stats is None:
+        stats = {'mean': np.mean, 'std': np.std}
 
-def post_pred_check(model, stats=()):
     for name, bottom_node in model.bottom_nodes.iteritems():
         if isinstance(bottom_node, np.ndarray):
             # Group model
             for i_subj, bottom_node_subj in enumerate(bottom_node):
                 if bottom_node_subj is None or not hasattr(bottom_node_subj, 'random'):
                     continue # Skip non-existant nodes
-                _post_pred_summary_bottom_node(bottom_node_subj)
+                data_stats, sampled_stats = _post_pred_summary_bottom_node(bottom_node_subj)
         else:
             # Flat model
             if bottom_node is None or not hasattr(bottom_node, 'random'):
-                continue
-            _post_pred_summary_bottom_node(bottom_node)
+                continue # Skip
+            data_stats, sampled_stats = _post_pred_summary_bottom_node(bottom_node)
 
 
 def _parents_to_random_posterior_sample(bottom_node, pos=None):
@@ -500,7 +510,11 @@ def _post_pred_bottom_node(bottom_node, value_range, samples=10, bins=100, axis=
         like[sample,:] = bottom_node.pdf(value_range)
 
     y = like.mean(axis=0)
-    y_std = like.std(axis=0)
+    try:
+        y_std = like.std(axis=0)
+    except FloatingPointError:
+        print "WARNING! %s threw FloatingPointError over std computation. Setting to 0 and continuing." % bottom_node.__name__
+        y_std = np.zeros_like(y)
 
     #if len(bottom_node.value) != 0:
         # No data assigned to node
