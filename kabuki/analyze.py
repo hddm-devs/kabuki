@@ -503,7 +503,6 @@ def _post_pred_bottom_node(bottom_node, value_range, samples=10, bins=100, axis=
             If provided, will plot into axis.
     """
     like = np.empty((samples, len(value_range)), dtype=np.float32)
-
     for sample in range(samples):
         _parents_to_random_posterior_sample(bottom_node)
         # Generate likelihood for parents parameters
