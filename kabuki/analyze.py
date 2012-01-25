@@ -6,6 +6,12 @@ from matplotlib.pylab import figure
 import matplotlib.pyplot as plt
 import sys, os
 import scipy as sc
+import pandas as pd
+
+try:
+    from collections import OrderedDict
+except ImportError:
+    from ordereddict import OrderedDict
 
 def convert_model_to_dictionary(model):
     """convert_model_to_dictionary(model)
@@ -415,12 +421,45 @@ def logp_trace(model):
 
     return logp
 
-def _post_pred_summary_bottom_node(bottom_node, samples=500, stats=None, plot=True, bins=100):
+def _evaluate_post_pred(sampled_stats, data_stats, evals=None):
+    """Evaluate a summary statistics of sampled sets.
+
+    :Arguments:
+        sampled_stats : dict
+            Map of summary statistic names to distributions
+        data_stats : dict
+            Map of summary statistic names to the data distribution
+
+    :Returns:
+        pandas.DataFrame containing the eval results as columns.
+    """
+    from scipy.stats import scoreatpercentile, percentileofscore
+    from itertools import product
+
+    if evals is None:
+        # Generate some default evals
+        evals = OrderedDict()
+        evals['in 95 quantile'] = lambda x, y: (scoreatpercentile(x, 97.5) > y) and (scoreatpercentile(x, 2.5) < y)
+        evals['quantile'] = percentileofscore
+        evals['SEM'] = lambda x, y: (np.mean(x) - y)**2
+
+    # Evalualte all eval-functions
+    results = pd.DataFrame(index=sampled_stats.keys(), columns=evals.keys())
+    for stat_name in sampled_stats.iterkeys():
+        for eval_name, func in evals.iteritems():
+            value = func(sampled_stats[stat_name], data_stats[stat_name])
+            assert np.isscalar(value), "eval function %s is not returning scalar." % eval_name
+            results.ix[stat_name][eval_name] = value
+
+    return results
+
+
+def _post_pred_summary_bottom_node(bottom_node, samples=500, stats=None, plot=False, bins=100, evals=None):
+    """Create posterior predictive check for a single bottom node."""
     def _calc_stats(data, stats):
         out = {}
         for name, func in stats.iteritems():
             out[name] = func(data)
-
         return out
 
     if stats is None:
@@ -454,25 +493,57 @@ def _post_pred_summary_bottom_node(bottom_node, samples=500, stats=None, plot=Tr
         for name, value in sampled_stats.iteritems():
             gof_plot(sampled_stats[name], data_stats[name], nbins=bins, name=name, verbose=0)
 
-    return data_stats, sampled_stats
+    evals = _evaluate_post_pred(sampled_stats, data_stats, evals=evals)
 
-def post_pred_check(model, stats=None, confidence=95, samples=500):
-    if stats is None:
-        stats = {'mean': np.mean, 'std': np.std}
+    return evals
+
+def post_pred_check(model, samples=500, bins=100, stats=None, evals=None, plot=False):
+    """Run posterior predictive check on a model.
+
+    :Arguments:
+        model : kabuki.Hierarchical
+            Kabuki model over which to compute the ppc on.
+
+    :Optional:
+        samples : int
+            How many samples to generate for each node.
+        bins : int
+            How many bins to use for computing the histogram.
+        stats : dict
+            User-defined statistics to compute (by default mean and std are computed)
+            and evaluate over the samples.
+            :Example: {'mean': np.mean, 'median': np.median}
+        evals : dict
+            User-defined evaluations of the statistics (by default 95 percentile and SEM).
+            :Example: {'percentile': scoreatpercentile}
+        plot : bool
+            Whether to plot the posterior predictive distributions.
+
+    :Returns:
+        Hierarchical pandas.DataFrame with the different statistics.
+    """
+    print "Sampling..."
+    results = []
 
     for name, bottom_node in model.bottom_nodes.iteritems():
         if isinstance(bottom_node, np.ndarray):
             # Group model
+            results_subj = []
             for i_subj, bottom_node_subj in enumerate(bottom_node):
                 if bottom_node_subj is None or not hasattr(bottom_node_subj, 'random'):
                     continue # Skip non-existant nodes
-                data_stats, sampled_stats = _post_pred_summary_bottom_node(bottom_node_subj, samples=samples)
+                evals = _post_pred_summary_bottom_node(bottom_node_subj, samples=samples, bins=bins, evals=evals, stats=stats, plot=plot)
+                results_subj.append(evals)
+            result = pd.concat(results_subj, keys=range(len(bottom_node)), names=('subj',))
+            results.append(result)
         else:
             # Flat model
             if bottom_node is None or not hasattr(bottom_node, 'random'):
                 continue # Skip
-            data_stats, sampled_stats = _post_pred_summary_bottom_node(bottom_node, samples=samples)
+            evals = _post_pred_summary_bottom_node(bottom_node, samples=samples, bins=bins, evals=evals, stats=stats, plot=plot)
+            results.append(evals)
 
+    return pd.concat(results, keys=model.bottom_nodes.keys(), names=('node',))
 
 def _parents_to_random_posterior_sample(bottom_node, pos=None):
     """Walks through parents and sets them to pos sample."""
