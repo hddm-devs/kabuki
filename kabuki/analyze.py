@@ -438,7 +438,7 @@ def _evaluate_post_pred(sampled_stats, data_stats, evals=None):
 
     if evals is None:
         # Generate some default evals
-        evals = OrderedDict()
+        evals = {}
         evals['in 95 quantile'] = lambda x, y: (scoreatpercentile(x, 97.5) > y) and (scoreatpercentile(x, 2.5) < y)
         evals['quantile'] = percentileofscore
         evals['SEM'] = lambda x, y: (np.mean(x) - y)**2
@@ -493,9 +493,9 @@ def _post_pred_summary_bottom_node(bottom_node, samples=500, stats=None, plot=Fa
         for name, value in sampled_stats.iteritems():
             gof_plot(sampled_stats[name], data_stats[name], nbins=bins, name=name, verbose=0)
 
-    evals = _evaluate_post_pred(sampled_stats, data_stats, evals=evals)
+    result = _evaluate_post_pred(sampled_stats, data_stats, evals=evals)
 
-    return evals
+    return result
 
 def post_pred_check(model, samples=500, bins=100, stats=None, evals=None, plot=False):
     """Run posterior predictive check on a model.
@@ -532,8 +532,8 @@ def post_pred_check(model, samples=500, bins=100, stats=None, evals=None, plot=F
             for i_subj, bottom_node_subj in enumerate(bottom_node):
                 if bottom_node_subj is None or not hasattr(bottom_node_subj, 'random'):
                     continue # Skip non-existant nodes
-                evals = _post_pred_summary_bottom_node(bottom_node_subj, samples=samples, bins=bins, evals=evals, stats=stats, plot=plot)
-                results_subj.append(evals)
+                result_subj = _post_pred_summary_bottom_node(bottom_node_subj, samples=samples, bins=bins, evals=evals, stats=stats, plot=plot)
+                results_subj.append(result_subj)
             result = pd.concat(results_subj, keys=range(len(bottom_node)), names=('subj',))
             results.append(result)
         else:
