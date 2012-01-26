@@ -439,7 +439,7 @@ def _evaluate_post_pred(sampled_stats, data_stats, evals=None):
     if evals is None:
         # Generate some default evals
         evals = {}
-        evals['in 95 quantile'] = lambda x, y: (scoreatpercentile(x, 97.5) > y) and (scoreatpercentile(x, 2.5) < y)
+        evals['in credible interval'] = lambda x, y: (scoreatpercentile(x, 97.5) > y) and (scoreatpercentile(x, 2.5) < y)
         evals['quantile'] = percentileofscore
         evals['SEM'] = lambda x, y: (np.mean(x) - y)**2
 
