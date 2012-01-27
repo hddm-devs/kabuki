@@ -438,13 +438,14 @@ def _evaluate_post_pred(sampled_stats, data_stats, evals=None):
 
     if evals is None:
         # Generate some default evals
-        evals = {}
+        evals = OrderedDict()
         evals['in credible interval'] = lambda x, y: (scoreatpercentile(x, 97.5) > y) and (scoreatpercentile(x, 2.5) < y)
         evals['quantile'] = percentileofscore
         evals['SEM'] = lambda x, y: (np.mean(x) - y)**2
 
     # Evalualte all eval-functions
     results = pd.DataFrame(index=sampled_stats.keys(), columns=evals.keys())
+    results.index.names = ['stat']
     for stat_name in sampled_stats.iterkeys():
         for eval_name, func in evals.iteritems():
             value = func(sampled_stats[stat_name], data_stats[stat_name])
@@ -463,7 +464,7 @@ def _post_pred_summary_bottom_node(bottom_node, samples=500, stats=None, plot=Fa
         return out
 
     if stats is None:
-        stats = {'mean': np.mean, 'std': np.std}
+        stats = OrderedDict((('mean', np.mean), ('std', np.std)))
 
     ############################
     # Compute stats over data
