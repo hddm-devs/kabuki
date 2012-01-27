@@ -228,37 +228,20 @@ def set_proposal_sd(mc, tau=.1):
 
     return
 
-def half_cauchy_rand(S):
+def centered_half_cauchy_rand(S, size):
     """sample from a half Cauchy distribution with scale S"""
-    return np.abs(np.tan(np.pi * (np.random.rand() - 0.5)) * S)
+    return abs(S * np.tan(np.pi * pm.random_number(size) - np.pi/2.0))
 
-def half_cauchy_logp(value, S):
+def centered_half_cauchy_logp(x, S):
     """logp of half Cauchy with scale S"""
-    if value < 0:
-        return -np.inf
-    else:
-        return np.log(2.*S/np.pi) - np.log(value**2 + S**2)
+    x = np.atleast_1d(x)
+    if sum(x<0): return -inf
+    return pm.flib.cauchy(x, 0, S) + len(x) * np.log(2)
 
 HalfCauchy = pm.stochastic_from_dist(name="Half Cauchy",
-                                     random=half_cauchy_rand,
-                                     logp=half_cauchy_logp,
+                                     random=centered_half_cauchy_rand,
+                                     logp=centered_half_cauchy_logp,
                                      dtype=np.double)
-
-def invgamma_logp(value, alpha, beta):
-    """ sample from an Inverse-gamma distrbution with shape alpha
-    and rate beta"""
-    return np.sum(pm.gamma_like(1./value, alpha, beta) - np.log(value**2))
-
-def invgamma_rand(alpha, beta, size = 1):
-    """ logp of an Inverse-gamma distrbution with shape alpha
-    and rate beta"""
-    return 1./ np.random.gamma(alpha, 1./beta, size)
-
-InvGamma = pm.stochastic_from_dist(name="Inverse Gamma",
-                                     random=invgamma_rand,
-                                     logp=invgamma_logp,
-                                     dtype=np.double)
-
 
 if __name__ == "__main__":
     import doctest
