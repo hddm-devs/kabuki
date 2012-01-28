@@ -235,7 +235,7 @@ def centered_half_cauchy_rand(S, size):
 def centered_half_cauchy_logp(x, S):
     """logp of half Cauchy with scale S"""
     x = np.atleast_1d(x)
-    if sum(x<0): return -inf
+    if sum(x<0): return -np.inf
     return pm.flib.cauchy(x, 0, S) + len(x) * np.log(2)
 
 HalfCauchy = pm.stochastic_from_dist(name="Half Cauchy",
