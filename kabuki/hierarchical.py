@@ -114,6 +114,26 @@ class Parameter(object):
         return object.__repr__(self).replace(' object ', " '%s' "%self.name)
 
 
+    def var_func(self, values):
+        """ applay the varinace node func (according to var type) on values"""
+        if self.var_type == 'std':
+            return np.std(values)
+
+        elif self.var_type == 'var':
+            return np.std(values) ** 2
+
+        elif self.var_type == 'precision':
+            return np.std(values) ** -2
+
+        elif self.var_type == 'sample_size':
+            v = np.var(values)
+            m = np.mean(values)
+            return (m * (1 - m)) / v - 1
+
+        else:
+            raise ValueError, "unknown var_type"
+
+
 class Hierarchical(object):
     """Creation of hierarchical Bayesian models in which each subject
     has a set of parameters that are constrained by a group distribution.
@@ -1019,18 +1039,18 @@ class Hierarchical(object):
         assert (not self.nodes), "function should be used before nodes are initialized."
 
         #init
+        subjless = {}
         subjs = self._subjs
         n_subjs = len(subjs)
-
         empty_s_model = deepcopy(self)
         empty_s_model.is_group_model = False
         del empty_s_model._num_subjs, empty_s_model._subjs, empty_s_model.data
 
         self.create_nodes()
 
-        #loop over subjects
+        #fit and copy single subjects
         for i_subj in range(n_subjs):
-            #create and fit single subject
+            #create and fit a single subject
             print "*!*!* fitting subject %d *!*!*" % subjs[i_subj]
             t_data = self.data[self.data['subj_idx'] == subjs[i_subj]]
             t_data = rec_drop_fields(t_data, ['data_idx'])
@@ -1040,27 +1060,29 @@ class Hierarchical(object):
 
             # copy to original model
             for (name, node) in s_model.group_nodes.iteritems():
-                self.subj_nodes[name][i_subj].value = node.value
-
-        #set group and var nodes
-        for (param_name, d) in self.params_dict.iteritems():
-            for (tag, nodes) in d.subj_nodes.iteritems():
-                subj_values = [x.value for x in nodes]
-                #set group node
-                if d.group_nodes:
-                    d.group_nodes[tag].value = np.mean(subj_values)
-                #set var node
-                if d.var_nodes:
-                    if d.var_type == 'std':
-                        d.var_nodes[tag].value = np.std(subj_values)
-                    elif d.var_type == 'var':
-                        d.var_nodes[tag].value = np.std(subj_values) ** 2
-                    elif d.var_type == 'precision':
-                        d.var_nodes[tag].value = np.std(subj_values) ** -2
-                    elif d.var_type == 'sample_size':
-                        v = np.var(subj_values)
-                        m = np.mean(subj_values)
-                        d.var_nodes[tag].value = (m * (1 - m)) / v - 1
+                #try to assign the value of the node to the original model
+                try:
+                    self.subj_nodes[name][i_subj].value = node.value
+                #if it fails it mean the param has no subj nodes
+                except KeyError:
+                    if subjless.has_key(name):
+                        subjless[name].append(node.value)
                     else:
-                        raise ValueError, "unknown var_type"
+                        subjless[name] = [node.value]
 
+        #set group and var nodes for params with subjs
+        for (param_name, param) in self.params_dict.iteritems():
+            #if param has subj nodes than compute group and var nodes from them
+            if param.has_subj_nodes:
+                for (tag, nodes) in param.subj_nodes.iteritems():
+                    subj_values = [x.value for x in nodes]
+                    #set group node
+                    if param.has_group_nodes:
+                        param.group_nodes[tag].value = np.mean(subj_values)
+                    #set var node
+                    if param.has_var_nodes:
+                        param.var_nodes[tag].value = param.var_func(subj_values)
+
+        #set group nodes of subjless nodes
+        for (name, values) in subjless.iteritems():
+            self.group_nodes[name].value = np.mean(subjless[name])
