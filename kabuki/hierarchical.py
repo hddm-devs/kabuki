@@ -917,7 +917,7 @@ class Hierarchical(object):
                         else:
                             subj_param.trace = mc_model.trace(subj_param.__name__)
 
-    def mcmc_load_from_db(self, dbname, verbose=0, db_loader=None):
+    def load_db(self, dbname, verbose=0, db_loader=None):
         """Load samples from a database created by an earlier model
         run (e.g. by calling .mcmc(dbname='test'))
         """
@@ -934,6 +934,9 @@ class Hierarchical(object):
         # Create mcmc instance reading from the opened database
         self.mc = pm.MCMC(self.nodes, db=db, verbose=verbose)
 
+        # Not sure if this does anything useful, but calling for good luck
+        self.mc.restore_sampler_state()
+
         # Take the traces from the database and feed them into our
         # distribution variables (needed for _gen_stats())
         self._set_traces(self.group_nodes)
@@ -943,7 +946,6 @@ class Hierarchical(object):
             self._set_traces(self.subj_nodes)
 
         return self
-
     #################################
     # Methods that can be overwritten
     #################################
