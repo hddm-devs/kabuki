@@ -891,31 +891,6 @@ class Hierarchical(object):
         return self._stats
 
 
-    def _set_traces(self, params, mc_model=None, add=False, chain=0):
-        """Externally set the traces of group_params. This is needed
-        when loading a model from a previous sampling run saved to a
-        database.
-        """
-        if not mc_model:
-            mc_model = self.mc
-
-        # Loop through parameters and set traces
-        for param_name, param_inst in params.iteritems():
-            try:
-                if add:
-                    # Append trace
-                    param_inst.trace._trace[chain] = np.concatenate((param_inst.trace._trace[chain],
-                                                                     mc_model.trace(param_name)()))
-                else:
-                    param_inst.trace = mc_model.trace(param_name)
-            except AttributeError: # param_inst is an array
-                if self.trace_subjs:
-                    for i, subj_param in enumerate(param_inst):
-                        if add:
-                            subj_param.trace._trace[chain] = np.concatenate((subj_param.trace._trace[chain],
-                                                                             mc_model.trace(subj_param.__name__))())
-                        else:
-                            subj_param.trace = mc_model.trace(subj_param.__name__)
 
     def load_db(self, dbname, verbose=0, db_loader=None):
         """Load samples from a database created by an earlier model
@@ -939,16 +914,11 @@ class Hierarchical(object):
 
         # Take the traces from the database and feed them into our
         # distribution variables (needed for _gen_stats())
-        self._set_traces(self.group_nodes)
-
-        if self.is_group_model:
-            self._set_traces(self.var_nodes)
-            self._set_traces(self.subj_nodes)
+        for node in self.mc.stochastics:
+            node.trace = self.mc.trace(node.__name__)
 
         return self
-    #################################
-    # Methods that can be overwritten
-    #################################
+
     def get_group_node(self, param):
         """Create and return a uniform prior distribution for group
         parameter 'param'.
