@@ -504,7 +504,7 @@ class Hierarchical(object):
 
         # suppress annoying warnings
         if ('hdf5' in dir(pm.database)) and \
-           (type(self.mc.db) is pm.database.hdf5.Database):
+           isinstance(self.mc.db, pm.database.hdf5.Database):
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore', pm.database.hdf5.tables.NaturalNameWarning)
 
