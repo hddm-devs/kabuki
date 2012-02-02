@@ -914,8 +914,6 @@ class Hierarchical(object):
 
         # Take the traces from the database and feed them into our
         # distribution variables (needed for _gen_stats())
-        for node in self.mc.stochastics:
-            node.trace = self.mc.trace(node.__name__)
 
         return self
 
