@@ -18,6 +18,13 @@ from copy import copy, deepcopy
 from matplotlib.mlab import rec_drop_fields
 
 
+class Knode(object):
+    def __init__(self, stoch = None, step_method=None, **stoch_params):
+        kabuki.debug_here()
+        for (attr, value) in locals().iteritems():
+            setattr(self, attr, value)
+
+
 class Parameter(object):
     """Specify a parameter of a model.
 
@@ -27,17 +34,12 @@ class Parameter(object):
     :Optional:
         is_bottom_node <bool=False>: Is node at the bottom of the hierarchy (e.g. likelihoods)
 
-        subj_stoch <Stochatic>: the class of the stochastic node for the subject
+        subj_knode <Knode>: the Knode of the subject
 
-        group_stoch <Stochatic>: the class of the stochastic node for the group
+        group_knode <Knode>: the Knode of the group
 
-        var_stoch <Stochatic>: the class of the stochastic node for the var
+        var_knode <Knode>: the Knode of the var
 
-        group_stoch_params <dictionary>: parameters which will be passed to the group node
-
-        var_stoch_params <dictionary>: parameters which will be passed to the var node
-
-        subj_stoch_params <dictionary>: parameters which will be passed to the subject node
 
         group_label <string>: the label that the subj node gives to the group parameter
 
@@ -64,16 +66,14 @@ class Parameter(object):
     """
 
     def __init__(self, name, is_bottom_node=False, vars=None, default=None, optional=False,
-                 subj_stoch = None, subj_stoch_params = None,
-                 group_stoch = None, group_stoch_params = None,
-                 var_stoch = None, var_stoch_params = None,
-                 group_label = 'mu', var_label = 'tau', var_type='std',
-                 group_step_method = None, var_step_method= None,
-                 subj_step_method = None, transform = None, share_var = False,
-                 verbose=0):
+                 subj_knode=None, group_knode=None, var_knode=None,
+                 group_label =None, var_label = 'tau', var_type='std',
+                 transform = None, share_var = False, verbose=0):
 
         for (attr, value) in locals().iteritems():
             setattr(self, attr, value)
+
+        self.knodes = {'group': group_knode, 'var': var_knode, 'subj': subj_knode}
 
         if self.optional and self.default is None:
             raise ValueError("Optional parameters have to have a default value.")
@@ -202,9 +202,6 @@ class Hierarchical(object):
     :Note:
         This class must be inherited. The child class must provide
         the following functions:
-            * get_group_node(param): Return group mean distribution for param.
-            * get_var_node(param): Return group variability distribution for param.
-            * get_subj_node(param): Return subject distribution for param.
             * get_bottom_node(param, params): Return distribution
                   for nodes at the bottom of the hierarchy param (e.g. the model
                   likelihood). params contains the associated model
@@ -291,20 +288,20 @@ class Hierarchical(object):
 
         for param in self.params:
             #set has_x_node
-            param.has_group_nodes = (param.group_stoch is not None)
-            param.has_var_nodes = (param.var_stoch is not None)
-            param.has_subj_nodes = (param.subj_stoch is not None)
+            param.has_group_nodes = (param.group_knode is not None)
+            param.has_var_nodes = (param.var_knode is not None)
+            param.has_subj_nodes = (param.subj_knode is not None)
 
             #set other attributes
             if param.is_bottom_node:
                 param.has_subj_nodes = True
                 continue
             if not trace_subjs and param.has_subj_nodes:
-                param.subj_stoch_params['trace'] = False
+                param.subj_knode.stoch_params['trace'] = False
             if not plot_subjs and param.has_subj_nodes:
-                param.subj_stoch_params['plot'] = False
+                param.subj_knode.stoch_params['plot'] = False
             if not plot_var and param.has_var_nodes:
-                param.var_stoch_params['plot'] = False
+                param.var_knode.stoch_params['plot'] = False
 
         #set params_dict
         self.params_dict = {}
@@ -357,7 +354,7 @@ class Hierarchical(object):
             # Bottom nodes are created later
             if name in self.depends_on or param.is_bottom_node:
                 continue
-            if self.is_group_model and (param.subj_stoch != None):
+            if self.is_group_model and (param.has_subj_nodes):
                 params[name] = param.subj_nodes['']
             else:
                 params[name] = param.group_nodes['']
@@ -395,7 +392,7 @@ class Hierarchical(object):
                 param = self.params_include[param_name]
 
                 # Add the node
-                if self.is_group_model and (param.subj_stoch != None):
+                if self.is_group_model and param.has_subj_nodes:
                     params[param_name] = param.subj_nodes[str(depend_element)]
                 else:
                     params[param_name] = param.group_nodes[str(depend_element)]
@@ -502,6 +499,12 @@ class Hierarchical(object):
             for tag, node in param.var_nodes.iteritems():
                 self.nodes[name+tag+'_var'] = node
                 self.var_nodes[name+tag] = node
+                
+        #update knodes
+        for name, param in self.params_include.iteritems():
+            param.knodes['group'].nodes = self.group_nodes
+            param.knodes['var'].nodes = self.var_nodes
+            param.knodes['subj'].nodes = self.subj_nodes
 
         return self.nodes
 
@@ -580,26 +583,24 @@ class Hierarchical(object):
 
         self.mc = pm.MCMC(nodes, *args, **kwargs)
 
-        if not assign_step_methods:
+        if (not assign_step_methods) or (not self.is_group_model):
             return self.mc
-
+        
         #assign step methods
-        if self.is_group_model:
-            for param in self.params:
-                #assign to group params
-                if param.group_step_method != None:
-                    for node in param.group_nodes.itervalues():
-                            if node != None:
-                                self.mc.use_step_method(param.group_step_method, node)
-                #assign to var params
-                if param.var_step_method != None:
-                    for node in param.var_nodes.itervalues():
-                        if node != None:
-                            self.mc.use_step_method(param.var_step_method, node)
-                if param.subj_step_method != None:
-                    for node_array in param.subj_nodes.itervalues():
-                        if node_array != None:
-                            [self.mc.use_step_method(param.subj_step_method, node) for node in node_array]
+        for param in self.params:
+            for knode in param.knodes.values():
+                #check if we need to assign step method
+                if knode.step_method is None:
+                    continue
+                #assign it to all the nodes in knode
+                for node in knode.nodes.itervalues():
+                    if node is None:
+                        continue
+                    if isinstance(node, pm.Stochastic):
+                        self.mc.use_step_method(knode.step_method, node)
+                    else:
+                        [self.mc.use_step_method(knode.step_method, node) for node in node_array]
+                        
 
         return self.mc
 
@@ -674,10 +675,10 @@ class Hierarchical(object):
             # Create parameter distribution from factory
             param.tag = tag
             param.data = data_dep_select
-            param.group_nodes[tag] = self.get_group_node(param)
+            param.group_nodes[tag] = self.create_pymc_node(param.knode, param.full_name)
             param.reset()
 
-            if self.is_group_model and (param.subj_stoch != None):
+            if self.is_group_model and param.has_subj_nodes:
                 # Create appropriate subj parameter
                 self._set_subj_nodes(param, tag, data_dep_select)
 
@@ -695,10 +696,10 @@ class Hierarchical(object):
         # Parameter does not depend on data
         # Set group parameter
         param.tag = ''
-        param.group_nodes[''] = self.get_group_node(param)
+        param.group_nodes[''] = self.create_pymc_node(param.group_knode, param.full_name)
         param.reset()
 
-        if self.is_group_model and (param.subj_stoch != None):
+        if self.is_group_model and param.has_subj_nodes:
             self._set_subj_nodes(param, '', self.data)
 
         return self
@@ -727,7 +728,7 @@ class Hierarchical(object):
         #if param does not share variance or this is the first node created
         # then we create the node
         if (len(param.var_nodes) == 0) or (not param.share_var):
-            param.var_nodes[tag] = self.get_var_node(param)
+            param.var_nodes[tag] = self.create_pymc_node(param.var_knode, param.full_name)
         else: #we copy the first node
             param.var_nodes[tag] = param.var_nodes.values()[0]
         param.reset()
@@ -749,12 +750,12 @@ class Hierarchical(object):
                 group_node, var_node = param.transform(param.group, param.var)
 
             if param.group_label != None:
-                param.subj_stoch_params[param.group_label] = group_node
+                param.subj_knode.stoch_params[param.group_label] = group_node
             if param.var_label != None:
-                param.subj_stoch_params[param.var_label] = var_node
+                param.subj_knode.stoch_params[param.var_label] = var_node
             param.tag = tag
             param.idx = subj_idx
-            param.subj_nodes[tag][subj_idx] = self.get_subj_node(param)
+            param.subj_nodes[tag][subj_idx] = self.create_pymc_node(param.subj_knode, param.full_name)
             param.reset()
 
         return self
@@ -778,7 +779,7 @@ class Hierarchical(object):
         for i, (data, params_dep, dep_name_list, dep_name_str) in enumerate(data_dep):
             dep_name = dep_name_str
             if init:
-                if self.is_group_model and (param.subj_stoch != None):
+                if self.is_group_model and param.has_subj_nodes:
                     param.subj_nodes[dep_name] = np.empty(self._num_subjs, dtype=object)
                 else:
                     param.subj_nodes[dep_name] = None
@@ -917,44 +918,14 @@ class Hierarchical(object):
 
         return self
 
-    def get_group_node(self, param):
-        """Create and return a uniform prior distribution for group
-        parameter 'param'.
 
-        This is used for the group distributions.
+    def create_pymc_node(self, knode, name):
+        """Create pymc node named 'name' out of knode """
 
-        """
-        if param.group_stoch == None:
+        if param.knode is None:
             return None
         else:
-            return param.group_stoch(param.full_name, **param.group_stoch_params)
-
-    def get_var_node(self, param):
-        """Create and return a Uniform prior distribution for the
-        variability parameter 'param'.
-
-        Note, that we chose a Uniform distribution rather than the
-        more common Gamma (see Gelman 2006: "Prior distributions for
-        variance parameters in hierarchical models").
-
-        This is used for the variability fo the group distribution.
-
-        """
-        if param.var_stoch == None:
-            return None
-        else:
-            return param.var_stoch(param.full_name, **param.var_stoch_params)
-
-    def get_subj_node(self, param):
-        """Create and return a Truncated Normal distribution for
-        'param' centered around param.group with standard deviation
-        param.var and initialization value param.init.
-
-        This is used for the individual subject distributions.
-
-        """
-        return param.subj_stoch(param.full_name, **param.subj_stoch_params)
-
+            return knode.stoch(name, **knode.stoch_params)
 
     def init_from_existing_model(self, pre_model, step_method, **kwargs):
         """
