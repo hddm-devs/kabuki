@@ -6,7 +6,11 @@ from matplotlib.pylab import figure
 import matplotlib.pyplot as plt
 import sys, os
 import scipy as sc
-import pandas as pd
+
+try:
+    import pandas as pd
+except:
+    print "Pandas not found, posterior predictive checks won't work."
 
 try:
     from collections import OrderedDict

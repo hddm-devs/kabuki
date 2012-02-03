@@ -507,7 +507,7 @@ class Hierarchical(object):
            isinstance(self.mc.db, pm.database.hdf5.Database):
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore', pm.database.hdf5.tables.NaturalNameWarning)
-
+        print self.mc.db
         # sample
         self.mc.sample(*args, **kwargs)
 
