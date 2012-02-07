@@ -505,8 +505,8 @@ class Hierarchical(object):
         # suppress annoying warnings
         if ('hdf5' in dir(pm.database)) and \
            isinstance(self.mc.db, pm.database.hdf5.Database):
-            with warnings.catch_warnings():
-                warnings.simplefilter('ignore', pm.database.hdf5.tables.NaturalNameWarning)
+            warnings.simplefilter('ignore', pm.database.hdf5.tables.NaturalNameWarning)
+
         print self.mc.db
         # sample
         self.mc.sample(*args, **kwargs)
@@ -831,6 +831,9 @@ class Hierarchical(object):
         if not self.nodes:
             self.create_nodes()
 
+        # Ignore annoying sqlite warnings
+        warnings.simplefilter('ignore', UserWarning)
+
         # Open database
         db = db_loader(dbname)
 
@@ -932,8 +935,8 @@ class Hierarchical(object):
         if step_method:
             print "assigned step methods to %d (out of %d)." % (assigned_steps, len(all_nodes))
 
-    def plot_posteriors(self):
-        pm.Matplot.plot(self.mc)
+    def plot_posteriors(self, *args, **kwargs):
+        pm.Matplot.plot(self.mc, *args, **kwargs)
 
     def subj_by_subj_map_init(self, runs=2, **map_kwargs):
         """

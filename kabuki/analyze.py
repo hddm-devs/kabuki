@@ -86,26 +86,6 @@ def get_subj_nodes(model, startswith=None, i_subj=None):
         else:
             return subj
 
-def gen_stats_db(traces, alpha=0.05, batches=100):
-    """Useful helper function to generate stats() on a loaded database
-    object.  Pass the db._traces list.
-
-    """
-
-    from pymc.utils import hpd, quantiles
-    from pymc import batchsd
-
-    stats = {}
-    for name, trace_obj in traces.iteritems():
-        trace = np.squeeze(np.array(trace_obj(), float))
-        stats[name] = {'standard deviation': trace.std(0),
-                       'mean': trace.mean(0),
-                       '%s%s HPD interval' % (int(100*(1-alpha)),'%'): hpd(trace, alpha),
-                       'mc error': batchsd(trace, batches),
-                       'quantiles': quantiles(trace)}
-
-    return stats
-
 def print_stats(stats):
     print gen_stats(stats)
 
@@ -618,7 +598,7 @@ def _post_pred_bottom_node(bottom_node, value_range, samples=10, bins=100, axis=
 
     return (y, y_std) #, hist, ranges)
 
-def plot_posterior_predictive(model, value_range=None, samples=10, columns=3, bins=100, prefix=None, figsize=(8,6)):
+def plot_posterior_predictive(model, value_range=None, samples=10, columns=3, bins=100, savefig=False, prefix=None, figsize=(8,6)):
     """Plot the posterior predictive of a kabuki hierarchical model.
 
     :Arguments:
@@ -641,8 +621,11 @@ def plot_posterior_predictive(model, value_range=None, samples=10, columns=3, bi
         bins : int (default=100)
             How many bins to compute the data histogram over.
 
-        save_to : str (default=None)
-            Save figure to fname save_to (format is detected)
+        savefig : bool (default=True)
+            Whether to save the figure to a file.
+
+        prefix : str (default=None)
+            Save figure into directory prefix
 
     :Note:
 
@@ -651,7 +634,7 @@ def plot_posterior_predictive(model, value_range=None, samples=10, columns=3, bi
     """
 
     if value_range is None:
-        # Infer from data
+        # Infer from data by finding the min and max from the nodes
         value_range = np.linspace(model.data)
 
     for name, bottom_node in model.bottom_nodes.iteritems():
@@ -682,8 +665,11 @@ def plot_posterior_predictive(model, value_range=None, samples=10, columns=3, bi
                                    axis=fig.add_subplot(111),
                                    bins=bins)
 
-        if prefix is not None:
-            fig.savefig(os.path.join(prefix, name))
+        if savefig:
+            if prefix is not None:
+                fig.savefig(os.path.join(prefix, name))
+            else:
+                fig.savefig(os.path.join(name))
 
 
 def _check_bottom_node(bottom_node):
