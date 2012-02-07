@@ -150,23 +150,127 @@ class UninformativePriorNormalstd(PriorNormalstd):
         return False
 
 
-class HCauchyPriorNormalstd(PriorNormalstd):
-    """
-    Step method for Uniform Prior over standard devision of Normal distribution
-    using reject sampling
-    """
+class MetropolisAlpha(pm.Metropolis):
 
-    target_class = kabuki.utils.HalfCauchy
+    def __init__(self, stochastic, betas, mu, sigma, *args, **kwargs):
+        pm.Metropolis.__init__(self, stochastic, *args, **kwargs)
+        self.betas = betas
+        self.sigma = sigma
+        self.mu = mu
+        self.alpha = stochastic
+        #set self.children
+        for beta in self.betas:
+            self.children = self.children.union(beta.extended_children)
 
-    def __init__(self, stochastic, **kwargs):
-        PriorNormalstd.__init__(self, stochastic, **kwargs)
-        self.S = stochastic.parents['S']
-#        self.logM = np.log(2./(np.pi*self.S))
-#        self.half_cauchy_logp = kabuki.utils.half_cauchy_logp
 
-    def is_rejected(self, proposal):
-        if np.random.rand() < (self.S**2 / (self.S**2 + proposal)):
-            reject = False
+
+
+    def _get_logp_plus_loglike(self):
+        return pm.logp_of_set(self.children)
+
+    logp_plus_loglike = property(fget = _get_logp_plus_loglike)
+
+    def step(self):
+        """
+        The default step method applies if the variable is floating-point
+        valued, and is not being proposed from its prior.
+        """
+
+        # Probability and likelihood for s's current value:
+        logp = self.logp_plus_loglike
+
+        # Sample a candidate value
+        self.propose()
+
+        # Probability and likelihood for s's proposed value:
+        try:
+            logp_p = self.logp_plus_loglike
+
+        except ZeroProbability:
+
+            # Reject proposal
+            self.reject()
+
+            # Increment rejected count
+            self.rejected += 1
+
+            return
+
+        # Evaluate acceptance ratio
+        if np.log(np.random.rand()) > logp_p - logp:
+
+            # Revert s if fail
+            self.reject()
+
+            # Increment rejected count
+            self.rejected += 1
         else:
-            reject = True
-        return reject
+            #update all the other variables
+            self.mu.value  = self.mu.value * self.alpha_ratio
+            self.sigma.value = self.sigma.value * np.abs(self.alpha_ratio)
+
+            # Increment accepted count
+            self.accepted += 1
+
+
+    def propose(self):
+        """
+        This method is called by step() to generate proposed values
+        if self.proposal_distribution is "Normal" (i.e. no proposal specified).
+        """
+
+        last_value  = self.alpha.value
+        self.alpha.value = np.random.normal(self.alpha.value, self.adaptive_scale_factor * self.proposal_sd,
+                                        size=self.alpha.value.shape)
+        self.alpha_ratio = self.alpha.value / last_value
+        for beta in self.betas:
+            beta.value = beta.value * self.alpha_ratio
+
+    def reject(self):
+        # Sets current s value to the last accepted value
+        # self.stochastic.value = self.stochastic.last_value
+        self.stochastic.revert()
+        for beta in self.betas:
+            beta.revert()
+
+
+
+class SPXcentered(pm.StepMethod):
+
+    def __init__(self, mu_node, sigma_node, subj_nodes, mu_step_method=pm.Metropolis,
+                 sigma_step_method=pm.Metropolis, subj_step_method=pm.Metropolis,
+                *args, **kwargs):
+        pm.StepMethod.__init__(self, [sigma_node, mu_node] + subj_nodes, *args, **kwargs)
+
+        #set nodes
+        self.alpha = pm.Uninformative('alpha', value=1., trace=False, plot=False)
+        self.mu = mu_node
+        self.sigma = sigma_node
+        self.subjs = subj_nodes
+
+        #set step methods
+        self.mu_step = mu_step_method(mu_node)
+        self.sigma_step = sigma_step_method(sigma_node)
+        self.subjs_steps = [subj_step_method(node) for node in subj_nodes]
+        self.alpha_step = MetropolisAlpha(self.alpha, subj_nodes, mu_node, sigma_node)
+
+
+    def step(self):
+
+        #take one step for all the nodes
+        [x.step() for x in self.subjs_steps]
+        self.mu_step.step()
+        self.sigma_step.step()
+
+        #sample a new alpha
+        self.alpha_step.step()
+
+    def tune(self, verbose):
+        #tune all step methods
+        tuning = self.mu_step.tune()
+        tuning = tuning | self.sigma_step.tune()
+        tuning = tuning | self.alpha_step.tune()
+        for step in self.subjs_steps:
+            tuning = tuning | step.tune()
+
+        return tuning
