@@ -993,8 +993,37 @@ class Hierarchical(object):
         if step_method:
             print "assigned step methods to %d (out of %d)." % (assigned_steps, len(all_nodes))
 
-    def plot_posteriors(self):
-        pm.Matplot.plot(self.mc)
+    def plot_posteriors(self, parameters=None, plot_subjs=False):
+        """
+        plot the nodes posteriors
+        Input:
+            parameters (optional) - a list of parameters to plot.
+            plot_subj (optional) - plot subjs nodes
+
+        TODO: add attributes plot_subjs and plot_var to kabuki
+        which will change the plot attribute in the relevant nodes
+        """
+
+        if parameters is None: #plot the model
+            pm.Matplot.plot(self.mc)
+
+        else: #plot only the given parameters
+
+            if type(parameters) != list:
+                 parameters = [parameters]
+
+            #get the nodes which will be plotted
+            for param in parameters:
+                nodes = param.group_nodes.values() + param.var_nodes.values()
+                if plot_subjs:
+                    for nodes_array in param.subj_nodes.values():
+                        nodes += list(nodes_array)
+            #this part does the ploting
+            for node in nodes:
+                plot_value = node.plot
+                node.plot = True
+                pm.Matplot.plot(node)
+                node.plot = plot_value
 
     def subj_by_subj_map_init(self, runs=2, **map_kwargs):
         """
