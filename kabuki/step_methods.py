@@ -23,12 +23,13 @@ class kNormalNormal(pm.Gibbs):
         self.mu_0 = stochastic.parents['mu']
         self.tau_0 = stochastic.parents['tau']
         self.tau_node = list(stochastic.extended_children)[0].parents['tau']
+
+        #total number of samples
         self.total_n = sum(array([len(x.value.flatten()) for x in self.children]))
 
         self.b = [] #holds the b parameters
         self.n_of_b = [] #holds the number of children of each b
-        self.total_b = 0
-        self.shift = False
+        self.shift = False #is the model centered or shifted
         for child in self.children:
             parent = child.parents['mu']
             if parent is stochastic:
@@ -38,7 +39,8 @@ class kNormalNormal(pm.Gibbs):
                 self.b.append(parent - stochastic)
 
                 self.n_of_b.append(len(child.value.flatten()))
-                self.total_b += 1
+
+        self.total_b = len(self.b)
 
     def step(self):
 
@@ -151,24 +153,27 @@ class UninformativePriorNormalstd(PriorNormalstd):
 
 
 class MetropolisAlpha(pm.Metropolis):
+    """
+    step method for the alpha in SPX
+    """
 
-    def __init__(self, stochastic, betas, mu, sigma, *args, **kwargs):
+    def __init__(self, stochastic, betas, loc, scale, *args, **kwargs):
         pm.Metropolis.__init__(self, stochastic, *args, **kwargs)
         self.betas = betas
-        self.sigma = sigma
-        self.mu = mu
+        self.scale = scale
+        self.loc = loc
         self.alpha = stochastic
+
         #set self.children
         for beta in self.betas:
-            self.children = self.children.union(beta.extended_children)
-
-
+            self.children.update(beta.extended_children)
 
 
     def _get_logp_plus_loglike(self):
         return pm.logp_of_set(self.children)
 
     logp_plus_loglike = property(fget = _get_logp_plus_loglike)
+
 
     def step(self):
         """
@@ -206,8 +211,9 @@ class MetropolisAlpha(pm.Metropolis):
             self.rejected += 1
         else:
             #update all the other variables
-            self.mu.value  = self.mu.value * self.alpha_ratio
-            self.sigma.value = self.sigma.value * np.abs(self.alpha_ratio)
+            for node in self.loc:
+                node.value  = node.value * self.alpha_ratio
+            self.scale.value = self.scale.value * np.abs(self.alpha_ratio)
 
             # Increment accepted count
             self.accepted += 1
@@ -236,41 +242,60 @@ class MetropolisAlpha(pm.Metropolis):
 
 
 class SPXcentered(pm.StepMethod):
+    """
+    PX step method for centered data:
+    y_ij ~ f(subj_j)
+    subj_j ~ g(loc, scale)
+    g has to have the property that if X ~ g(a,b) than k*X ~ g(k*a,k*b)
+    """
 
-    def __init__(self, mu_node, sigma_node, subj_nodes, mu_step_method=pm.Metropolis,
-                 sigma_step_method=pm.Metropolis, subj_step_method=pm.Metropolis,
+    def __init__(self, beta, loc, scale, loc_step_method=pm.Metropolis,
+                 scale_step_method=pm.Metropolis, beta_step_method=pm.Metropolis,
                 *args, **kwargs):
-        pm.StepMethod.__init__(self, [sigma_node, mu_node] + subj_nodes, *args, **kwargs)
+
+        if type(loc) != list:
+            loc = [loc]
+        pm.StepMethod.__init__(self, [scale] + loc + beta, *args, **kwargs)
 
         #set nodes
         self.alpha = pm.Uninformative('alpha', value=1., trace=False, plot=False)
-        self.mu = mu_node
-        self.sigma = sigma_node
-        self.subjs = subj_nodes
+        self.loc = loc
+        self.scale = scale
+        self.beta = set([])
+        for node in self.loc:
+            self.beta.update(node.extended_children)
 
         #set step methods
-        self.mu_step = mu_step_method(mu_node)
-        self.sigma_step = sigma_step_method(sigma_node)
-        self.subjs_steps = [subj_step_method(node) for node in subj_nodes]
-        self.alpha_step = MetropolisAlpha(self.alpha, subj_nodes, mu_node, sigma_node)
+        self.loc_steps = [loc_step_method(node) for node in self.loc]
+        self.scale_step = scale_step_method(scale)
+
+        self.beta_steps = [beta_step_method(node) for node in self.beta]
+        self.alpha_step = MetropolisAlpha(self.alpha, self.beta, loc, scale)
 
 
     def step(self):
 
         #take one step for all the nodes
-        [x.step() for x in self.subjs_steps]
-        self.mu_step.step()
-        self.sigma_step.step()
+        [x.step() for x in self.beta_steps]
+        [x.step() for x in self.loc_steps]
+        self.scale_step.step()
 
-        #sample a new alpha
+        #take a step for alpha
         self.alpha_step.step()
 
     def tune(self, verbose):
-        #tune all step methods
-        tuning = self.mu_step.tune()
-        tuning = tuning | self.sigma_step.tune()
-        tuning = tuning | self.alpha_step.tune()
-        for step in self.subjs_steps:
+        #tune scale
+        tuning = self.scale_step.tune()
+
+        #tune beta
+        for step in self.beta_steps:
             tuning = tuning | step.tune()
+
+        #tune loc
+        for step in self.loc_steps:
+            tuning = tuning | step.tune()
+
+        #tune alpha
+        tuning = tuning | self.alpha_step.tune()
 
         return tuning
