@@ -9,6 +9,7 @@ from numpy.random import randn
 from numpy import array, sqrt
 from nose import SkipTest
 from pandas import DataFrame
+from time import time
 
 
 def multi_normal_like(values, vec_mu, tau):
@@ -355,24 +356,30 @@ class TestStepMethods(unittest.TestCase):
                                  loc_step_method=mu_step_method)
 
         #run spx mcmc
+        i_t = time()
         mcmc_spx.sample(iter,burnin)
+        print "spx sampling took %.2f seconds" % (time() - i_t)
         stats = dict([('mu%d spx' %x, mcmc_spx.mu[x].stats()) for x in range(n_conds)])
         stats.update({'sigma spx': mcmc_spx.sigma.stats()})
 
         #run vpx mcmc
+        i_t = time()
         mcmc_vpx.sample(iter,burnin)
+        print "spx sampling took %.2f seconds" % (time() - i_t)
         stats.update(dict([('mu%d vpx' %x, mcmc_vpx.mu[x].stats()) for x in range(n_conds)]))
         stats.update({'sigma vpx': mcmc_vpx.sigma.stats()})
 
         #run basic mcmc
+        i_t = time()
         mcmc.sample(iter,burnin)
+        print "spx sampling took %.2f seconds" % (time() - i_t)
         stats.update(dict([('mu%d basic' %x, mcmc.mu[x].stats()) for x in range(n_conds)]))
         stats.update({'sigma basic': mcmc.sigma.stats()})
 
         df = DataFrame(stats, index=['mean', 'standard deviation']).T
-        df.rename(columns = {'mean':'mean', 'standard deviation': 'std'})
+        df = df.rename(columns = {'mean':'mean', 'standard deviation': 'std'})
         print df
-
+        kabuki.debug_here()
 #        for i in range(len(df)/2):
 #            np.testing.assert_allclose(df[(2*i):(2*i+1)], df[(2*i+1):(2*i+2)], rtol=0.3)
 
@@ -380,13 +387,15 @@ class TestStepMethods(unittest.TestCase):
     def test_SPX(self):
         self.run_SPXcentered(sigma_x=1, n_subjs=5, size=100, mu_value=4,
                              mu_step_method=kabuki.steps.kNormalNormal, seed=1)
-        self.run_SPXcentered(sigma_x=0.5, n_subjs=2, size=100, mu_value=(4,3),
+        self.run_SPXcentered(sigma_x=1, n_subjs=5, size=10, mu_value=(4,3,2,1,0,4,3,2,1,0),
                              mu_step_method=kabuki.steps.kNormalNormal, seed=1)
-        self.run_SPXcentered(sigma_x=2, n_subjs=5, size=10, mu_value=1,
+        self.run_SPXcentered(sigma_x=0.5, n_subjs=5, size=10, mu_value=(4,3),
                              mu_step_method=kabuki.steps.kNormalNormal, seed=1)
-        self.run_SPXcentered(sigma_x=3, n_subjs=5, size=50, mu_value=(4,3),
+        self.run_SPXcentered(sigma_x=0.1, n_subjs=5, size=10, mu_value=(4,3),
                              mu_step_method=kabuki.steps.kNormalNormal, seed=1)
-        self.run_SPXcentered(sigma_x=1, n_subjs=3, size=10, mu_value=(4,3,2,1),
+        self.run_SPXcentered(sigma_x=1, n_subjs=10, size=10, mu_value=(4,3,2,1),
+                             mu_step_method=kabuki.steps.kNormalNormal, seed=1)
+        self.run_SPXcentered(sigma_x=0.1, n_subjs=10, size=10, mu_value=(4,3,2,1),
                              mu_step_method=kabuki.steps.kNormalNormal, seed=1)
 
     def create_nodes_for_spx_centered(self, sigma_x=1, n_subjs=5, size=100, mu_value=4, seed=1, vec=False):
