@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pymc as pm
 from copy import copy, deepcopy
+import sys
 import kabuki
 
 def interpolate_trace(x, trace, range=(-1,1), bins=100):
@@ -192,20 +193,6 @@ def parse_config_file(fname, mcmc=False, load=False, param_names=None):
 
     return m
 
-
-def load_traces_from_db(mc, dbname):
-    """Load samples from a database created by an earlier model
-    """
-    # Open database
-    db = pm.database.hdf5.load(dbname)
-
-    # Loop through parameters and set traces
-    for node in mc.nodes:
-        #loop only not-observed
-        if node.observed:
-            continue
-        node.trace = db.trace(node.__name__)
-
 def scipy_stochastic(scipy_dist, **kwargs):
     """
     Return a Stochastic subclass made from a particular SciPy distribution.
@@ -391,6 +378,116 @@ def set_proposal_sd(mc, tau=.1):
 
     return
 
+
+###########################################################################
+# The following code is directly copied from Twisted:
+# http://twistedmatrix.com/trac/browser/tags/releases/twisted-11.1.0/twisted/python/reflect.py
+# For the license see:
+# http://twistedmatrix.com/trac/browser/trunk/LICENSE
+###########################################################################
+
+class _NoModuleFound(Exception):
+    """
+    No module was found because none exists.
+    """
+
+def _importAndCheckStack(importName):
+    """
+    Import the given name as a module, then walk the stack to determine whether
+    the failure was the module not existing, or some code in the module (for
+    example a dependent import) failing.  This can be helpful to determine
+    whether any actual application code was run.  For example, to distiguish
+    administrative error (entering the wrong module name), from programmer
+    error (writing buggy code in a module that fails to import).
+
+    @raise Exception: if something bad happens.  This can be any type of
+    exception, since nobody knows what loading some arbitrary code might do.
+
+    @raise _NoModuleFound: if no module was found.
+    """
+    try:
+        try:
+            return __import__(importName)
+        except ImportError:
+            excType, excValue, excTraceback = sys.exc_info()
+            while excTraceback:
+                execName = excTraceback.tb_frame.f_globals["__name__"]
+                if (execName is None or # python 2.4+, post-cleanup
+                    execName == importName): # python 2.3, no cleanup
+                    raise excType, excValue, excTraceback
+                excTraceback = excTraceback.tb_next
+            raise _NoModuleFound()
+    except:
+        # Necessary for cleaning up modules in 2.3.
+        sys.modules.pop(importName, None)
+        raise
+
+def find_object(name):
+    """
+    Retrieve a Python object by its fully qualified name from the global Python
+    module namespace.  The first part of the name, that describes a module,
+    will be discovered and imported.  Each subsequent part of the name is
+    treated as the name of an attribute of the object specified by all of the
+    name which came before it.  For example, the fully-qualified name of this
+    object is 'twisted.python.reflect.namedAny'.
+
+    @type name: L{str}
+    @param name: The name of the object to return.
+
+    @raise InvalidName: If the name is an empty string, starts or ends with
+        a '.', or is otherwise syntactically incorrect.
+
+    @raise ModuleNotFound: If the name is syntactically correct but the
+        module it specifies cannot be imported because it does not appear to
+        exist.
+
+    @raise ObjectNotFound: If the name is syntactically correct, includes at
+        least one '.', but the module it specifies cannot be imported because
+        it does not appear to exist.
+
+    @raise AttributeError: If an attribute of an object along the way cannot be
+        accessed, or a module along the way is not found.
+
+    @return: the Python object identified by 'name'.
+    """
+
+    if not name:
+        raise InvalidName('Empty module name')
+
+    names = name.split('.')
+
+    # if the name starts or ends with a '.' or contains '..', the __import__
+    # will raise an 'Empty module name' error. This will provide a better error
+    # message.
+    if '' in names:
+        raise InvalidName(
+            "name must be a string giving a '.'-separated list of Python "
+            "identifiers, not %r" % (name,))
+
+    topLevelPackage = None
+    moduleNames = names[:]
+    while not topLevelPackage:
+        if moduleNames:
+            trialname = '.'.join(moduleNames)
+            try:
+                topLevelPackage = _importAndCheckStack(trialname)
+            except _NoModuleFound:
+                moduleNames.pop()
+        else:
+            if len(names) == 1:
+                raise ModuleNotFound("No module named %r" % (name,))
+            else:
+                raise ObjectNotFound('%r does not name an object' % (name,))
+
+    obj = topLevelPackage
+    for n in names[1:]:
+        obj = getattr(obj, n)
+
+    return obj
+
+######################
+# END OF COPIED CODE #
+######################
 
 if __name__ == "__main__":
     import doctest
