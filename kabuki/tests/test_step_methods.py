@@ -312,8 +312,8 @@ class TestStepMethods(unittest.TestCase):
     def run_SPXcentered(self, sigma_x, n_subjs, size, mu_value, mu_step_method, seed):
 
         #init basic  mcmc
-        iter = 40000
-        burnin= 35000
+        iter = 100000
+        burnin= 90000
         nodes, t_values = self.create_nodes_for_spx_centered(sigma_x=sigma_x, n_subjs=n_subjs, size=size,
                                                          mu_value=mu_value, seed=seed)
         mcmc = pm.MCMC(nodes)
@@ -324,7 +324,7 @@ class TestStepMethods(unittest.TestCase):
                                                              mu_value=mu_value, seed=seed)
         mcmc_spx = pm.MCMC(nodes_spx)
         mcmc_spx.use_step_method(kabuki.steps.SPXcentered, loc=nodes_spx['mu'], 
-                                 scale=nodes_spx['sigma'], beta=nodes_spx['x'],
+                                 scale=nodes_spx['sigma'],
                                  loc_step_method=mu_step_method)
 
         #run spx mcmc

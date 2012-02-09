@@ -70,7 +70,7 @@ class Parameter(object):
                  group_label = 'mu', var_label = 'tau', var_type='std',
                  group_step_method = None, var_step_method= None,
                  subj_step_method = None, transform = None, share_var = False,
-                 verbose=0):
+                 use_spx = False, verbose=0):
 
         for (attr, value) in locals().iteritems():
             setattr(self, attr, value)
@@ -580,26 +580,45 @@ class Hierarchical(object):
 
         self.mc = pm.MCMC(nodes, *args, **kwargs)
 
-        if not assign_step_methods:
+        if not assign_step_methods or not self.is_group_mode:
             return self.mc
 
         #assign step methods
-        if self.is_group_model:
-            for param in self.params:
+        for param in self.params:
+            #assign SPX when share_var
+            if param.use_spx and param.share_var:
+                self.mc.use_step_method(kabuki.steps.SPXcentered,
+                                        loc=param.group_nodes.values(),
+                                        scale=params.var_nodes.values()[0],
+                                        loc_step_method=param.group_step_method,
+                                        scale_step_method=param.var_step_method,
+                                        beta_step_method=param.subj_step_method)
+                continue
+
+            #assign SPX when var is not shared
+            elif param.use_spx and not param.share_var:
+                for (tag, node) in param.group_nodes.iteritems():
+                    self.mc.use_step_method(kabuki.steps.SPXcentered,
+                                            loc=param.group_nodes[tag],
+                                            scale=params.var_nodes[tag],
+                                            loc_step_method=param.group_step_method,
+                                            scale_step_method=param.var_step_method,
+                                            beta_step_method=param.subj_step_method)
+
+            #assign other step methods
+            else:
                 #assign to group params
-                if param.group_step_method != None:
-                    for node in param.group_nodes.itervalues():
-                            if node != None:
-                                self.mc.use_step_method(param.group_step_method, node)
+                for node in param.group_nodes.itervalues():
+                    if (node is not None) and (param.group_step_method != None):
+                        self.mc.use_step_method(param.group_step_method, node)
                 #assign to var params
-                if param.var_step_method != None:
-                    for node in param.var_nodes.itervalues():
-                        if node != None:
-                            self.mc.use_step_method(param.var_step_method, node)
-                if param.subj_step_method != None:
-                    for node_array in param.subj_nodes.itervalues():
-                        if node_array != None:
-                            [self.mc.use_step_method(param.subj_step_method, node) for node in node_array]
+                for node in param.var_nodes.itervalues():
+                    if (node != None) and (param.var_step_method != None):
+                        self.mc.use_step_method(param.var_step_method, node)
+                #assign to subj nodes
+                for node_array in param.subj_nodes.itervalues():
+                    if (node_array != None) and (param.subj_step_method != None):
+                        [self.mc.use_step_method(param.subj_step_method, node) for node in node_array]
 
         return self.mc
 
