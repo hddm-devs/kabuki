@@ -8,6 +8,20 @@ from pprint import pprint
 from numpy.random import randn
 from numpy import array, sqrt
 from nose import SkipTest
+from pandas import DataFrame
+
+
+def multi_normal_like(values, vec_mu, tau):
+    """logp for multi normal"""
+    logp = 0
+    for i in xrange(len(vec_mu)):
+        logp += pm.normal_like(values[i,:], vec_mu[i], tau)
+
+    return logp
+
+MN = pm.stochastic_from_dist(name="MultiNormal", logp=multi_normal_like, dtype=np.double, mv=True)
+
+
 
 class TestStepMethods(unittest.TestCase):
 
@@ -312,8 +326,12 @@ class TestStepMethods(unittest.TestCase):
     def run_SPXcentered(self, sigma_x, n_subjs, size, mu_value, mu_step_method, seed):
 
         #init basic  mcmc
-        iter = 100000
-        burnin= 90000
+        if np.isscalar(mu_value):
+            n_conds = 1
+        else:
+            n_conds = len(mu_value)
+        iter = 20000 #100000
+        burnin= 15000 #90000
         nodes, t_values = self.create_nodes_for_spx_centered(sigma_x=sigma_x, n_subjs=n_subjs, size=size,
                                                          mu_value=mu_value, seed=seed)
         mcmc = pm.MCMC(nodes)
@@ -323,33 +341,41 @@ class TestStepMethods(unittest.TestCase):
         nodes_spx, t_values = self.create_nodes_for_spx_centered(sigma_x=sigma_x, n_subjs=n_subjs, size=size,
                                                              mu_value=mu_value, seed=seed)
         mcmc_spx = pm.MCMC(nodes_spx)
-        mcmc_spx.use_step_method(kabuki.steps.SPXcentered, loc=nodes_spx['mu'], 
+        mcmc_spx.use_step_method(kabuki.steps.SPXcentered, loc=nodes_spx['mu'],
                                  scale=nodes_spx['sigma'],
+                                 loc_step_method=mu_step_method)
+
+
+        #init mcmc with spx on vec model
+        nodes_vpx, t_values = self.create_nodes_for_spx_centered(sigma_x=sigma_x, n_subjs=n_subjs, size=size,
+                                                             mu_value=mu_value, seed=seed, vec=True)
+        mcmc_vpx = pm.MCMC(nodes_vpx)
+        mcmc_vpx.use_step_method(kabuki.steps.SPXcentered, loc=nodes_vpx['mu'],
+                                 scale=nodes_vpx['sigma'],
                                  loc_step_method=mu_step_method)
 
         #run spx mcmc
         mcmc_spx.sample(iter,burnin)
-        spx_mu_stats = [x.stats() for x in mcmc_spx.mu]
-        spx_mu_mean = [x['mean'] for x in spx_mu_stats]
-        spx_mu_std = [x['standard deviation'] for x in spx_mu_stats]
-        spx_sigma_mean = mcmc_spx.sigma.stats()['mean']
+        stats = dict([('mu%d spx' %x, mcmc_spx.mu[x].stats()) for x in range(n_conds)])
+        stats.update({'sigma spx': mcmc_spx.sigma.stats()})
+
+        #run vpx mcmc
+        mcmc_vpx.sample(iter,burnin)
+        stats.update(dict([('mu%d vpx' %x, mcmc_vpx.mu[x].stats()) for x in range(n_conds)]))
+        stats.update({'sigma vpx': mcmc_vpx.sigma.stats()})
 
         #run basic mcmc
         mcmc.sample(iter,burnin)
-        basic_mu_stats = [x.stats() for x in mcmc.mu]
-        basic_mu_mean = [x['mean'] for x in basic_mu_stats]
-        basic_mu_std = [x['standard deviation'] for x in basic_mu_stats]
-        basic_sigma_mean = mcmc.sigma.stats()['mean']
+        stats.update(dict([('mu%d basic' %x, mcmc.mu[x].stats()) for x in range(n_conds)]))
+        stats.update({'sigma basic': mcmc.sigma.stats()})
 
-        print "Basic mcmc | SPX mcmc"
-        for i_mu in range(len(basic_mu_mean)):
-            print "mu%d mean:" % i_mu, basic_mu_mean[i_mu], spx_mu_mean[i_mu]
-            print "mu%d std: " % i_mu, basic_mu_std[i_mu], spx_mu_std[i_mu]
-        print "sigma mean: ", basic_sigma_mean, spx_sigma_mean
+        df = DataFrame(stats, index=['mean', 'standard deviation']).T
+        df.rename(columns = {'mean':'mean', 'standard deviation': 'std'})
+        print df
 
-        np.testing.assert_allclose(spx_mu_mean, basic_mu_mean, rtol=0.1)
-        np.testing.assert_allclose(spx_mu_std, basic_mu_std, rtol=0.3)
-        np.testing.assert_allclose(spx_sigma_mean, basic_sigma_mean, rtol=0.3)
+#        for i in range(len(df)/2):
+#            np.testing.assert_allclose(df[(2*i):(2*i+1)], df[(2*i+1):(2*i+2)], rtol=0.3)
+
 
     def test_SPX(self):
         self.run_SPXcentered(sigma_x=1, n_subjs=5, size=100, mu_value=4,
@@ -363,8 +389,7 @@ class TestStepMethods(unittest.TestCase):
         self.run_SPXcentered(sigma_x=1, n_subjs=3, size=10, mu_value=(4,3,2,1),
                              mu_step_method=kabuki.steps.kNormalNormal, seed=1)
 
-
-    def create_nodes_for_spx_centered(self, sigma_x=1, n_subjs=5, size=100, mu_value=4, seed=1):
+    def create_nodes_for_spx_centered(self, sigma_x=1, n_subjs=5, size=100, mu_value=4, seed=1, vec=False):
 
         #init
         np.random.seed(seed)
@@ -387,26 +412,31 @@ class TestStepMethods(unittest.TestCase):
         for i_cond in range(n_conds):
             #initalize the true value of x
             true_x = randn(n_subjs)*sigma_x + mu_value[i_cond]
+            value = np.random.randn(n_subjs, size).T + true_x
+            value = value.T
             print true_x
 
             #init mu and sigma
             mu[i_cond] = pm.Normal('mu%d' % i_cond, 0, 100.**-2, value=0)
 
             #create subj_nodes (x + y)
-            subj_nodes[i_cond] = [None]*n_subjs
-            data_nodes[i_cond] = [None]*n_subjs
-            for i_subj in range(n_subjs):
-                #x is generate from the mean.
-                subj_nodes[i_cond][i_subj] = pm.Normal('x%d_%d' % (i_cond, i_subj), mu[i_cond], sigma**-2, value=randn())
-                value = np.random.randn(size) + true_x[i_subj]
-                data_nodes[i_cond][i_subj] = pm.Normal('y%d_%d' % (i_cond, i_subj),
-                                                       mu=subj_nodes[i_cond][i_subj],
-                                                       tau=1, value=value, observed=True)
+            if vec:
+                subj_nodes[i_cond] = pm.Normal('x%d' % (i_cond), mu[i_cond], sigma**-2, size=n_subjs, value=true_x)
+                data_nodes[i_cond] = MN('y%d' % (i_cond), vec_mu=subj_nodes[i_cond], tau=1, value=value, observed=True)
+            else:
+                subj_nodes[i_cond] = [None]*n_subjs
+                data_nodes[i_cond] = [None]*n_subjs
+                for i_subj in range(n_subjs):
+                    #x is generate from the mean.
+                    subj_nodes[i_cond][i_subj] = pm.Normal('x%d_%d' % (i_cond, i_subj), mu[i_cond], sigma**-2, value=true_x[i_subj])
+                    data_nodes[i_cond][i_subj] = pm.Normal('y%d_%d' % (i_cond, i_subj),
+                                                           mu=subj_nodes[i_cond][i_subj],
+                                                           tau=1, value=value[i_subj,:], observed=True)
 
         #create nodes dictionary
         nodes = {}
-        nodes['x'] = reduce(lambda x,y:x + y, subj_nodes)
-        nodes['y'] = reduce(lambda x,y:x + y, data_nodes)
+        nodes['x'] = subj_nodes
+        nodes['y'] = data_nodes
         nodes['mu'] = mu
         nodes['sigma'] = sigma
 
