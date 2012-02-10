@@ -249,8 +249,8 @@ class SPXcentered(pm.StepMethod):
     g has to have the property that if X ~ g(a,b) than k*X ~ g(k*a,k*b)
     """
 
-    def __init__(self, loc, scale, loc_step_method=pm.Metropolis,
-                 scale_step_method=pm.Metropolis, beta_step_method=pm.Metropolis,
+    def __init__(self, loc, scale, loc_step_method=None,
+                 scale_step_method=None, beta_step_method=None,
                 *args, **kwargs):
 
         if type(loc) != list:
@@ -265,6 +265,14 @@ class SPXcentered(pm.StepMethod):
 
         #set alpha
         self.alpha = pm.Uninformative('alpha', value=1., trace=False, plot=False)
+
+        #assign default Metropolis step method if needed
+        if loc_step_method is None:
+            loc_step_method = pm.Metropolis
+        if scale_step_method is None:
+            scale_step_method = pm.Metropolis
+        if beta_step_method is None:
+            beta_step_method = pm.Metropolis
 
         #set step methods
         self.loc_steps = [loc_step_method(node) for node in self.loc]

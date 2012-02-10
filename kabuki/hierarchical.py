@@ -589,7 +589,7 @@ class Hierarchical(object):
             if param.use_spx and param.share_var:
                 self.mc.use_step_method(kabuki.steps.SPXcentered,
                                         loc=param.group_nodes.values(),
-                                        scale=params.var_nodes.values()[0],
+                                        scale=param.var_nodes.values()[0],
                                         loc_step_method=param.group_step_method,
                                         scale_step_method=param.var_step_method,
                                         beta_step_method=param.subj_step_method)
@@ -600,7 +600,7 @@ class Hierarchical(object):
                 for (tag, node) in param.group_nodes.iteritems():
                     self.mc.use_step_method(kabuki.steps.SPXcentered,
                                             loc=param.group_nodes[tag],
-                                            scale=params.var_nodes[tag],
+                                            scale=param.var_nodes[tag],
                                             loc_step_method=param.group_step_method,
                                             scale_step_method=param.var_step_method,
                                             beta_step_method=param.subj_step_method)
