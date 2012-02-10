@@ -331,8 +331,10 @@ class TestStepMethods(unittest.TestCase):
             n_conds = 1
         else:
             n_conds = len(mu_value)
-        iter = 20000 #100000
-        burnin= 15000 #90000
+
+        max_tries = 5
+        iter = 10000 #100000
+        burnin= 5000 #90000
         nodes, t_values = self.create_nodes_for_spx_centered(sigma_x=sigma_x, n_subjs=n_subjs, size=size,
                                                          mu_value=mu_value, seed=seed)
         mcmc = pm.MCMC(nodes)
@@ -355,47 +357,68 @@ class TestStepMethods(unittest.TestCase):
                                  scale=nodes_vpx['sigma'],
                                  loc_step_method=mu_step_method)
 
-        #run spx mcmc
-        i_t = time()
-        mcmc_spx.sample(iter,burnin)
-        print "spx sampling took %.2f seconds" % (time() - i_t)
-        stats = dict([('mu%d spx' %x, mcmc_spx.mu[x].stats()) for x in range(n_conds)])
-        stats.update({'sigma spx': mcmc_spx.sigma.stats()})
 
-        #run vpx mcmc
-        i_t = time()
-        mcmc_vpx.sample(iter,burnin)
-        print "spx sampling took %.2f seconds" % (time() - i_t)
-        stats.update(dict([('mu%d vpx' %x, mcmc_vpx.mu[x].stats()) for x in range(n_conds)]))
-        stats.update({'sigma vpx': mcmc_vpx.sigma.stats()})
+        #run all the models until they converge to the same values
+        i_try = 0
+        while i_try < max_tries:
+            print "~~~~~ trying for the %d time ~~~~~~" % (i_try + 1)
 
-        #run basic mcmc
-        i_t = time()
-        mcmc.sample(iter,burnin)
-        print "spx sampling took %.2f seconds" % (time() - i_t)
-        stats.update(dict([('mu%d basic' %x, mcmc.mu[x].stats()) for x in range(n_conds)]))
-        stats.update({'sigma basic': mcmc.sigma.stats()})
+            #run spx mcmc
+            i_t = time()
+            mcmc_spx.sample(iter,burnin)
+            print "spx sampling took %.2f seconds" % (time() - i_t)
+            stats = dict([('mu%d spx' %x, mcmc_spx.mu[x].stats()) for x in range(n_conds)])
 
-        df = DataFrame(stats, index=['mean', 'standard deviation']).T
-        df = df.rename(columns = {'mean':'mean', 'standard deviation': 'std'})
-        print df
-        kabuki.debug_here()
-#        for i in range(len(df)/2):
-#            np.testing.assert_allclose(df[(2*i):(2*i+1)], df[(2*i+1):(2*i+2)], rtol=0.3)
+            #run vpx mcmc
+            i_t = time()
+            mcmc_vpx.sample(iter,burnin)
+            print "vpx sampling took %.2f seconds" % (time() - i_t)
+            stats.update(dict([('mu%d vpx' %x, mcmc_vpx.mu[x].stats()) for x in range(n_conds)]))
+
+            #run basic mcmc
+            i_t = time()
+            mcmc.sample(iter,burnin)
+            print "basic sampling took %.2f seconds" % (time() - i_t)
+            stats.update(dict([('mu%d basic' %x, mcmc.mu[x].stats()) for x in range(n_conds)]))
+
+            df = DataFrame(stats, index=['mean', 'standard deviation']).T
+            df = df.rename(columns = {'mean':'mean', 'standard deviation': 'std'})
+            print df
+
+            #check if all the results are close enough
+            try:
+                for i in range(len(df)/3):
+                    np.testing.assert_allclose(df[(3*i+0):(3*i+1)], df[(3*i+1):(3*i+2)], atol=0.1, rtol=0.01)
+                    np.testing.assert_allclose(df[(3*i+1):(3*i+2)], df[(3*i+2):(3*i+3)], atol=0.1, rtol=0.01)
+                    np.testing.assert_allclose(df[(3*i+2):(3*i+3)], df[(3*i+0):(3*i+1)], atol=0.1, rtol=0.01)
+
+                break
+            #if not add more runs
+            except AssertionError:
+                print "Failed to reach agreement. trying again"
+                i_try += 1
+
+        assert (i_try < max_tries), "could not replicate values using different mcmc samplers"
 
 
     def test_SPX(self):
+        print "*************** Test 1 ***************"
         self.run_SPXcentered(sigma_x=1, n_subjs=5, size=100, mu_value=4,
                              mu_step_method=kabuki.steps.kNormalNormal, seed=1)
+        print "*************** Test 2 ***************"
         self.run_SPXcentered(sigma_x=1, n_subjs=5, size=10, mu_value=(4,3,2,1,0,4,3,2,1,0),
                              mu_step_method=kabuki.steps.kNormalNormal, seed=1)
+        print "*************** Test 3 ***************"
         self.run_SPXcentered(sigma_x=0.5, n_subjs=5, size=10, mu_value=(4,3),
                              mu_step_method=kabuki.steps.kNormalNormal, seed=1)
+        print "*************** Test 4 ***************"
         self.run_SPXcentered(sigma_x=0.1, n_subjs=5, size=10, mu_value=(4,3),
                              mu_step_method=kabuki.steps.kNormalNormal, seed=1)
-        self.run_SPXcentered(sigma_x=1, n_subjs=10, size=10, mu_value=(4,3,2,1),
+        print "*************** Test 5 ***************"
+        self.run_SPXcentered(sigma_x=1, n_subjs=5, size=10, mu_value=range(20),
                              mu_step_method=kabuki.steps.kNormalNormal, seed=1)
-        self.run_SPXcentered(sigma_x=0.1, n_subjs=10, size=10, mu_value=(4,3,2,1),
+        print "*************** Test 6 ***************"
+        self.run_SPXcentered(sigma_x=0.1, n_subjs=5, size=10, mu_value=range(20),
                              mu_step_method=kabuki.steps.kNormalNormal, seed=1)
 
     def create_nodes_for_spx_centered(self, sigma_x=1, n_subjs=5, size=100, mu_value=4, seed=1, vec=False):
@@ -430,14 +453,14 @@ class TestStepMethods(unittest.TestCase):
 
             #create subj_nodes (x + y)
             if vec:
-                subj_nodes[i_cond] = pm.Normal('x%d' % (i_cond), mu[i_cond], sigma**-2, size=n_subjs, value=true_x)
+                subj_nodes[i_cond] = pm.Normal('x%d' % (i_cond), mu[i_cond], sigma**-2, size=n_subjs)
                 data_nodes[i_cond] = MN('y%d' % (i_cond), vec_mu=subj_nodes[i_cond], tau=1, value=value, observed=True)
             else:
                 subj_nodes[i_cond] = [None]*n_subjs
                 data_nodes[i_cond] = [None]*n_subjs
                 for i_subj in range(n_subjs):
                     #x is generate from the mean.
-                    subj_nodes[i_cond][i_subj] = pm.Normal('x%d_%d' % (i_cond, i_subj), mu[i_cond], sigma**-2, value=true_x[i_subj])
+                    subj_nodes[i_cond][i_subj] = pm.Normal('x%d_%d' % (i_cond, i_subj), mu[i_cond], sigma**-2)
                     data_nodes[i_cond][i_subj] = pm.Normal('y%d_%d' % (i_cond, i_subj),
                                                            mu=subj_nodes[i_cond][i_subj],
                                                            tau=1, value=value[i_subj,:], observed=True)
