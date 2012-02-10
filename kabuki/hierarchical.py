@@ -1033,7 +1033,7 @@ class Hierarchical(object):
 
             #get the nodes which will be plotted
             for param in parameters:
-                nodes = param.group_nodes.values() + param.var_nodes.values()
+                nodes = np.unique(param.group_nodes.values() + param.var_nodes.values())
                 if plot_subjs:
                     for nodes_array in param.subj_nodes.values():
                         nodes += list(nodes_array)
