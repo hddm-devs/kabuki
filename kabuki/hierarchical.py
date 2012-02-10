@@ -580,7 +580,7 @@ class Hierarchical(object):
 
         self.mc = pm.MCMC(nodes, *args, **kwargs)
 
-        if not assign_step_methods or not self.is_group_mode:
+        if not assign_step_methods or not self.is_group_model:
             return self.mc
 
         #assign step methods
