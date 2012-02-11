@@ -84,14 +84,12 @@ class Parameter(object):
 
         # Pointers that get overwritten
         self.group = None
-        self.subj = None
         self.tag = None
         self.data = None
         self.idx = None
 
     def reset(self):
         self.group = None
-        self.subj = None
         self.tag = None
         self.data = None
         self.idx = None
@@ -743,39 +741,44 @@ class Hierarchical(object):
             param.tag = 'var'
         else:
             param.tag = 'var' + tag
+
         #if param does not share variance or this is the first node created
         # then we create the node
         if (len(param.var_nodes) == 0) or (not param.share_var):
             param.var_nodes[tag] = self.get_var_node(param)
         else: #we copy the first node
             param.var_nodes[tag] = param.var_nodes.values()[0]
-        param.reset()
 
-        # Init
+        #Create subj parameters
+        param.reset()
+        param.tag = tag
+
+        #first set parents
+        param.group = param.group_nodes[tag]
+        param.var = param.var_nodes[tag]
+
+        if param.transform == None:
+            group_node = param.group
+            var_node = param.var
+        else:
+            group_node, var_node = param.transform(param.group, param.var)
+
+        #set subj_stoch_params according to parnets labels
+        if param.group_label != None:
+            param.subj_stoch_params[param.group_label] = group_node
+        if param.var_label != None:
+            param.subj_stoch_params[param.var_label] = var_node
+
+        # Init nodes
         param.subj_nodes[tag] = np.empty(self._num_subjs, dtype=object)
-        # Create subj parameter distribution for each subject
+        # now create subj parameter distribution for each subject
         for subj_idx,subj in enumerate(self._subjs):
             data_subj = data[data['subj_idx']==subj]
             param.data = data_subj
-            #set group parent
-            param.group = param.group_nodes[tag]
-            param.var = param.var_nodes[tag]
-
-            if param.transform == None:
-                group_node = param.group
-                var_node = param.var
-            else:
-                group_node, var_node = param.transform(param.group, param.var)
-
-            if param.group_label != None:
-                param.subj_stoch_params[param.group_label] = group_node
-            if param.var_label != None:
-                param.subj_stoch_params[param.var_label] = var_node
-            param.tag = tag
             param.idx = subj_idx
             param.subj_nodes[tag][subj_idx] = self.get_subj_node(param)
-            param.reset()
 
+        param.reset()
         return self
 
     def _set_bottom_nodes(self, param, init=False):
