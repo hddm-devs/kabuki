@@ -325,6 +325,7 @@ class TestStepMethods(unittest.TestCase):
         self.half_cauchy_bundle(use_metropolis=False)
 
     def run_SPXcentered(self, sigma_x, n_subjs, size, mu_value, mu_step_method, seed):
+        """ run a single Spxcentered test"""
 
         #init basic  mcmc
         if np.isscalar(mu_value):
@@ -335,13 +336,13 @@ class TestStepMethods(unittest.TestCase):
         max_tries = 5
         iter = 10000 #100000
         burnin= 5000 #90000
-        nodes, t_values = self.create_nodes_for_spx_centered(sigma_x=sigma_x, n_subjs=n_subjs, size=size,
+        nodes, t_values = self.create_hierarchical_model(sigma_x=sigma_x, n_subjs=n_subjs, size=size,
                                                          mu_value=mu_value, seed=seed)
         mcmc = pm.MCMC(nodes)
         [mcmc.use_step_method(mu_step_method, node) for node in nodes['mu']]
 
         #init mcmc with SPX step method
-        nodes_spx, t_values = self.create_nodes_for_spx_centered(sigma_x=sigma_x, n_subjs=n_subjs, size=size,
+        nodes_spx, t_values = self.create_hierarchical_model(sigma_x=sigma_x, n_subjs=n_subjs, size=size,
                                                              mu_value=mu_value, seed=seed)
         mcmc_spx = pm.MCMC(nodes_spx)
         mcmc_spx.use_step_method(kabuki.steps.SPXcentered, loc=nodes_spx['mu'],
@@ -350,7 +351,7 @@ class TestStepMethods(unittest.TestCase):
 
 
         #init mcmc with spx on vec model
-        nodes_vpx, t_values = self.create_nodes_for_spx_centered(sigma_x=sigma_x, n_subjs=n_subjs, size=size,
+        nodes_vpx, t_values = self.create_hierarchical_model(sigma_x=sigma_x, n_subjs=n_subjs, size=size,
                                                              mu_value=mu_value, seed=seed, vec=True)
         mcmc_vpx = pm.MCMC(nodes_vpx)
         mcmc_vpx.use_step_method(kabuki.steps.SPXcentered, loc=nodes_vpx['mu'],
@@ -402,6 +403,7 @@ class TestStepMethods(unittest.TestCase):
 
 
     def test_SPX(self):
+        """test a bundle of SPXcentered tests"""
         print "*************** Test 1 ***************"
         self.run_SPXcentered(sigma_x=1, n_subjs=5, size=100, mu_value=4,
                              mu_step_method=kabuki.steps.kNormalNormal, seed=1)
@@ -421,8 +423,19 @@ class TestStepMethods(unittest.TestCase):
         self.run_SPXcentered(sigma_x=0.1, n_subjs=5, size=10, mu_value=range(20),
                              mu_step_method=kabuki.steps.kNormalNormal, seed=1)
 
-    def create_nodes_for_spx_centered(self, sigma_x=1, n_subjs=5, size=100, mu_value=4, seed=1, vec=False):
+    def create_hierarchical_model(self, sigma_x=1, n_subjs=5, size=100, mu_value=4, seed=1, vec=False):
+        """
+        create an hierarchical normal model
+        y_ijk ~ N(x_jk, 1) (i sample, j subject, k condition)
+        x_jk ~ N(m_k, sigma_x**2)
+        m_k ~ N(0, 100*-2)
 
+        Input:
+            m_value <list> - m_value[k] - m_k
+            size <int>- number of samples per subject per category
+            n_subjs <int> - no. of subjects
+            vec <boolean> - use a vectorized model
+        """
         #init
         np.random.seed(seed)
         if np.isscalar(mu_value):
@@ -439,6 +452,7 @@ class TestStepMethods(unittest.TestCase):
 
         #init sigma node
         sigma = pm.Uniform('sigma', 1e-10,1e10, value=1)
+        tau = sigma**-2
 
         #create nodes for each cond
         for i_cond in range(n_conds):
@@ -453,14 +467,14 @@ class TestStepMethods(unittest.TestCase):
 
             #create subj_nodes (x + y)
             if vec:
-                subj_nodes[i_cond] = pm.Normal('x%d' % (i_cond), mu[i_cond], sigma**-2, size=n_subjs)
+                subj_nodes[i_cond] = pm.Normal('x%d' % (i_cond), mu[i_cond], tau, size=n_subjs)
                 data_nodes[i_cond] = MN('y%d' % (i_cond), vec_mu=subj_nodes[i_cond], tau=1, value=value, observed=True)
             else:
                 subj_nodes[i_cond] = [None]*n_subjs
                 data_nodes[i_cond] = [None]*n_subjs
                 for i_subj in range(n_subjs):
                     #x is generate from the mean.
-                    subj_nodes[i_cond][i_subj] = pm.Normal('x%d_%d' % (i_cond, i_subj), mu[i_cond], sigma**-2)
+                    subj_nodes[i_cond][i_subj] = pm.Normal('x%d_%d' % (i_cond, i_subj), mu[i_cond], tau)
                     data_nodes[i_cond][i_subj] = pm.Normal('y%d_%d' % (i_cond, i_subj),
                                                            mu=subj_nodes[i_cond][i_subj],
                                                            tau=1, value=value[i_subj,:], observed=True)
@@ -473,3 +487,84 @@ class TestStepMethods(unittest.TestCase):
         nodes['sigma'] = sigma
 
         return nodes, true_values
+
+
+    def run_SliceStep(self, sigma_x, n_subjs, size, mu_value, seed):
+
+        #init basic  mcmc
+        if np.isscalar(mu_value):
+            n_conds = 1
+        else:
+            n_conds = len(mu_value)
+
+        max_tries = 5
+        iter = 10000 #100000
+        burnin= 5000 #90000
+
+        #init basic mcmc
+        nodes, t_values = self.create_hierarchical_model(sigma_x=sigma_x, n_subjs=n_subjs, size=size,
+                                                         mu_value=mu_value, seed=seed)
+        mcmc = pm.MCMC(nodes)
+        [mcmc.use_step_method(kabuki.steps.kNormalNormal, node) for node in nodes['mu']]
+
+        #init mcmc with slice step
+        nodes_s, t_values = self.create_hierarchical_model(sigma_x=sigma_x, n_subjs=n_subjs, size=size,
+                                                         mu_value=mu_value, seed=seed)
+        mcmc_s = pm.MCMC(nodes_s)
+        [mcmc_s.use_step_method(kabuki.steps.kNormalNormal, node) for node in nodes_s['mu']]
+        mcmc_s.use_step_method(kabuki.steps.SliceStep, nodes_s['sigma'], width=3)
+
+
+        #run all the models until they converge to the same values
+        i_try = 0
+        stats = {}
+        while i_try < max_tries:
+            print "~~~~~ trying for the %d time ~~~~~~" % (i_try + 1)
+
+            #run slice mcmc
+            i_t = time()
+            mcmc_s.sample(iter,burnin)
+            print "slice sampling took %.2f seconds" % (time() - i_t)
+            stats.update(dict([('mu%d S' %x, mcmc_s.mu[x].stats()) for x in range(n_conds)]))
+
+            #run basic mcmc
+            i_t = time()
+            mcmc.sample(iter,burnin)
+            print "basic sampling took %.2f seconds" % (time() - i_t)
+            stats.update(dict([('mu%d basic' %x, mcmc.mu[x].stats()) for x in range(n_conds)]))
+
+            df = DataFrame(stats, index=['mean', 'standard deviation']).T
+            df = df.rename(columns = {'mean':'mean', 'standard deviation': 'std'})
+            print df
+
+            #check if all the results are close enough
+            try:
+                for i in range(len(df)/2):
+                    np.testing.assert_allclose(df[(2*i+0):(2*i+1)], df[(2*i+1):(2*i+2)], atol=0.1, rtol=0.01)
+                break
+            #if not add more runs
+            except AssertionError:
+                print "Failed to reach agreement In:"
+                print df[(2*i):(2*(i+1))]
+                print "trying again"
+
+            i_try += 1
+
+        assert (i_try < max_tries), "could not replicate values using different mcmc samplers"
+
+        return mcmc, mcmc_s
+
+    def test_SliceStep(self):
+        """test a bundle of SPXcentered tests"""
+        print "*************** Test 1 ***************"
+        self.run_SliceStep(sigma_x=1, n_subjs=5, size=100, mu_value=4, seed=1)
+        print "*************** Test 2 ***************"
+        self.run_SliceStep(sigma_x=1, n_subjs=5, size=10, mu_value=range(10), seed=1)
+        print "*************** Test 3 ***************"
+        self.run_SliceStep(sigma_x=0.5, n_subjs=5, size=10, mu_value=(4,3), seed=1)
+        print "*************** Test 4 ***************"
+        self.run_SliceStep(sigma_x=0.1, n_subjs=5, size=10, mu_value=(4,3), seed=1)
+        print "*************** Test 5 ***************"
+        self.run_SliceStep(sigma_x=1, n_subjs=5, size=10, mu_value=range(20), seed=1)
+        print "*************** Test 6 ***************"
+        self.run_SliceStep(sigma_x=0.1, n_subjs=5, size=10, mu_value=range(20), seed=1)
