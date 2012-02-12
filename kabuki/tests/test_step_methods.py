@@ -489,7 +489,7 @@ class TestStepMethods(unittest.TestCase):
         return nodes, true_values
 
 
-    def run_SliceStep(self, sigma_x, n_subjs, size, mu_value, seed):
+    def run_SliceStep(self, sigma_x, n_subjs, size, mu_value, seed, left, max_tries=5):
 
         #init basic  mcmc
         if np.isscalar(mu_value):
@@ -497,7 +497,6 @@ class TestStepMethods(unittest.TestCase):
         else:
             n_conds = len(mu_value)
 
-        max_tries = 5
         iter = 10000 #100000
         burnin= 5000 #90000
 
@@ -512,7 +511,7 @@ class TestStepMethods(unittest.TestCase):
                                                          mu_value=mu_value, seed=seed)
         mcmc_s = pm.MCMC(nodes_s)
         [mcmc_s.use_step_method(kabuki.steps.kNormalNormal, node) for node in nodes_s['mu']]
-        mcmc_s.use_step_method(kabuki.steps.SliceStep, nodes_s['sigma'], width=3)
+        mcmc_s.use_step_method(kabuki.steps.SliceStep, nodes_s['sigma'], width=3, left=left)
 
 
         #run all the models until they converge to the same values
@@ -568,3 +567,9 @@ class TestStepMethods(unittest.TestCase):
         self.run_SliceStep(sigma_x=1, n_subjs=5, size=10, mu_value=range(20), seed=1)
         print "*************** Test 6 ***************"
         self.run_SliceStep(sigma_x=0.1, n_subjs=5, size=10, mu_value=range(20), seed=1)
+        print "*************** Test 7 ***************"
+        self.run_SliceStep(sigma_x=0.1, n_subjs=5, size=10, mu_value=(4,3), seed=1, left=0)
+        print "*************** Test 8 ***************"
+        self.run_SliceStep(sigma_x=1, n_subjs=5, size=10, mu_value=range(20), seed=1, left=0)
+        print "*************** Test 9 ***************"
+        self.run_SliceStep(sigma_x=0.1, n_subjs=5, size=10, mu_value=range(20), seed=1, left=0)

@@ -314,22 +314,20 @@ class SliceStep(pm.Gibbs):
     """
     simple slice sampler
     """
-    def __init__(self, stochastic, width = 0.5, maxiter = 200, verbose = None, *args, **kwargs):
+    def __init__(self, stochastic, width = 2, maxiter = 200, left = None,
+                 verbose = None, *args, **kwargs):
         """
         Input:
             stochastic - stochastic node
-            width - the initial width of the interval
-            maxiter - maximum number of iteration allowed for stepping-out and shrinking
+            width <float> - the initial width of the interval
+            maxiter <int> - maximum number of iteration allowed for stepping-out and shrinking
+            left <int> - the starting position of the interval (default is None).  
         """
         pm.Gibbs.__init__(self, stochastic, verbose=verbose, *args, **kwargs)
         self.width = width
         self.neval = 0
         self.maxiter = maxiter
-        self.stochastic = stochastic
-        if verbose != None:
-            self.verbose = verbose
-        else:
-            self.verbose = stochastic.verbose
+        self.left = left
 
     def step(self):
         stoch = self.stochastic
@@ -342,26 +340,33 @@ class SliceStep(pm.Gibbs):
             print self._id + ' current value: %.3f' % value
             print self._id + ' sampled vertical level ' + `z`
 
+
         #position an interval at random starting position around the current value
         r = self.width * np.random.rand()
-        xl = value - r
-        xr = xl + self.width
+        xr = value + r
+        if self.left is not None:
+            xl = self.left
+        else:
+            xl = xr - self.width
+
 
         if self.verbose>2:
             print 'initial interval [%.3f, %.3f]' % (xl, xr)
 
-        #step out to the left
-        iter = 0
-        stoch.value = xl
-        while (self.get_logp() >= z) and (iter < self.maxiter):
-            xl -= self.width
+        if self.left is None:
+            #step out to the left
+            iter = 0
             stoch.value = xl
-            iter += 1
+            while (self.get_logp() >= z) and (iter < self.maxiter):
+                xl -= self.width
+                stoch.value = xl
+                iter += 1
 
-        assert iter < self.maxiter, "Step-out procedure failed"
-        self.neval += iter
-        if self.verbose>2:
-            print 'after %d iteration interval is [%.3f, %.3f]' % (iter, xl, xr)
+            assert iter < self.maxiter, "Step-out procedure failed"
+            self.neval += iter
+
+            if self.verbose>2:
+                print 'after %d iteration interval is [%.3f, %.3f]' % (iter, xl, xr)
 
         #step out to the right
         iter = 0
