@@ -147,6 +147,7 @@ def gen_group_stats(stats):
     return s
 
 def group_plot(model, params_to_plot=(), n_bins=50, save_to=None):
+
     if isinstance(model, pm.MCMC):
         nodes = model.stochastics
     else:
@@ -154,27 +155,40 @@ def group_plot(model, params_to_plot=(), n_bins=50, save_to=None):
     db = model.mc.db
 
     for (param_name, param) in model.params_dict.iteritems():
-        if len(params_to_plot) > 0 and  param_name not in params_to_plot:
+        #check if we need to plot this parameter
+        if (len(params_to_plot) > 0) and  (param_name not in params_to_plot):
             continue
+        if not param.has_subj_nodes:
+            continue
+        
         for (node_tag, group_node) in param.group_nodes.iteritems():
+            
+            #get subj nodes
             g_node_trace = model.mc.db.trace(group_node.__name__)[:]
             subj_nodes = param.subj_nodes[node_tag]
-            if subj_nodes == []:
-                continue
 
+            #create figure
             print "plotting %s" % group_node.__name__
             sys.stdout.flush()
             figure()
+            
+            #get x axis
             lb = min([min(db.trace(x.__name__)[:]) for x in subj_nodes])
             lb = min(lb, min(g_node_trace))
             ub = max([max(db.trace(x.__name__)[:]) for x in subj_nodes])
             ub = max(ub, max(g_node_trace))
             x_data = np.linspace(lb, ub, n_bins)
+            
+            #group histogram
             g_hist = np.histogram(g_node_trace,bins=n_bins, range=[lb, ub], normed=True)[0]
             plt.plot(x_data, g_hist, '--', label='group')
+            
+            #subj histogram
             for i in subj_nodes:
                 g_hist = np.histogram(db.trace(i.__name__)[:],bins=n_bins, range=[lb, ub], normed=True)[0]
                 plt.plot(x_data, g_hist, label=re.search('[0-9]+$',i.__name__).group())
+                
+            #legend and title
             leg = plt.legend(loc='best', fancybox=True)
             leg.get_frame().set_alpha(0.5)
             name = group_node.__name__

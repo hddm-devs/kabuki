@@ -19,7 +19,7 @@ from matplotlib.mlab import rec_drop_fields
 
 
 class Knode(object):
-    def __init__(self, stoch = None, step_method=None, **stoch_params):
+    def __init__(self, stoch = None, step_method=None, stoch_params=None):
         kabuki.debug_here()
         for (attr, value) in locals().iteritems():
             setattr(self, attr, value)
@@ -67,8 +67,8 @@ class Parameter(object):
 
     def __init__(self, name, is_bottom_node=False, vars=None, default=None, optional=False,
                  subj_knode=None, group_knode=None, var_knode=None,
-                 group_label =None, var_label = 'tau', var_type='std',
-                 transform = None, share_var = False, verbose=0):
+                 group_label=None, var_label=None, var_type=None,
+                 transform=None, share_var=False, use_spx=False, verbose=0):
 
         for (attr, value) in locals().iteritems():
             setattr(self, attr, value)
@@ -84,14 +84,12 @@ class Parameter(object):
 
         # Pointers that get overwritten
         self.group = None
-        self.subj = None
         self.tag = None
         self.data = None
         self.idx = None
 
     def reset(self):
         self.group = None
-        self.subj = None
         self.tag = None
         self.data = None
         self.idx = None
@@ -499,7 +497,7 @@ class Hierarchical(object):
             for tag, node in param.var_nodes.iteritems():
                 self.nodes[name+tag+'_var'] = node
                 self.var_nodes[name+tag] = node
-                
+
         #update knodes
         for name, param in self.params_include.iteritems():
             param.knodes['group'].nodes = self.group_nodes
@@ -585,22 +583,44 @@ class Hierarchical(object):
 
         if (not assign_step_methods) or (not self.is_group_model):
             return self.mc
-        
+
         #assign step methods
         for param in self.params:
-            for knode in param.knodes.values():
-                #check if we need to assign step method
-                if knode.step_method is None:
-                    continue
-                #assign it to all the nodes in knode
-                for node in knode.nodes.itervalues():
-                    if node is None:
+            #assign SPX when share_var
+            if param.use_spx and param.share_var:
+                self.mc.use_step_method(kabuki.steps.SPXcentered,
+                                        loc=param.group_nodes.values(),
+                                        scale=param.var_nodes.values()[0],
+                                        loc_step_method=param.group_knode.step_method,
+                                        scale_step_method=param.var_knode.step_method,
+                                        beta_step_method=param.subj_knode.step_method)
+                continue
+
+            #assign SPX when var is not shared
+            elif param.use_spx and not param.share_var:
+                for (tag, node) in param.group_nodes.iteritems():
+                    self.mc.use_step_method(kabuki.steps.SPXcentered,
+                                            loc=param.group_nodes[tag],
+                                            scale=param.var_nodes[tag],
+                                            loc_step_method=param.group_knode.step_method,
+                                            scale_step_method=param.var_knode.step_method,
+                                            beta_step_method=param.subj_knode.step_method)
+
+            #assign other step methods
+            else:
+                for knode in param.knodes.values():
+                    #check if we need to assign step method
+                    if knode.step_method is None:
                         continue
-                    if isinstance(node, pm.Stochastic):
-                        self.mc.use_step_method(knode.step_method, node)
-                    else:
-                        [self.mc.use_step_method(knode.step_method, node) for node in node_array]
-                        
+                    #assign it to all the nodes in knode
+                    for node in knode.nodes.itervalues():
+                        if node is None:
+                            continue
+                        #check if it is a single node, otherwise it's an array
+                        elif isinstance(node, pm.Stochastic):
+                            self.mc.use_step_method(knode.step_method, node)
+                        else:
+                            [self.mc.use_step_method(knode.step_method, node) for node in node_array]
 
         return self.mc
 
@@ -725,39 +745,44 @@ class Hierarchical(object):
             param.tag = 'var'
         else:
             param.tag = 'var' + tag
+
         #if param does not share variance or this is the first node created
         # then we create the node
         if (len(param.var_nodes) == 0) or (not param.share_var):
             param.var_nodes[tag] = self.create_pymc_node(param.var_knode, param.full_name)
         else: #we copy the first node
             param.var_nodes[tag] = param.var_nodes.values()[0]
-        param.reset()
 
-        # Init
+        #Create subj parameters
+        param.reset()
+        param.tag = tag
+
+        #first set parents
+        param.group = param.group_nodes[tag]
+        param.var = param.var_nodes[tag]
+
+        if param.transform == None:
+            group_node = param.group
+            var_node = param.var
+        else:
+            group_node, var_node = param.transform(param.group, param.var)
+
+        #set subj_stoch_params according to parnets labels
+        if param.group_label != None:
+            param.subj_knode.stoch_params[param.group_label] = group_node
+        if param.var_label != None:
+            param.subj_knode.stoch_params[param.var_label] = var_node
+
+        # Init nodes
         param.subj_nodes[tag] = np.empty(self._num_subjs, dtype=object)
-        # Create subj parameter distribution for each subject
+        # now create subj parameter distribution for each subject
         for subj_idx,subj in enumerate(self._subjs):
             data_subj = data[data['subj_idx']==subj]
             param.data = data_subj
-            #set group parent
-            param.group = param.group_nodes[tag]
-            param.var = param.var_nodes[tag]
-
-            if param.transform == None:
-                group_node = param.group
-                var_node = param.var
-            else:
-                group_node, var_node = param.transform(param.group, param.var)
-
-            if param.group_label != None:
-                param.subj_knode.stoch_params[param.group_label] = group_node
-            if param.var_label != None:
-                param.subj_knode.stoch_params[param.var_label] = var_node
-            param.tag = tag
             param.idx = subj_idx
             param.subj_nodes[tag][subj_idx] = self.create_pymc_node(param.subj_knode, param.full_name)
-            param.reset()
 
+        param.reset()
         return self
 
     def _set_bottom_nodes(self, param, init=False):
@@ -962,8 +987,37 @@ class Hierarchical(object):
         if step_method:
             print "assigned step methods to %d (out of %d)." % (assigned_steps, len(all_nodes))
 
-    def plot_posteriors(self):
-        pm.Matplot.plot(self.mc)
+    def plot_posteriors(self, parameters=None, plot_subjs=False):
+        """
+        plot the nodes posteriors
+        Input:
+            parameters (optional) - a list of parameters to plot.
+            plot_subj (optional) - plot subjs nodes
+
+        TODO: add attributes plot_subjs and plot_var to kabuki
+        which will change the plot attribute in the relevant nodes
+        """
+
+        if parameters is None: #plot the model
+            pm.Matplot.plot(self.mc)
+
+        else: #plot only the given parameters
+
+            if type(parameters) != list:
+                 parameters = [parameters]
+
+            #get the nodes which will be plotted
+            for param in parameters:
+                nodes = np.unique(param.group_nodes.values() + param.var_nodes.values())
+                if plot_subjs:
+                    for nodes_array in param.subj_nodes.values():
+                        nodes += list(nodes_array)
+            #this part does the ploting
+            for node in nodes:
+                plot_value = node.plot
+                node.plot = True
+                pm.Matplot.plot(node)
+                node.plot = plot_value
 
     def subj_by_subj_map_init(self, runs=2, **map_kwargs):
         """
