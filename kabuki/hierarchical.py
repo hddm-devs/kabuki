@@ -347,7 +347,7 @@ class Hierarchical(object):
         parameter.
 
         :Arguments:
-            retry : int
+            max_retries : int
                 How often to retry when model creation
                 failed (due to bad starting values).
 
@@ -395,7 +395,7 @@ class Hierarchical(object):
                 continue
             break
         else:
-            print "After %f retries, still not good fit found." %(tries)
+            print "After %f retries, still no good fit found." %(tries)
             raise e
 
 
