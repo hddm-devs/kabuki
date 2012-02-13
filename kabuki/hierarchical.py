@@ -19,9 +19,10 @@ from matplotlib.mlab import rec_drop_fields
 
 
 class Knode(object):
-    def __init__(self, stoch = None, args=None, step_method=None, step_method_args=None):
-        for (attr, value) in locals().iteritems():
-            setattr(self, attr, value)
+    def __init__(self, stoch, step_method=None, step_method_args=None, **kwargs):
+        self.stoch = stoch
+        self.step_method = step_method
+        self.args = kwargs
         if step_method_args is None:
             self.step_method_args = {}
 
@@ -386,7 +387,7 @@ class Hierarchical(object):
                 # Add a key that is only the col_name that links to
                 # the correct dependent nodes. This is the central
                 # trick so that later on the get_bottom_node can use
-               # params[col_name] and the bottm node will get linked to
+                # params[col_name] and the bottm node will get linked to
                 # the correct nodes automatically.
                 param = self.params_include[param_name]
 
@@ -635,6 +636,7 @@ class Hierarchical(object):
                         elif isinstance(node, pm.Stochastic):
                             self.mc.use_step_method(step, node, **args)
                         else:
+                            # BUG node_array undefined
                             [self.mc.use_step_method(step, node, **args) for node in node_array]
 
         return self.mc
