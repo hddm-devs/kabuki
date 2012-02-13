@@ -284,9 +284,9 @@ class SPXcentered(pm.StepMethod):
             beta_step_method_args = {}
 
         #set step methods
-        self.loc_steps = [loc_step_method(node) for node in self.loc]
-        self.scale_step = scale_step_method(scale)
-        self.beta_steps = [beta_step_method(node) for node in self.beta]
+        self.loc_steps = [loc_step_method(node, **loc_step_method_args) for node in self.loc]
+        self.scale_step = scale_step_method(scale, **scale_step_method_args)
+        self.beta_steps = [beta_step_method(node, **beta_step_method_args) for node in self.beta]
         self.alpha_step = MetropolisAlpha(self.alpha, self.beta, loc, scale)
 
     def step(self):
