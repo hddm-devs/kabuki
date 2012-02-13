@@ -913,7 +913,7 @@ class Hierarchical(object):
     def plot_posteriors(self, *args, **kwargs):
         pm.Matplot.plot(self.mc, *args, **kwargs)
 
-    def subj_by_subj_map_init(self, runs=2, **map_kwargs):
+    def subj_by_subj_map_init(self, runs=2, verbose=-1, **map_kwargs):
         """
         initializing nodes by finding the MAP for each subject separately
         Input:
@@ -924,10 +924,10 @@ class Hierarchical(object):
         before running mcmc() or map()
         """
 
-        #check if nodes were created. if they were it cause problems for deepcopy
+        # check if nodes were created. if they were it cause problems for deepcopy
         assert (not self.nodes), "function should be used before nodes are initialized."
 
-        #init
+        # init
         subjs = self._subjs
         n_subjs = len(subjs)
 
@@ -937,10 +937,10 @@ class Hierarchical(object):
 
         self.create_nodes()
 
-        #loop over subjects
+        # loop over subjects
         for i_subj in range(n_subjs):
-            #create and fit single subject
-            print "*!*!* fitting subject %d *!*!*" % subjs[i_subj]
+            # create and fit single subject
+            if verbose > 1: print "*!*!* fitting subject %d *!*!*" % subjs[i_subj]
             t_data = self.data[self.data['subj_idx'] == subjs[i_subj]]
             t_data = rec_drop_fields(t_data, ['data_idx'])
             s_model = deepcopy(empty_s_model)
