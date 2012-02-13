@@ -19,10 +19,11 @@ from matplotlib.mlab import rec_drop_fields
 
 
 class Knode(object):
-    def __init__(self, stoch = None, step_method=None, stoch_params=None):
-        kabuki.debug_here()
+    def __init__(self, stoch = None, args=None, step_method=None, step_method_args=None):
         for (attr, value) in locals().iteritems():
             setattr(self, attr, value)
+        if step_method_args is None:
+            self.step_method_args = {}
 
 
 class Parameter(object):
@@ -277,7 +278,7 @@ class Hierarchical(object):
         """initialize self.params"""
 
        #set Parameters
-        self.params = self.get_params()
+        self.params = self.create_params()
         if replace_params == None:
             replace_params = ()
 
@@ -295,11 +296,11 @@ class Hierarchical(object):
                 param.has_subj_nodes = True
                 continue
             if not trace_subjs and param.has_subj_nodes:
-                param.subj_knode.stoch_params['trace'] = False
+                param.subj_knode.args['trace'] = False
             if not plot_subjs and param.has_subj_nodes:
-                param.subj_knode.stoch_params['plot'] = False
+                param.subj_knode.args['plot'] = False
             if not plot_var and param.has_var_nodes:
-                param.var_knode.stoch_params['plot'] = False
+                param.var_knode.args['plot'] = False
 
         #set params_dict
         self.params_dict = {}
@@ -500,9 +501,15 @@ class Hierarchical(object):
 
         #update knodes
         for name, param in self.params_include.iteritems():
-            param.knodes['group'].nodes = self.group_nodes
-            param.knodes['var'].nodes = self.var_nodes
-            param.knodes['subj'].nodes = self.subj_nodes
+            if param.is_bottom_node:
+                continue
+            param.knodes['group'].nodes = param.group_nodes
+            #try to update var knodes and subj knodes if they exist
+            try:
+                param.knodes['var'].nodes = param.var_nodes
+                param.knodes['subj'].nodes = param.subj_nodes
+            except AttributeError:
+                pass
 
         return self.nodes
 
@@ -561,6 +568,19 @@ class Hierarchical(object):
 
         return max_map
 
+    def _assign_spx(self, param, loc, scale):
+        """assign spx step method to param"""
+        self.mc.use_step_method(kabuki.steps.SPXcentered,
+                                loc=loc,
+                                scale=scale,
+                                loc_step_method=param.group_knode.step_method,
+                                loc_step_method_args=param.group_knode.step_method_args,
+                                scale_step_method=param.var_knode.step_method,
+                                scale_step_method_args=param.var_knode.step_method_args,
+                                beta_step_method=param.subj_knode.step_method,
+                                beta_step_method_args=param.subj_knode.step_method_args)
+
+
     def mcmc(self, assign_step_methods = True, *args, **kwargs):
         """
         Returns pymc.MCMC object of model.
@@ -588,39 +608,34 @@ class Hierarchical(object):
         for param in self.params:
             #assign SPX when share_var
             if param.use_spx and param.share_var:
-                self.mc.use_step_method(kabuki.steps.SPXcentered,
-                                        loc=param.group_nodes.values(),
-                                        scale=param.var_nodes.values()[0],
-                                        loc_step_method=param.group_knode.step_method,
-                                        scale_step_method=param.var_knode.step_method,
-                                        beta_step_method=param.subj_knode.step_method)
-                continue
+                loc = param.group_nodes.values()
+                scale = param.var_nodes.values()[0]
+                self._assign_spx(param, loc, scale)
 
             #assign SPX when var is not shared
             elif param.use_spx and not param.share_var:
                 for (tag, node) in param.group_nodes.iteritems():
-                    self.mc.use_step_method(kabuki.steps.SPXcentered,
-                                            loc=param.group_nodes[tag],
-                                            scale=param.var_nodes[tag],
-                                            loc_step_method=param.group_knode.step_method,
-                                            scale_step_method=param.var_knode.step_method,
-                                            beta_step_method=param.subj_knode.step_method)
+                    loc=param.group_nodes[tag]
+                    scale=param.var_nodes[tag]
+                    self._assign_spx(param, loc, scale)
 
             #assign other step methods
             else:
-                for knode in param.knodes.values():
+                for knode in param.knodes.itervalues():
                     #check if we need to assign step method
-                    if knode.step_method is None:
+                    if (knode is None) or knode.step_method is None:
                         continue
                     #assign it to all the nodes in knode
                     for node in knode.nodes.itervalues():
+                        step = knode.step_method
+                        args = knode.step_method_args
                         if node is None:
                             continue
                         #check if it is a single node, otherwise it's an array
                         elif isinstance(node, pm.Stochastic):
-                            self.mc.use_step_method(knode.step_method, node)
+                            self.mc.use_step_method(step, node, **args)
                         else:
-                            [self.mc.use_step_method(knode.step_method, node) for node in node_array]
+                            [self.mc.use_step_method(step, node, **args) for node in node_array]
 
         return self.mc
 
@@ -695,7 +710,7 @@ class Hierarchical(object):
             # Create parameter distribution from factory
             param.tag = tag
             param.data = data_dep_select
-            param.group_nodes[tag] = self.create_pymc_node(param.knode, param.full_name)
+            param.group_nodes[tag] = self.create_pymc_node(param.group_knode, param.full_name)
             param.reset()
 
             if self.is_group_model and param.has_subj_nodes:
@@ -767,11 +782,11 @@ class Hierarchical(object):
         else:
             group_node, var_node = param.transform(param.group, param.var)
 
-        #set subj_stoch_params according to parnets labels
+        #set subj_stoch_args according to parnets labels
         if param.group_label != None:
-            param.subj_knode.stoch_params[param.group_label] = group_node
+            param.subj_knode.args[param.group_label] = group_node
         if param.var_label != None:
-            param.subj_knode.stoch_params[param.var_label] = var_node
+            param.subj_knode.args[param.var_label] = var_node
 
         # Init nodes
         param.subj_nodes[tag] = np.empty(self._num_subjs, dtype=object)
@@ -947,10 +962,10 @@ class Hierarchical(object):
     def create_pymc_node(self, knode, name):
         """Create pymc node named 'name' out of knode """
 
-        if param.knode is None:
+        if knode is None:
             return None
         else:
-            return knode.stoch(name, **knode.stoch_params)
+            return knode.stoch(name, **knode.args)
 
     def init_from_existing_model(self, pre_model, step_method, **kwargs):
         """

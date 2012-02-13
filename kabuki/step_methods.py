@@ -252,7 +252,8 @@ class SPXcentered(pm.StepMethod):
 
     def __init__(self, loc, scale, loc_step_method=None,
                  scale_step_method=None, beta_step_method=None,
-                *args, **kwargs):
+                 loc_step_method_args=None, scale_step_method_args=None,
+                 beta_step_method_args=None, *args, **kwargs):
 
         if type(loc) != list:
             loc = [loc]
@@ -275,12 +276,18 @@ class SPXcentered(pm.StepMethod):
         if beta_step_method is None:
             beta_step_method = pm.Metropolis
 
+        if loc_step_method_args is None:
+            loc_step_method_args = {}
+        if scale_step_method_args is None:
+            scale_step_method_args = {}
+        if beta_step_method_args is None:
+            beta_step_method_args = {}
+
         #set step methods
         self.loc_steps = [loc_step_method(node) for node in self.loc]
         self.scale_step = scale_step_method(scale)
         self.beta_steps = [beta_step_method(node) for node in self.beta]
         self.alpha_step = MetropolisAlpha(self.alpha, self.beta, loc, scale)
-
 
     def step(self):
 
@@ -321,7 +328,7 @@ class SliceStep(pm.Gibbs):
             stochastic - stochastic node
             width <float> - the initial width of the interval
             maxiter <int> - maximum number of iteration allowed for stepping-out and shrinking
-            left <int> - the starting position of the interval (default is None).  
+            left <int> - the starting position of the interval (default is None).
         """
         pm.Gibbs.__init__(self, stochastic, verbose=verbose, *args, **kwargs)
         self.width = width
