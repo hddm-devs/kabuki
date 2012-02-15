@@ -294,6 +294,8 @@ reporting the bug.
     class newer_class(new_class):
         __doc__ = docstr
         rv = scipy_dist
+        rv.random = random
+
         def __init__(self, *args, **kwds):
             new_class.__init__(self, *args, **kwds)
             self.args, self.kwds = separate_shape_args(self.parents, shape_args)
