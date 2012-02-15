@@ -1,8 +1,6 @@
 import kabuki
-from kabuki.hierarchical import Parameter
 import numpy as np
 import unittest
-import pymc as pm
 import scipy.stats
 from collections import OrderedDict
 from kabuki.generate import gen_rand_data, _add_noise

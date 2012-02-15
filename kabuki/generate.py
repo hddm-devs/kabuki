@@ -1,13 +1,7 @@
 from __future__ import division
 
 import numpy as np
-import numpy.lib.recfunctions as rec
-from scipy.stats import uniform, norm
 from copy import copy
-import random
-import pandas as pd
-
-from kabuki import debug_here
 
 def _add_noise(params, noise=.1, exclude_params=()):
     """Add individual noise to each parameter.
