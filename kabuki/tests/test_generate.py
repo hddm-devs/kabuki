@@ -104,3 +104,14 @@ class TestGenerate(unittest.TestCase):
         truth = np.float64(normal_like.rv.random(size=100, **params['cond2']))
         np.testing.assert_array_equal(data[data['condition'] == 'cond2']['data'], truth)
 
+
+    def test_column_name(self):
+        params = OrderedDict([('loc', 0), ('scale', 1)])
+        subjs = 100
+        samples = 100
+
+        # generate test data
+        np.random.seed(31337)
+        data = gen_rand_data(normal_like, params, samples=samples, subjs=subjs, exclude_params=('scale',), column_name='test')
+
+        self.assertIn('test', data.dtype.names)
