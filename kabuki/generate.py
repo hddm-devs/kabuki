@@ -31,7 +31,7 @@ def _add_noise(params, noise=.1, exclude_params=()):
 
     return params
 
-def gen_rand_data(dist, params, samples=50, subjs=1, subj_noise=.1, exclude_params=(), column_name='data', dtype=np.float64):
+def gen_rand_data(dist, params, samples=50, subjs=1, subj_noise=.1, exclude_params=(), column_name='data'):
     """Generate a random dataset using a user-defined random distribution.
 
     :Arguments:
@@ -59,8 +59,6 @@ def gen_rand_data(dist, params, samples=50, subjs=1, subj_noise=.1, exclude_para
             Do not add noise to these parameters.
         column_name : str <default='data'>
             What to name the data column.
-        dtype : numpy.dtype <default=numpy.float64>
-            Which dtype the sampled data should be in.
 
     :Returns:
         data : numpy structured array
@@ -78,6 +76,8 @@ def gen_rand_data(dist, params, samples=50, subjs=1, subj_noise=.1, exclude_para
         params = {'none': params}
 
     subj_params = {}
+
+    dtype = np.dtype(dist.dtype)
 
     idx = list(product(range(subjs), params.keys(), dtype(range(samples))))
     data = np.array(idx, dtype=[('subj_idx', np.int32), ('condition', 'S20'), (column_name, dtype)])

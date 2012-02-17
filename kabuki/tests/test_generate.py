@@ -39,18 +39,6 @@ class TestGenerate(unittest.TestCase):
         np.testing.assert_array_equal(data['data'], truth)
         self.assertEqual(params, params_return)
 
-    def test_single_cond_no_subj_dtype(self):
-        params = {'loc': 0, 'scale': 1}
-        np.random.seed(31337)
-        data, params_return = gen_rand_data(normal_like, params, samples=100, dtype=np.int32)
-        np.random.seed(31337)
-        truth = np.int32(normal_like.rv.random(size=100, **params))
-
-        np.testing.assert_array_equal(data['data'], truth)
-        self.assertEqual(data.dtype[2], np.int32)
-
-        self.assertEqual(params, params_return)
-
     def test_single_cond_multi_subjs(self):
         params = OrderedDict([('loc', 0), ('scale', 1)])
         subjs = 100
