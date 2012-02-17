@@ -79,7 +79,7 @@ def gen_rand_data(dist, params, samples=50, subjs=1, subj_noise=.1, exclude_para
 
     dtype = np.dtype(dist.dtype)
 
-    idx = list(product(range(subjs), params.keys(), dtype(range(samples))))
+    idx = list(product(range(subjs), params.keys(), range(samples)))
     data = np.array(idx, dtype=[('subj_idx', np.int32), ('condition', 'S20'), (column_name, dtype)])
 
     for condition, param in params.iteritems():
