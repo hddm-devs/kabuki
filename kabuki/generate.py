@@ -31,7 +31,7 @@ def _add_noise(params, noise=.1, exclude_params=()):
 
     return params
 
-def gen_rand_data(dist, params, samples=50, subjs=1, subj_noise=.1, exclude_params=(), column_name='data'):
+def gen_rand_data(dist, params, samples=50, subjs=1, subj_noise=.1, exclude_params=(), column_name='data', dtype=np.float64):
     """Generate a random dataset using a user-defined random distribution.
 
     :Arguments:
@@ -59,6 +59,8 @@ def gen_rand_data(dist, params, samples=50, subjs=1, subj_noise=.1, exclude_para
             Do not add noise to these parameters.
         column_name : str <default='data'>
             What to name the data column.
+        dtype : numpy.dtype
+            Which dtype the sampled data should be in.
 
     :Returns:
         data : numpy structured array
@@ -77,8 +79,8 @@ def gen_rand_data(dist, params, samples=50, subjs=1, subj_noise=.1, exclude_para
 
     subj_params = {}
 
-    idx = list(product(range(subjs), params.keys(), np.float64(range(samples))))
-    data = np.array(idx, dtype=[('subj_idx', np.int32), ('condition', 'S20'), (column_name, np.float64)])
+    idx = list(product(range(subjs), params.keys(), dtype(range(samples))))
+    data = np.array(idx, dtype=[('subj_idx', np.int32), ('condition', 'S20'), (column_name, dtype)])
 
     for condition, param in params.iteritems():
         subj_params[condition] = []
@@ -91,7 +93,7 @@ def gen_rand_data(dist, params, samples=50, subjs=1, subj_noise=.1, exclude_para
             subj_params[condition].append(subj_param)
             samples_from_dist = dist.rv.random(size=samples, **subj_param)
             idx = (data['subj_idx'] == subj_idx) & (data['condition'] == condition)
-            data[column_name][idx] = np.array(samples_from_dist, dtype=np.float64)
+            data[column_name][idx] = np.array(samples_from_dist, dtype=dtype)
 
     # Remove list around subj_params if there is only 1 subject
     if subjs == 1:
