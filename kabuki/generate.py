@@ -64,6 +64,9 @@ def gen_rand_data(dist, params, samples=50, subjs=1, subj_noise=.1, exclude_para
         data : numpy structured array
             Will contain the columns 'subj_idx', 'condition' and 'data' which contains
             the random samples.
+        subj_params : dict mapping condition to list of individual subject parameters
+            Tries to be smart and will return direct values if there is only 1 subject
+            and no dict if there is only 1 condition.
 
     """
     from itertools import product
@@ -72,18 +75,32 @@ def gen_rand_data(dist, params, samples=50, subjs=1, subj_noise=.1, exclude_para
     if not isinstance(params[params.keys()[0]], dict):
         params = {'none': params}
 
+    subj_params = {}
+
     idx = list(product(range(subjs), params.keys(), np.float64(range(samples))))
     data = np.array(idx, dtype=[('subj_idx', np.int32), ('condition', 'S20'), (column_name, np.float64)])
 
     for condition, param in params.iteritems():
+        subj_params[condition] = []
         for subj_idx in range(subjs):
             if subjs > 1:
+                # Sample subject parameters from a normal around the specified parameters
                 subj_param = _add_noise(param, noise=subj_noise, exclude_params=exclude_params)
             else:
                 subj_param = param
+            subj_params[condition].append(subj_param)
             samples_from_dist = dist.rv.random(size=samples, **subj_param)
             idx = (data['subj_idx'] == subj_idx) & (data['condition'] == condition)
             data[column_name][idx] = np.array(samples_from_dist, dtype=np.float64)
 
-    return data
+    # Remove list around subj_params if there is only 1 subject
+    if subjs == 1:
+        for key, val in subj_params.iteritems():
+            subj_params[key] = val[0]
+
+    # Remove dict around subj_params if there is only 1 condition
+    if len(subj_params) == 1:
+        subj_params = subj_params[subj_params.keys()[0]]
+
+    return data, subj_params
 

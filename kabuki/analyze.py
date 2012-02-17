@@ -519,6 +519,9 @@ def post_pred_check(model, samples=500, bins=100, stats=None, evals=None, plot=F
                     continue # Skip non-existant nodes
                 result_subj = _post_pred_summary_bottom_node(bottom_node_subj, samples=samples, bins=bins, evals=evals, stats=stats, plot=plot)
                 results_subj.append(result_subj)
+
+            assert len(results_subj) != 0, "All bottom nodes were skipped."
+
             result = pd.concat(results_subj, keys=range(len(bottom_node)), names=('subj',))
             results.append(result)
         else:
