@@ -59,7 +59,7 @@ def gen_rand_data(dist, params, samples=50, subjs=1, subj_noise=.1, exclude_para
             Do not add noise to these parameters.
         column_name : str <default='data'>
             What to name the data column.
-        dtype : numpy.dtype
+        dtype : numpy.dtype <default=numpy.float64>
             Which dtype the sampled data should be in.
 
     :Returns:
