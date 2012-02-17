@@ -881,9 +881,9 @@ class Hierarchical(object):
                 bottom_node = self.get_bottom_node(param, selected_subj_nodes)
                 if bottom_node is not None and len(bottom_node.value) == 0:
                     print "Warning! Bottom node %s is not linked to data. Replacing with None." % param.full_name
-                    param.bottom_nodes[dep_name][i] = None
+                    param.subj_nodes[dep_name][i] = None
                 else:
-                    param.bottom_nodes[dep_name][i] = bottom_node
+                    param.subj_nodes[dep_name][i] = bottom_node
                 param.reset()
         else: # Do not use subj params, but group ones
             # Since group nodes are not created in this function we
@@ -895,7 +895,7 @@ class Hierarchical(object):
 
             if len(data) == 0:
                 # If no data is present, do not create node.
-                param.bottom_nodes[dep_name][i] = None
+                param.subj_nodes[dep_name][i] = None
             else:
                 param.tag = dep_name
                 param.data = data
@@ -903,9 +903,9 @@ class Hierarchical(object):
                 bottom_node = self.get_bottom_node(param, params)
                 if bottom_node is not None and len(bottom_node.value) == 0:
                     print "Warning! Bottom node %s is not linked to data. Replacing with None." % param.full_name
-                    param.bottom_nodes[dep_name] = None
+                    param.subj_nodes[dep_name] = None
                 else:
-                    param.bottom_nodes[dep_name] = bottom_node
+                    param.subj_nodes[dep_name] = bottom_node
 
             param.reset()
 
