@@ -514,15 +514,18 @@ def post_pred_check(model, samples=500, bins=100, stats=None, evals=None, plot=F
         if isinstance(bottom_node, np.ndarray):
             # Group model
             results_subj = []
+            subjs = []
+
             for i_subj, bottom_node_subj in enumerate(bottom_node):
                 if bottom_node_subj is None or not hasattr(bottom_node_subj, 'random'):
                     continue # Skip non-existant nodes
+                subjs.append(i_subj)
                 result_subj = _post_pred_summary_bottom_node(bottom_node_subj, samples=samples, bins=bins, evals=evals, stats=stats, plot=plot)
                 results_subj.append(result_subj)
 
             assert len(results_subj) != 0, "All bottom nodes were skipped."
 
-            result = pd.concat(results_subj, keys=range(len(bottom_node)), names=('subj',))
+            result = pd.concat(results_subj, keys=subjs, names=('subj',))
             results.append(result)
         else:
             # Flat model
@@ -531,7 +534,7 @@ def post_pred_check(model, samples=500, bins=100, stats=None, evals=None, plot=F
             evals = _post_pred_summary_bottom_node(bottom_node, samples=samples, bins=bins, evals=evals, stats=stats, plot=plot)
             results.append(evals)
 
-    return pd.concat(results, keys=model.bottom_nodes.keys(), names=('node',))
+    return pd.concat(results, keys=model.bottom_nodes.keys(), names=['node',])
 
 def _parents_to_random_posterior_sample(bottom_node, pos=None):
     """Walks through parents and sets them to pos sample."""
