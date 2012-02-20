@@ -213,8 +213,8 @@ class Hierarchical(object):
     """
 
     def __init__(self, data, is_group_model=None, depends_on=None, trace_subjs=True,
-                 plot_subjs=False, plot_var=False, include=(), replace_params = None,
-                 update_params = None):
+                 plot_subjs=False, plot_var=False, include=(), replace_params=None,
+                 update_params=None, overwrite_data_idx=False):
         # Init
         self.include = set(include)
 
@@ -225,8 +225,21 @@ class Hierarchical(object):
         # data, this provides a means of getting the data out of
         # kabuki and sorting to according to data_idx to get the
         # original order.
-        assert('data_idx' not in data.dtype.names),'A field named data_idx was found in the data file, please change it.'
-        new_dtype = data.dtype.descr + [('data_idx', '<i8')]
+        #create data_idx field if needed
+        if ('data_idx' in data.dtype.names) and not overwrite_data_idx:
+            data_idx_msg = """
+            A field named data_idx was found in the data file, please change it.
+            Alternatively, you can overwrite this field by setting the overwrite_data_idx
+            argument to True"""
+            raise ValueError, data_idx_msg
+
+        elif ('data_idx' not in data.dtype.names):
+            new_dtype = data.dtype.descr + [('data_idx', '<i8')]
+
+        else:
+            new_dtype = data.dtype.descr
+
+        #copy data
         new_data = np.empty(data.shape, dtype=new_dtype)
         for field in data.dtype.fields:
             new_data[field] = data[field]
