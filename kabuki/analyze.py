@@ -136,6 +136,23 @@ def gen_group_stats(stats):
 
     return s
 
+def plot_posteriors(nodes, bins=50):
+    from kabuki.utils import interpolate_trace
+    figure()
+    lb = min([min(node.trace()[:]) for node in nodes])
+    ub = max([max(node.trace()[:]) for node in nodes])
+    x_data = np.linspace(lb, ub, 300)
+
+    for node in nodes:
+        trace = node.trace()[:]
+        #hist = interpolate_trace(x_data, trace, range=(trace.min(), trace.max()), bins=bins)
+        hist = interpolate_trace(x_data, trace, range=(lb, ub), bins=bins)
+        plt.plot(x_data, hist, label=node.__name__, lw=2.)
+
+    leg = plt.legend(loc='best', fancybox=True)
+    leg.get_frame().set_alpha(0.5)
+
+
 def group_plot(model, params_to_plot=(), n_bins=50, save_to=None):
     if isinstance(model, pm.MCMC):
         nodes = model.stochastics
@@ -173,6 +190,7 @@ def group_plot(model, params_to_plot=(), n_bins=50, save_to=None):
 
             if save_to is not None:
                 plt.savefig(os.path.join(save_to, "group_%s.png" % name))
+                plt.savefig(os.path.join(save_to, "group_%s.pdf" % name))
 
 def compare_all_pairwise(model):
     """Perform all pairwise comparisons of dependent parameter
@@ -523,10 +541,9 @@ def post_pred_check(model, samples=500, bins=100, stats=None, evals=None, plot=F
                 result_subj = _post_pred_summary_bottom_node(bottom_node_subj, samples=samples, bins=bins, evals=evals, stats=stats, plot=plot)
                 results_subj.append(result_subj)
 
-            assert len(results_subj) != 0, "All bottom nodes were skipped."
-
-            result = pd.concat(results_subj, keys=subjs, names=('subj',))
-            results.append(result)
+            if len(results_subj) != 0:
+                result = pd.concat(results_subj, keys=subjs, names=['subj'])
+                results.append(result)
         else:
             # Flat model
             if bottom_node is None or not hasattr(bottom_node, 'random'):
@@ -534,7 +551,7 @@ def post_pred_check(model, samples=500, bins=100, stats=None, evals=None, plot=F
             evals = _post_pred_summary_bottom_node(bottom_node, samples=samples, bins=bins, evals=evals, stats=stats, plot=plot)
             results.append(evals)
 
-    return pd.concat(results, keys=model.bottom_nodes.keys(), names=['node',])
+    return pd.concat(results, keys=model.bottom_nodes.keys(), names=['node'])
 
 def _parents_to_random_posterior_sample(bottom_node, pos=None):
     """Walks through parents and sets them to pos sample."""
@@ -673,9 +690,11 @@ def plot_posterior_predictive(model, value_range=None, samples=10, columns=3, bi
 
         if savefig:
             if prefix is not None:
-                fig.savefig(os.path.join(prefix, name))
+                fig.savefig(os.path.join(prefix, name) + '.svg', format='svg')
+                fig.savefig(os.path.join(prefix, name) + '.png', format='png')
             else:
-                fig.savefig(os.path.join(name))
+                fig.savefig(name + '.svg', format='svg')
+                fig.savefig(name + '.png', format='png')
 
 
 def _check_bottom_node(bottom_node):
