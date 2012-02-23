@@ -468,11 +468,11 @@ class Hierarchical(object):
 
         # Set values of nodes
         for name, node in max_map._dict_container.iteritems():
-            if type(node) is pm.ArrayContainer:
+            if isinstance(node, pm.ArrayContainer):
                 for i,subj_node in enumerate(node):
-                    if not subj_node.observed:
+                    if isinstance(node, pm.Node) and not subj_node.observed:
                         self.nodes[name][i].value = subj_node.value
-            elif not node.observed:
+            elif isinstance(node, pm.Node) and not node.observed:
                 self.nodes[name].value = node.value
 
         return max_map
