@@ -8,7 +8,7 @@ Introduction
 :Web site: http://github.com/hddm-dev/kabuki
 :Copyright: This document has been placed in the public domain.
 :License: Kabuki is released under the GPLv3.
-:Version: 0.1.1
+:Version: 0.2RC1
 
 Purpose
 =======
