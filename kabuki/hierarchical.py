@@ -267,6 +267,7 @@ class Hierarchical(object):
 
         params = {} # use subj parameters to feed into model
         # Create new params dict and copy over nodes
+
         for name, param in self.params_include.iteritems():
             # Bottom nodes are created later
             if name in self.depends_on or param.is_bottom_node:
@@ -510,7 +511,6 @@ class Hierarchical(object):
            isinstance(self.mc.db, pm.database.hdf5.Database):
             warnings.simplefilter('ignore', pm.database.hdf5.tables.NaturalNameWarning)
 
-        print self.mc.db
         # sample
         self.mc.sample(*args, **kwargs)
 
@@ -521,19 +521,27 @@ class Hierarchical(object):
         stats_str = kabuki.analyze.gen_group_stats(self.stats())
         if fname is None:
             print stats_str
+            print "DIC: %f" % self.mc.dic
+            print "logp: %f" % self.mc.logp
         else:
             with open(fname) as fd:
                 fd.write(stats_str)
+                fd.write("DIC: %f\n" % self.mc.dic)
+                fd.write("logp: %f\n" % self.mc.logp)
+
 
 
     def print_stats(self, fname=None):
         stats_str = kabuki.analyze.gen_stats(self.stats())
         if fname is None:
             print stats_str
+            print "DIC: %f" % self.mc.dic
+            print "logp: %f" % self.mc.logp
         else:
             with open(fname) as fd:
                 fd.write(stats_str)
-
+                fd.write("DIC: %f\n" % self.mc.dic)
+                fd.write("logp: %f\n" % self.mc.logp)
 
     def _set_dependent_param(self, param):
         """Set parameter that depends on data.
@@ -912,6 +920,9 @@ class Hierarchical(object):
 
     def plot_posteriors(self, *args, **kwargs):
         pm.Matplot.plot(self.mc, *args, **kwargs)
+
+    def plot_posterior_predictive(self, *args, **kwargs):
+        kabuki.analyze.plot_posterior_predictive(self, *args, **kwargs)
 
     def subj_by_subj_map_init(self, runs=2, verbose=-1, **map_kwargs):
         """

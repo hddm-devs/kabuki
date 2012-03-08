@@ -136,7 +136,16 @@ def gen_group_stats(stats):
 
     return s
 
-def plot_posteriors(nodes, bins=50):
+def plot_posterior_nodes(nodes, bins=50):
+    """Plot interpolated posterior of a list of nodes.
+
+    :Arguments:
+        nodes : list of pymc.Node's
+            List of pymc.Node's to plot the posterior of
+        bins : int (default=50)
+            How many bins to use for computing the histogram.
+
+    """
     from kabuki.utils import interpolate_trace
     figure()
     lb = min([min(node.trace()[:]) for node in nodes])
@@ -644,7 +653,7 @@ def plot_posterior_predictive(model, value_range=None, samples=10, columns=3, bi
         bins : int (default=100)
             How many bins to compute the data histogram over.
 
-        savefig : bool (default=True)
+        savefig : bool (default=False)
             Whether to save the figure to a file.
 
         prefix : str (default=None)
