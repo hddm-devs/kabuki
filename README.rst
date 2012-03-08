@@ -2,7 +2,7 @@
 Introduction
 ************
 
-:Date: July 19, 2011
+:Date: March 8 19, 2012
 :Author: Thomas Wiecki, Imri Sofer
 :Contact: thomas_wiecki@brown.edu, imri_sofer@brown.edu
 :Web site: http://github.com/hddm-devs/kabuki

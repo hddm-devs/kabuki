@@ -5,7 +5,7 @@ import scipy.stats
 from collections import OrderedDict
 from kabuki.generate import gen_rand_data, _add_noise
 
-normal_like = kabuki.utils.scipy_stochastic(scipy.stats.distributions.norm_gen, name='normal', longname='normal')
+normal_like = kabuki.distributions.scipy_stochastic(scipy.stats.distributions.norm_gen, name='normal', longname='normal')
 
 class TestGenerate(unittest.TestCase):
     def runTest(self):

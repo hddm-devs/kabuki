@@ -3,6 +3,7 @@ from hierarchical import *
 import utils
 import analyze
 import generate
+import distributions
 
 try:
     from IPython.core.debugger import Tracer; debug_here = Tracer()
