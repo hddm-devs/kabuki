@@ -7,11 +7,6 @@ import matplotlib.pyplot as plt
 import sys, os
 
 try:
-    import pandas as pd
-except:
-    print "Pandas not found, posterior predictive checks won't work."
-
-try:
     from collections import OrderedDict
 except ImportError:
     from ordereddict import OrderedDict
@@ -445,6 +440,9 @@ def _evaluate_post_pred(sampled_stats, data_stats, evals=None):
     :Returns:
         pandas.DataFrame containing the eval results as columns.
     """
+
+    import pandas as pd
+
     from scipy.stats import scoreatpercentile, percentileofscore
     from itertools import product
 
@@ -535,6 +533,7 @@ def post_pred_check(model, samples=500, bins=100, stats=None, evals=None, plot=F
     :Returns:
         Hierarchical pandas.DataFrame with the different statistics.
     """
+    import pandas as pd
     print "Sampling..."
     results = []
 
@@ -597,6 +596,7 @@ def _post_pred_bottom_node(bottom_node, value_range, samples=10, bins=100, axis=
         axis : matplotlib.axis (default=None)
             If provided, will plot into axis.
     """
+
     like = np.empty((samples, len(value_range)), dtype=np.float32)
     for sample in range(samples):
         _parents_to_random_posterior_sample(bottom_node)
