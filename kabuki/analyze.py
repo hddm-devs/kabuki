@@ -5,7 +5,6 @@ import re
 from matplotlib.pylab import figure
 import matplotlib.pyplot as plt
 import sys, os
-import scipy as sc
 
 try:
     import pandas as pd
@@ -353,6 +352,8 @@ def group_cond_diff(hm, node, cond1, cond2, threshold=0):
         group_var - group variance of the difference
         mass_under_threshold  - the mass of the group pdf which is smaller than threshold
     """
+    import scipy as sp
+
     name = node
     node_dict = hm.params_include[name].subj_nodes
     n_subjs = hm._num_subjs
@@ -375,7 +376,7 @@ def group_cond_diff(hm, node, cond1, cond2, threshold=0):
     pooled_var = 1. / sum(1. / (subj_diff_std**2))
     pooled_mean = sum(subj_diff_mean / (subj_diff_std**2)) * pooled_var
 
-    mass_under = sc.stats.norm.cdf(threshold,pooled_mean, np.sqrt(pooled_var))
+    mass_under = sp.stats.norm.cdf(threshold,pooled_mean, np.sqrt(pooled_var))
 
     return pooled_mean, pooled_var, mass_under
 

@@ -3,10 +3,31 @@ import numpy as np
 import pymc as pm
 
 from pymc import Stochastic, utils
-from pymc.distributions import bind_size, debug_wrapper
+from pymc.distributions import bind_size
 
 # To remain compatibility with pymc 2.1, we copy this function.
 # Once pymc 2.2 is released this should be depracated.
+
+def debug_wrapper(func, name):
+    # Wrapper to debug distributions
+
+    import pdb
+
+    def wrapper(*args, **kwargs):
+
+        print('Debugging inside %s:' % name)
+        print('\tPress \'s\' to step into function for debugging')
+        print('\tCall \'args\' to list function arguments')
+
+        # Set debugging trace
+        pdb.set_trace()
+
+        # Call function
+        return func(*args, **kwargs)
+
+    return wrapper
+
+
 def new_dist_class(*new_class_args):
     """
     Returns a new class from a distribution.
@@ -163,7 +184,7 @@ def new_dist_class(*new_class_args):
                 logp = debug_wrapper(logp)
                 random = debug_wrapper(random)
             else:
-                Stochastic.__init__(self, logp=logp, random=random, logp_partial_gradients = logp_partial_gradients, dtype=dtype, **arg_dict_out)
+                Stochastic.__init__(self, logp=logp, random=random, dtype=dtype, **arg_dict_out)
 
     new_class.__name__ = name
     new_class.parent_names = parent_names
@@ -351,3 +372,4 @@ reporting the bug.
 
     newer_class.__name__ = new_class.__name__
     return newer_class
+
