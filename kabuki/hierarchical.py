@@ -15,8 +15,6 @@ import warnings
 
 import kabuki
 from copy import copy, deepcopy
-from matplotlib.mlab import rec_drop_fields
-
 
 class Parameter(object):
     """Specify a parameter of a model.
@@ -953,7 +951,7 @@ class Hierarchical(object):
             # create and fit single subject
             if verbose > 1: print "*!*!* fitting subject %d *!*!*" % subjs[i_subj]
             t_data = self.data[self.data['subj_idx'] == subjs[i_subj]]
-            t_data = rec_drop_fields(t_data, ['data_idx'])
+            t_data = rec.drop_fields(t_data, ['data_idx'])
             s_model = deepcopy(empty_s_model)
             s_model.data = t_data
             s_model.map(method='fmin_powell', runs=runs, **map_kwargs)
