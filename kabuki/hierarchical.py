@@ -459,6 +459,7 @@ class Hierarchical(object):
                 else:
                     self._set_independet_param(param)
 
+
             # Init bottom nodes
             for param in self.params_include.itervalues():
                 if not param.is_bottom_node:
@@ -496,22 +497,38 @@ class Hierarchical(object):
         _create()
 
 
-        # Create model dictionary
+        # Create model dictionaries
         self.nodes = {}
         self.group_nodes = {}
         self.var_nodes = {}
         self.subj_nodes = {}
 
+        #dictionary of stochastics. the keys are names of single nodes
+        self.stoch_by_name = {}
+        #dictionary of stochastics. the keys are (param_name, h_type, tag, idx)
+        #htype (string)= 'g':group, 'v':var, 's':subject
+        #idx (int) - for subject nodes it's the subject idx, for other nodes its -1
+        self.stoch_by_tuple = {}
+
         for name, param in self.params_include.iteritems():
             for tag, node in param.group_nodes.iteritems():
                 self.nodes[name+tag+'_group'] = node
                 self.group_nodes[name+tag] = node
-            for tag, node in param.subj_nodes.iteritems():
-                self.nodes[name+tag+'_subj'] = node
-                self.subj_nodes[name+tag] = node
+                self.stoch_by_tuple[(name,'g',tag,-1)] = node
+                self.stoch_by_name[node.__name__] = node
             for tag, node in param.var_nodes.iteritems():
                 self.nodes[name+tag+'_var'] = node
                 self.var_nodes[name+tag] = node
+                self.stoch_by_tuple[(name,'v',tag,-1)] = node
+                self.stoch_by_name[node.__name__] = node
+            for tag, nodes in param.subj_nodes.iteritems():
+                self.nodes[name+tag+'_subj'] = nodes
+                self.subj_nodes[name+tag] = nodes
+                if param.is_bottom_node:
+                    continue
+                for (idx, node) in enumerate(nodes):
+                    self.stoch_by_tuple[(name,'s',tag,idx)] = node
+                    self.stoch_by_name[node.__name__] = node
 
         #update knodes
         for name, param in self.params_include.iteritems():
@@ -615,8 +632,13 @@ class Hierarchical(object):
 
         self.mc = pm.MCMC(nodes, *args, **kwargs)
 
-        if (not assign_step_methods) or (not self.is_group_model):
-            return self.mc
+        if assign_step_methods and self.is_group_model:
+            self.mcmc_step_methods()
+        
+        return self.mc
+
+        
+    def mcmc_step_methods(self):
 
         #assign step methods
         for param in self.params:
@@ -650,8 +672,6 @@ class Hierarchical(object):
                             self.mc.use_step_method(step, node, **args)
                         else:
                             [self.mc.use_step_method(step, t_node, **args) for t_node in node]
-
-        return self.mc
 
     def sample(self, *args, **kwargs):
         """Sample from posterior.
@@ -998,40 +1018,92 @@ class Hierarchical(object):
         else:
             return knode.stoch(name, **knode.args)
 
-    def init_from_existing_model(self, pre_model, step_method, **kwargs):
+    def init_from_existing_model(self, pre_model, assign_values=True, assign_step_methods=True,
+                                 match=None, **mcmc_kwargs):
         """
         initialize the value and step methods of the model using an existing model
+        Input:
+            pre_model - existing mode
+
+            assign_values (boolean) - should values of nodes from the existing model
+                be assigned to the new model
+
+            assign_step_method (boolean) - same as assign_values only for step methods
+
+            match (dict) - dictionary which maps tags from the new model to tags from the
+                existing model. match is a dictionary of dictionaries and it has 
+                the following structure:  match[name][new_tag] = pre_tag
+                name is the parameter name. new_tag is the tag of the new model,
+                and pre_tag is a single tag or list of tags from the exisiting model that will be map
+                to the new_tag.           
         """
-        if not self.nodes:
-            self.mcmc(**kwargs)
-        all_nodes = list(self.mc.stochastics)
-        all_pre_nodes = list(pre_model.mc.stochastics)
-        assigned_values = 0
-        assigned_steps = 0
+        if not self.mc:
+            self.mcmc(assign_step_methods=False, **mcmc_kwargs)
 
-        #loop over all nodes
-        for i_node in range(len(all_nodes)):
-            #get name of current node
-            t_name = all_nodes[i_node].__name__
-            #get the matched node from the pre_model
-            pre_node = [x for x in all_pre_nodes if x.__name__ == t_name]
-            if len(pre_node)==0:
+        pre_d = pre_model.stoch_by_tuple
+        assigned_s = 0; assigned_v = 0
+
+        #set the new nodes
+        for (key, node) in self.stoch_by_tuple.iteritems():
+            name, h_type, tag, idx = key
+            if name not in pre_model.params_include.keys():
                 continue
-            pre_node = pre_node[0]
-            assigned_values += 1
 
-            all_nodes[i_node].value= pre_node.value
-            if step_method:
-                step_pre_node = pre_model.mc.step_method_dict[pre_node][0]
-                pre_sd = step_pre_node.proposal_sd * step_pre_node.adaptive_scale_factor
-                if type(step_pre_node) == pm.Metropolis:
-                    self.mc.use_step_method(pm.Metropolis(all_nodes[i_node],
-                                                          proposal_sd = pre_sd))
-                    assigned_steps += 1
+            #if the key was found then match_nodes is the assign the old node value to the new node
+            if pre_d.has_key(key):
+                matched_nodes = [pre_d[key]]
 
-        print "assigned values to %d nodes (out of %d)." % (assigned_values, len(all_nodes))
-        if step_method:
-            print "assigned step methods to %d (out of %d)." % (assigned_steps, len(all_nodes))
+            else: #match tags
+                #get the matching pre_tags
+                try:
+                    pre_tags = match[name][tag]
+                except TypeError, AttributeError:
+                    raise ValueError('match argument does not have the coorect name or tag')
+                
+                if type(pre_tags) == str:
+                    pre_tags = [pre_tags]
+
+                #get matching nodes
+                matched_nodes = [pre_d[(name, h_type, x, idx)] for x in pre_tags]
+
+            #average matched_nodes values
+            if assign_values:
+                node.value = np.mean([x.value for x in matched_nodes])
+                assigned_v += 1
+
+            #assign step method
+            if assign_step_methods:
+                assigned_s += self._assign_step_methods_from_existing(node, pre_model, matched_nodes)
+
+        print "assigned %d values (out of %d)." % (assigned_v, len(self.mc.stochastics))
+        print "assigned %d step methods (out of %d)." % (assigned_s, len(self.mc.stochastics))
+
+
+    def _assign_step_methods_from_existing(self, node, pre_model, matched_nodes):
+        """
+        private funciton used by init_from_existing_model to assign a node
+        using matched_nodes from pre_model
+        Output:
+             assigned (boolean) - step method was assigned
+
+        """
+
+        if isinstance(matched_nodes, pm.Node):
+            matched_node = [matched_nodes]
+
+        #find the step methods
+        steps = [pre_model.mc.step_method_dict[x][0] for x in matched_nodes]
+
+        #only assign it if it's a Metropolis
+        if isinstance(steps[0], pm.Metropolis):
+            pre_sd = np.median([x.proposal_sd * x.adaptive_scale_factor for x in steps])
+            self.mc.use_step_method(pm.Metropolis, node, proposal_sd = pre_sd)
+            assigned = True
+        else:
+            kabuki.debug_here()
+            assigned = False
+
+        return assigned
 
     def plot_posteriors(self, parameters=None, plot_subjs=False):
         """
