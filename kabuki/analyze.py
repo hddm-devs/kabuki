@@ -618,7 +618,7 @@ def _post_pred_bottom_node(bottom_node, value_range, samples=10, bins=100, axis=
 
     if axis is not None:
         # Plot pp
-        axis.plot(value_range, y, label='pp', color='b')
+        axis.plot(value_range, y, label='post pred', color='b')
         axis.fill_between(value_range, y-y_std, y+y_std, color='b', alpha=.8)
 
         # Plot data
@@ -697,6 +697,7 @@ def plot_posterior_predictive(model, value_range=None, samples=10, columns=3, bi
             _post_pred_bottom_node(bottom_node, value_range,
                                    axis=fig.add_subplot(111),
                                    bins=bins)
+            plt.legend()
 
         if savefig:
             if prefix is not None:
