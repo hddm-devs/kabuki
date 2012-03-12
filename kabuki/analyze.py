@@ -5,6 +5,7 @@ import re
 from matplotlib.pylab import figure
 import matplotlib.pyplot as plt
 import sys, os
+from copy import copy
 
 try:
     from collections import OrderedDict
@@ -453,7 +454,7 @@ def _evaluate_post_pred(sampled_stats, data_stats, evals=None):
         evals['quantile'] = percentileofscore
         evals['SEM'] = lambda x, y: (np.mean(x) - y)**2
 
-    # Evalualte all eval-functions
+    # Evaluate all eval-functions
     results = pd.DataFrame(index=sampled_stats.keys(), columns=evals.keys())
     results.index.names = ['stat']
     for stat_name in sampled_stats.iterkeys():
@@ -502,7 +503,7 @@ def _post_pred_summary_bottom_node(bottom_node, samples=500, stats=None, plot=Fa
     if plot:
         from pymc.Matplot import gof_plot
         for name, value in sampled_stats.iteritems():
-            gof_plot(sampled_stats[name], data_stats[name], nbins=bins, name=name, verbose=0)
+            gof_plot(value, data_stats[name], nbins=bins, name=name, verbose=0)
 
     result = _evaluate_post_pred(sampled_stats, data_stats, evals=evals)
 
@@ -557,8 +558,8 @@ def post_pred_check(model, samples=500, bins=100, stats=None, evals=None, plot=F
             # Flat model
             if bottom_node is None or not hasattr(bottom_node, 'random'):
                 continue # Skip
-            evals = _post_pred_summary_bottom_node(bottom_node, samples=samples, bins=bins, evals=evals, stats=stats, plot=plot)
-            results.append(evals)
+            result = _post_pred_summary_bottom_node(bottom_node, samples=samples, bins=bins, evals=evals, stats=stats, plot=plot)
+            results.append(result)
 
     return pd.concat(results, keys=model.bottom_nodes.keys(), names=['node'])
 
