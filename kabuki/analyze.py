@@ -552,7 +552,7 @@ def post_pred_check(model, samples=500, bins=100, stats=None, evals=None, plot=F
     print "Sampling..."
     results = []
 
-    for name, bottom_node in model.bottom_nodes.iteritems():
+    for name, bottom_node in model.observed_nodes.iteritems():
         if isinstance(bottom_node, np.ndarray):
             # Group model
             results_subj = []
@@ -575,7 +575,7 @@ def post_pred_check(model, samples=500, bins=100, stats=None, evals=None, plot=F
             result = _post_pred_summary_bottom_node(bottom_node, samples=samples, bins=bins, evals=evals, stats=stats, plot=plot)
             results.append(result)
 
-    return pd.concat(results, keys=model.bottom_nodes.keys(), names=['node'])
+    return pd.concat(results, keys=model.observed_nodes.keys(), names=['node'])
 
 def _parents_to_random_posterior_sample(bottom_node, pos=None):
     """Walks through parents and sets them to pos sample."""
@@ -685,7 +685,7 @@ def plot_posterior_predictive(model, value_range=None, samples=10, columns=3, bi
         # Infer from data by finding the min and max from the nodes
         value_range = np.linspace(model.data)
 
-    for name, bottom_node in model.bottom_nodes.iteritems():
+    for name, bottom_node in model.observed_nodes.iteritems():
         if isinstance(bottom_node, np.ndarray):
             if not hasattr(bottom_node[0], 'pdf'):
                 continue # skip nodes that do not define pdf function
@@ -752,7 +752,7 @@ def _check_bottom_node(bottom_node):
 
 
 def check_model(model):
-    for name, bottom_node in model.bottom_nodes.iteritems():
+    for name, bottom_node in model.observed_nodes.iteritems():
         if isinstance(bottom_node, np.ndarray):
             # Group model
             for i_subj, bottom_node_subj in enumerate(bottom_node):

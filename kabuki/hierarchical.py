@@ -504,6 +504,7 @@ class Hierarchical(object):
         self.group_nodes = {}
         self.var_nodes = {}
         self.subj_nodes = {}
+        self.observed_nodes = {}
 
         #dictionary of stochastics. the keys are names of single nodes
         self.stoch_by_name = {}
@@ -525,12 +526,13 @@ class Hierarchical(object):
                 self.stoch_by_name[node.__name__] = node
             for tag, nodes in param.subj_nodes.iteritems():
                 self.nodes[name+tag+'_subj'] = nodes
-                self.subj_nodes[name+tag] = nodes
                 if param.is_bottom_node:
-                    continue
-                for (idx, node) in enumerate(nodes):
-                    self.stoch_by_tuple[(name,'s',tag,idx)] = node
-                    self.stoch_by_name[node.__name__] = node
+                    self.observed_nodes[name+tag] = nodes
+                else:
+                    self.subj_nodes[name+tag] = nodes
+                    for (idx, node) in enumerate(nodes):
+                        self.stoch_by_tuple[(name,'s',tag,idx)] = node
+                        self.stoch_by_name[node.__name__] = node
 
         #update knodes
         for name, param in self.params_include.iteritems():
@@ -636,10 +638,10 @@ class Hierarchical(object):
 
         if assign_step_methods and self.is_group_model:
             self.mcmc_step_methods()
-        
+
         return self.mc
 
-        
+
     def mcmc_step_methods(self):
 
         #assign step methods
@@ -1052,11 +1054,11 @@ class Hierarchical(object):
             assign_step_method (boolean) - same as assign_values only for step methods
 
             match (dict) - dictionary which maps tags from the new model to tags from the
-                existing model. match is a dictionary of dictionaries and it has 
+                existing model. match is a dictionary of dictionaries and it has
                 the following structure:  match[name][new_tag] = pre_tag
                 name is the parameter name. new_tag is the tag of the new model,
                 and pre_tag is a single tag or list of tags from the exisiting model that will be map
-                to the new_tag.           
+                to the new_tag.
         """
         if not self.mc:
             self.mcmc(assign_step_methods=False, **mcmc_kwargs)
@@ -1080,7 +1082,7 @@ class Hierarchical(object):
                     pre_tags = match[name][tag]
                 except TypeError, AttributeError:
                     raise ValueError('match argument does not have the coorect name or tag')
-                
+
                 if type(pre_tags) == str:
                     pre_tags = [pre_tags]
 
