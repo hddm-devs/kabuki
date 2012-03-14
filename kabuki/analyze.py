@@ -2,10 +2,15 @@ from __future__ import division
 import numpy as np
 import pymc as pm
 import re
-from matplotlib.pylab import show, figure
+from matplotlib.pylab import figure
 import matplotlib.pyplot as plt
 import sys, os
-import scipy as sc
+from copy import copy
+
+try:
+    from collections import OrderedDict
+except ImportError:
+    from ordereddict import OrderedDict
 
 def convert_model_to_dictionary(model):
     """convert_model_to_dictionary(model)
@@ -76,26 +81,6 @@ def get_subj_nodes(model, startswith=None, i_subj=None):
         else:
             return subj
 
-def gen_stats_db(traces, alpha=0.05, batches=100):
-    """Useful helper function to generate stats() on a loaded database
-    object.  Pass the db._traces list.
-
-    """
-
-    from pymc.utils import hpd, quantiles
-    from pymc import batchsd
-
-    stats = {}
-    for name, trace_obj in traces.iteritems():
-        trace = np.squeeze(np.array(trace_obj(), float))
-        stats[name] = {'standard deviation': trace.std(0),
-                       'mean': trace.mean(0),
-                       '%s%s HPD interval' % (int(100*(1-alpha)),'%'): hpd(trace, alpha),
-                       'mc error': batchsd(trace, batches),
-                       'quantiles': quantiles(trace)}
-
-    return stats
-
 def print_stats(stats):
     print gen_stats(stats)
 
@@ -145,6 +130,32 @@ def gen_group_stats(stats):
     s = gen_stats(g_stats)
 
     return s
+
+def plot_posterior_nodes(nodes, bins=50):
+    """Plot interpolated posterior of a list of nodes.
+
+    :Arguments:
+        nodes : list of pymc.Node's
+            List of pymc.Node's to plot the posterior of
+        bins : int (default=50)
+            How many bins to use for computing the histogram.
+
+    """
+    from kabuki.utils import interpolate_trace
+    figure()
+    lb = min([min(node.trace()[:]) for node in nodes])
+    ub = max([max(node.trace()[:]) for node in nodes])
+    x_data = np.linspace(lb, ub, 300)
+
+    for node in nodes:
+        trace = node.trace()[:]
+        #hist = interpolate_trace(x_data, trace, range=(trace.min(), trace.max()), bins=bins)
+        hist = interpolate_trace(x_data, trace, range=(lb, ub), bins=bins)
+        plt.plot(x_data, hist, label=node.__name__, lw=2.)
+
+    leg = plt.legend(loc='best', fancybox=True)
+    leg.get_frame().set_alpha(0.5)
+
 
 def group_plot(model, params_to_plot=(), n_bins=50, save_to=None):
 
@@ -196,8 +207,8 @@ def group_plot(model, params_to_plot=(), n_bins=50, save_to=None):
             plt.gcf().canvas.set_window_title(name)
 
             if save_to is not None:
-                plt.savefig(os.path.join(save_to, "%s.png" % name))
-    show()
+                plt.savefig(os.path.join(save_to, "group_%s.png" % name))
+                plt.savefig(os.path.join(save_to, "group_%s.pdf" % name))
 
 def compare_all_pairwise(model):
     """Perform all pairwise comparisons of dependent parameter
@@ -329,7 +340,7 @@ def check_geweke(model, assert_=True):
 
     return True
 
-def group_cond_diff(hm, node, cond1, cond2, threshold = 0):
+def group_cond_diff(hm, node, cond1, cond2, threshold=0):
     """
     compute the difference between different condition in a group analysis.
     The function compute for each subject the difference between 'node' under
@@ -351,6 +362,8 @@ def group_cond_diff(hm, node, cond1, cond2, threshold = 0):
         group_var - group variance of the difference
         mass_under_threshold  - the mass of the group pdf which is smaller than threshold
     """
+    import scipy as sp
+
     name = node
     node_dict = hm.params_include[name].subj_nodes
     n_subjs = hm._num_subjs
@@ -373,7 +386,7 @@ def group_cond_diff(hm, node, cond1, cond2, threshold = 0):
     pooled_var = 1. / sum(1. / (subj_diff_std**2))
     pooled_mean = sum(subj_diff_mean / (subj_diff_std**2)) * pooled_var
 
-    mass_under = sc.stats.norm.cdf(threshold,pooled_mean, np.sqrt(pooled_var))
+    mass_under = sp.stats.norm.cdf(threshold,pooled_mean, np.sqrt(pooled_var))
 
     return pooled_mean, pooled_var, mass_under
 
@@ -429,3 +442,322 @@ def logp_trace(model):
         logp[i_sample] = model.mc.logp
 
     return logp
+
+def _evaluate_post_pred(sampled_stats, data_stats, evals=None):
+    """Evaluate a summary statistics of sampled sets.
+
+    :Arguments:
+        sampled_stats : dict
+            Map of summary statistic names to distributions
+        data_stats : dict
+            Map of summary statistic names to the data distribution
+
+    :Returns:
+        pandas.DataFrame containing the eval results as columns.
+    """
+
+    import pandas as pd
+
+    from scipy.stats import scoreatpercentile, percentileofscore
+    from itertools import product
+
+    if evals is None:
+        # Generate some default evals
+        evals = OrderedDict()
+        evals['in credible interval'] = lambda x, y: (scoreatpercentile(x, 97.5) > y) and (scoreatpercentile(x, 2.5) < y)
+        evals['quantile'] = percentileofscore
+        evals['SEM'] = lambda x, y: (np.mean(x) - y)**2
+
+    # Evaluate all eval-functions
+    results = pd.DataFrame(index=sampled_stats.keys(), columns=evals.keys())
+    results.index.names = ['stat']
+    for stat_name in sampled_stats.iterkeys():
+        for eval_name, func in evals.iteritems():
+            value = func(sampled_stats[stat_name], data_stats[stat_name])
+            assert np.isscalar(value), "eval function %s is not returning scalar." % eval_name
+            results.ix[stat_name][eval_name] = value
+
+    return results
+
+
+def _post_pred_summary_bottom_node(bottom_node, samples=500, stats=None, plot=False, bins=100, evals=None):
+    """Create posterior predictive check for a single bottom node."""
+    def _calc_stats(data, stats):
+        out = {}
+        for name, func in stats.iteritems():
+            out[name] = func(data)
+        return out
+
+    if stats is None:
+        stats = OrderedDict((('mean', np.mean), ('std', np.std)))
+
+    ############################
+    # Compute stats over data
+    data = bottom_node.value
+    data_stats = _calc_stats(data, stats)
+
+    ###############################################
+    # Initialize posterior sample stats container
+    sampled_stats = {}
+    for name in stats.iterkeys():
+        sampled_stats[name] = np.empty(samples)
+
+    ##############################
+    # Sample and generate stats
+    for sample in range(samples):
+        _parents_to_random_posterior_sample(bottom_node)
+        # Generate data from bottom node
+        sampled = bottom_node.random()
+        sampled_stat = _calc_stats(sampled, stats)
+
+        # Add it the results container
+        for name, value in sampled_stat.iteritems():
+            sampled_stats[name][sample] = value
+
+    if plot:
+        from pymc.Matplot import gof_plot
+        for name, value in sampled_stats.iteritems():
+            gof_plot(value, data_stats[name], nbins=bins, name=name, verbose=0)
+
+    result = _evaluate_post_pred(sampled_stats, data_stats, evals=evals)
+
+    return result
+
+def post_pred_check(model, samples=500, bins=100, stats=None, evals=None, plot=False):
+    """Run posterior predictive check on a model.
+
+    :Arguments:
+        model : kabuki.Hierarchical
+            Kabuki model over which to compute the ppc on.
+
+    :Optional:
+        samples : int
+            How many samples to generate for each node.
+        bins : int
+            How many bins to use for computing the histogram.
+        stats : dict
+            User-defined statistics to compute (by default mean and std are computed)
+            and evaluate over the samples.
+            :Example: {'mean': np.mean, 'median': np.median}
+        evals : dict
+            User-defined evaluations of the statistics (by default 95 percentile and SEM).
+            :Example: {'percentile': scoreatpercentile}
+        plot : bool
+            Whether to plot the posterior predictive distributions.
+
+    :Returns:
+        Hierarchical pandas.DataFrame with the different statistics.
+    """
+    import pandas as pd
+    print "Sampling..."
+    results = []
+
+    for name, bottom_node in model.bottom_nodes.iteritems():
+        if isinstance(bottom_node, np.ndarray):
+            # Group model
+            results_subj = []
+            subjs = []
+
+            for i_subj, bottom_node_subj in enumerate(bottom_node):
+                if bottom_node_subj is None or not hasattr(bottom_node_subj, 'random'):
+                    continue # Skip non-existant nodes
+                subjs.append(i_subj)
+                result_subj = _post_pred_summary_bottom_node(bottom_node_subj, samples=samples, bins=bins, evals=evals, stats=stats, plot=plot)
+                results_subj.append(result_subj)
+
+            if len(results_subj) != 0:
+                result = pd.concat(results_subj, keys=subjs, names=['subj'])
+                results.append(result)
+        else:
+            # Flat model
+            if bottom_node is None or not hasattr(bottom_node, 'random'):
+                continue # Skip
+            result = _post_pred_summary_bottom_node(bottom_node, samples=samples, bins=bins, evals=evals, stats=stats, plot=plot)
+            results.append(result)
+
+    return pd.concat(results, keys=model.bottom_nodes.keys(), names=['node'])
+
+def _parents_to_random_posterior_sample(bottom_node, pos=None):
+    """Walks through parents and sets them to pos sample."""
+    for i, parent in enumerate(bottom_node.parents.itervalues()):
+        if not isinstance(parent, pm.Node): # Skip non-stochastic nodes
+            continue
+
+        if pos is None:
+            # Set to random posterior position
+            pos = np.random.randint(0, len(parent.trace()))
+
+        assert len(parent.trace()) >= pos, "pos larger than posterior sample size"
+        parent.value = parent.trace()[pos]
+
+
+def _post_pred_bottom_node(bottom_node, value_range, samples=10, bins=100, axis=None):
+    """Calculate posterior predictive for a certain bottom node.
+
+    :Arguments:
+        bottom_node : pymc.stochastic
+            Bottom node to compute posterior over.
+
+        value_range : numpy.ndarray
+            Range over which to evaluate the likelihood.
+
+    :Optional:
+        samples : int (default=10)
+            Number of posterior samples to use.
+
+        bins : int (default=100)
+            Number of bins to compute histogram over.
+
+        axis : matplotlib.axis (default=None)
+            If provided, will plot into axis.
+    """
+
+    like = np.empty((samples, len(value_range)), dtype=np.float32)
+    for sample in range(samples):
+        _parents_to_random_posterior_sample(bottom_node)
+        # Generate likelihood for parents parameters
+        like[sample,:] = bottom_node.pdf(value_range)
+
+    y = like.mean(axis=0)
+    try:
+        y_std = like.std(axis=0)
+    except FloatingPointError:
+        print "WARNING! %s threw FloatingPointError over std computation. Setting to 0 and continuing." % bottom_node.__name__
+        y_std = np.zeros_like(y)
+
+    #if len(bottom_node.value) != 0:
+        # No data assigned to node
+    #    return y, y_std
+
+    #hist, ranges = np.histogram(bottom_node.value, normed=True, bins=bins)
+
+    if axis is not None:
+        # Plot pp
+        axis.plot(value_range, y, label='post pred', color='b')
+        axis.fill_between(value_range, y-y_std, y+y_std, color='b', alpha=.8)
+
+        # Plot data
+        if len(bottom_node.value) != 0:
+            axis.hist(bottom_node.value, normed=True,
+                      range=(value_range[0], value_range[-1]), label='data',
+                      bins=100, histtype='step', lw=2.)
+
+        axis.set_ylim(bottom=0) # Likelihood and histogram can only be positive
+
+    return (y, y_std) #, hist, ranges)
+
+def plot_posterior_predictive(model, value_range=None, samples=10, columns=3, bins=100, savefig=False, prefix=None, figsize=(8,6)):
+    """Plot the posterior predictive of a kabuki hierarchical model.
+
+    :Arguments:
+
+        model : kabuki.Hierarchical
+            The (constructed and sampled) kabuki hierarchical model to
+            create the posterior preditive from.
+
+        value_range : numpy.ndarray
+            Array to evaluate the likelihood over.
+
+    :Optional:
+
+        samples : int (default=10)
+            How many posterior samples to generate the posterior predictive over.
+
+        columns : int (default=3)
+            How many columns to use for plotting the subjects.
+
+        bins : int (default=100)
+            How many bins to compute the data histogram over.
+
+        savefig : bool (default=False)
+            Whether to save the figure to a file.
+
+        prefix : str (default=None)
+            Save figure into directory prefix
+
+    :Note:
+
+        This function changes the current value and logp of the nodes.
+
+    """
+
+    if value_range is None:
+        # Infer from data by finding the min and max from the nodes
+        value_range = np.linspace(model.data)
+
+    for name, bottom_node in model.bottom_nodes.iteritems():
+        if isinstance(bottom_node, np.ndarray):
+            if not hasattr(bottom_node[0], 'pdf'):
+                continue # skip nodes that do not define pdf function
+        else:
+            if not hasattr(bottom_node, 'pdf'):
+                continue # skip nodes that do not define pdf function
+
+        fig = plt.figure(figsize=figsize)
+
+        fig.suptitle(name, fontsize=12)
+        fig.subplots_adjust(top=0.9, hspace=.4, wspace=.3)
+        if isinstance(bottom_node, np.ndarray):
+            # Group model
+            for i_subj, bottom_node_subj in enumerate(bottom_node):
+                if bottom_node_subj is None:
+                    continue # Skip non-existant nodes
+                ax = fig.add_subplot(np.ceil(len(bottom_node)/columns), columns, i_subj+1)
+                ax.set_title(str(i_subj))
+                _post_pred_bottom_node(bottom_node_subj, value_range,
+                                       axis=ax,
+                                       bins=bins)
+        else:
+            # Flat model
+            _post_pred_bottom_node(bottom_node, value_range,
+                                   axis=fig.add_subplot(111),
+                                   bins=bins)
+            plt.legend()
+
+        if savefig:
+            if prefix is not None:
+                fig.savefig(os.path.join(prefix, name) + '.svg', format='svg')
+                fig.savefig(os.path.join(prefix, name) + '.png', format='png')
+            else:
+                fig.savefig(name + '.svg', format='svg')
+                fig.savefig(name + '.png', format='png')
+
+
+def _check_bottom_node(bottom_node):
+    if bottom_node is None:
+        print "Bottom node is None!!"
+        return False
+
+    # Check if node has name
+    if not hasattr(bottom_node, '__name__'):
+        print "bottom node has missing __name__ attribute."
+
+    name = bottom_node.__name__
+
+    # Check if parents exist
+    if not hasattr(bottom_node, 'parents'):
+        print "bottom node %s is missing parents attribute." % name
+
+    # Check if node has value
+    if not hasattr(bottom_node, 'value'):
+        print "bottom node %s is missing value." % name
+
+    # Check if data is empty
+    if len(bottom_node.value) == 0:
+        print "values of bottom node %s is emtpy!" % name
+
+    for i, parent in enumerate(bottom_node.parents.itervalues()):
+        if not hasattr(parent, '_logp'): # Skip non-stochastic nodes
+            continue
+
+
+def check_model(model):
+    for name, bottom_node in model.bottom_nodes.iteritems():
+        if isinstance(bottom_node, np.ndarray):
+            # Group model
+            for i_subj, bottom_node_subj in enumerate(bottom_node):
+                _check_bottom_node(bottom_node_subj)
+        else:
+            # Flat mode
+            _check_bottom_node(bottom_node)
+

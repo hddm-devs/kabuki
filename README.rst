@@ -2,13 +2,13 @@
 Introduction
 ************
 
-:Date: July 19, 2011
+:Date: March 8 19, 2012
 :Author: Thomas Wiecki, Imri Sofer
 :Contact: thomas_wiecki@brown.edu, imri_sofer@brown.edu
-:Web site: http://github.com/hddm-dev/kabuki
+:Web site: http://github.com/hddm-devs/kabuki
 :Copyright: This document has been placed in the public domain.
 :License: Kabuki is released under the GPLv3.
-:Version: 0.1.1
+:Version: 0.2
 
 Purpose
 =======
@@ -50,5 +50,9 @@ Moreover, kabuki comes equipped with some models of ubiquitous use such as a Bay
 Usage
 =====
 
+To come...
+
 Getting started
 ===============
+
+To come...

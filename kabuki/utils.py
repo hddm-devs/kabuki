@@ -2,7 +2,8 @@ from __future__ import division
 import numpy as np
 import matplotlib.pyplot as plt
 import pymc as pm
-
+from copy import copy, deepcopy
+import sys
 import kabuki
 
 def interpolate_trace(x, trace, range=(-1,1), bins=100):
@@ -71,154 +72,6 @@ def load_csv(*args, **kwargs):
     #read data
     return np.recfromcsv(*args, **kwargs)
 
-def parse_config_file(fname, mcmc=False, load=False, param_names=None):
-    """Open, parse and execute a kabuki model as specified by the
-    configuration file.
-
-    :Arguments:
-        fname <str>: File name of config file.
-
-    :Optional:
-        mcmc <bool=False>: Run MCMC on model.
-        load <bool=False>: Load from database.
-    """
-    raise NotImplementedError("Obsolete, todo!")
-
-    import os.path
-    if not os.path.isfile(fname):
-        raise ValueError("%s could not be found."%fname)
-
-    import ConfigParser
-
-    config = ConfigParser.ConfigParser()
-    config.read(fname)
-
-    #####################################################
-    # Parse config file
-    data_fname = config.get('data', 'load')
-    if not os.path.exists(data_fname):
-        raise IOError, "Data file %s not found."%data_fname
-
-    try:
-        save = config.get('data', 'save')
-    except ConfigParser.NoOptionError:
-        save = False
-
-    data = np.recfromcsv(data_fname)
-
-    try:
-        model_type = config.get('model', 'type')
-    except ConfigParser.NoOptionError:
-        model_type = 'simple'
-
-    try:
-        is_subj_model = config.getboolean('model', 'is_subj_model')
-    except ConfigParser.NoOptionError:
-        is_subj_model = True
-
-    try:
-        no_bias = config.getboolean('model', 'no_bias')
-    except ConfigParser.NoOptionError:
-        no_bias = True
-
-    try:
-        debug = config.getboolean('model', 'debug')
-    except ConfigParser.NoOptionError:
-        debug = False
-
-    try:
-        dbname = config.get('mcmc', 'dbname')
-    except ConfigParser.NoOptionError:
-        dbname = None
-
-    # Get depends
-    depends = {}
-    if param_names is not None:
-        for param_name in param_names:
-            try:
-                # Multiple depends can be listed (separated by a comma)
-                depends[param_name] = config.get('depends', param_name).split(',')
-            except ConfigParser.NoOptionError:
-                pass
-
-    # MCMC values
-    try:
-        samples = config.getint('mcmc', 'samples')
-    except ConfigParser.NoOptionError:
-        samples = 10000
-    try:
-        burn = config.getint('mcmc', 'burn')
-    except ConfigParser.NoOptionError:
-        burn = 5000
-    try:
-        thin = config.getint('mcmc', 'thin')
-    except ConfigParser.NoOptionError:
-        thin = 3
-    try:
-        verbose = config.getint('mcmc', 'verbose')
-    except ConfigParser.NoOptionError:
-        verbose = 0
-
-    try:
-        plot_rt_fit = config.getboolean('stats', 'plot_rt_fit')
-    except ConfigParser.NoOptionError, ConfigParser.NoSectionError:
-        plot_rt_fit = False
-
-    try:
-        plot_posteriors = config.getboolean('stats', 'plot_posteriors')
-    except ConfigParser.NoOptionError, ConfigParser.NoSectionError:
-        plot_posteriors = False
-
-
-    print "Creating model..."
-    m = hddm.models.Multi(data, model_type=model_type, is_subj_model=is_subj_model, no_bias=no_bias, depends_on=depends, debug=debug)
-
-    if mcmc:
-        if not load:
-            print "Sampling... (this can take some time)"
-            m.mcmc(samples=samples, burn=burn, thin=thin, verbose=verbose, dbname=dbname)
-        else:
-            m.mcmc_load_from_db(dbname=dbname)
-
-    if save:
-        m.save_stats(save)
-    else:
-        print m.summary()
-
-    if plot_rt_fit:
-        m.plot_rt_fit()
-
-    if plot_posteriors:
-        m.plot_posteriors
-
-    return m
-
-def posterior_predictive_check(model, data):
-    params = copy(model.params_est)
-    if model.model_type.startswith('simple'):
-        params['sv'] = 0
-        params['sz'] = 0
-        params['ster'] = 0
-    if model.no_bias:
-        params['z'] = params['a']/2.
-
-    data_sampled = _gen_rts_params(params)
-
-    # Check
-    return pm.discrepancy(data_sampled, data, .5)
-
-def load_traces_from_db(mc, dbname):
-    """Load samples from a database created by an earlier model
-    """
-    # Open database
-    db = pm.database.hdf5.load(dbname)
-
-    # Loop through parameters and set traces
-    for node in mc.nodes:
-        #loop only not-observed
-        if node.observed:
-            continue
-        node.trace = db.trace(node.__name__)
 
 def set_proposal_sd(mc, tau=.1):
     for var in mc.variables:
@@ -227,6 +80,137 @@ def set_proposal_sd(mc, tau=.1):
             mc.use_step_method(pm.Metropolis, var, proposal_sd = tau)
 
     return
+
+
+###########################################################################
+# The following code is directly copied from Twisted:
+# http://twistedmatrix.com/trac/browser/tags/releases/twisted-11.1.0/twisted/python/reflect.py
+# For the license see:
+# http://twistedmatrix.com/trac/browser/trunk/LICENSE
+###########################################################################
+
+class _NoModuleFound(Exception):
+    """
+    No module was found because none exists.
+    """
+
+
+class InvalidName(ValueError):
+    """
+    The given name is not a dot-separated list of Python objects.
+    """
+
+
+class ModuleNotFound(InvalidName):
+    """
+    The module associated with the given name doesn't exist and it can't be
+    imported.
+    """
+
+
+class ObjectNotFound(InvalidName):
+    """
+    The object associated with the given name doesn't exist and it can't be
+    imported.
+    """
+
+def _importAndCheckStack(importName):
+    """
+    Import the given name as a module, then walk the stack to determine whether
+    the failure was the module not existing, or some code in the module (for
+    example a dependent import) failing.  This can be helpful to determine
+    whether any actual application code was run.  For example, to distiguish
+    administrative error (entering the wrong module name), from programmer
+    error (writing buggy code in a module that fails to import).
+
+    @raise Exception: if something bad happens.  This can be any type of
+    exception, since nobody knows what loading some arbitrary code might do.
+
+    @raise _NoModuleFound: if no module was found.
+    """
+    try:
+        try:
+            return __import__(importName)
+        except ImportError:
+            excType, excValue, excTraceback = sys.exc_info()
+            while excTraceback:
+                execName = excTraceback.tb_frame.f_globals["__name__"]
+                if (execName is None or # python 2.4+, post-cleanup
+                    execName == importName): # python 2.3, no cleanup
+                    raise excType, excValue, excTraceback
+                excTraceback = excTraceback.tb_next
+            raise _NoModuleFound()
+    except:
+        # Necessary for cleaning up modules in 2.3.
+        sys.modules.pop(importName, None)
+        raise
+
+def find_object(name):
+    """
+    Retrieve a Python object by its fully qualified name from the global Python
+    module namespace.  The first part of the name, that describes a module,
+    will be discovered and imported.  Each subsequent part of the name is
+    treated as the name of an attribute of the object specified by all of the
+    name which came before it.  For example, the fully-qualified name of this
+    object is 'twisted.python.reflect.namedAny'.
+
+    @type name: L{str}
+    @param name: The name of the object to return.
+
+    @raise InvalidName: If the name is an empty string, starts or ends with
+        a '.', or is otherwise syntactically incorrect.
+
+    @raise ModuleNotFound: If the name is syntactically correct but the
+        module it specifies cannot be imported because it does not appear to
+        exist.
+
+    @raise ObjectNotFound: If the name is syntactically correct, includes at
+        least one '.', but the module it specifies cannot be imported because
+        it does not appear to exist.
+
+    @raise AttributeError: If an attribute of an object along the way cannot be
+        accessed, or a module along the way is not found.
+
+    @return: the Python object identified by 'name'.
+    """
+
+    if not name:
+        raise InvalidName('Empty module name')
+
+    names = name.split('.')
+
+    # if the name starts or ends with a '.' or contains '..', the __import__
+    # will raise an 'Empty module name' error. This will provide a better error
+    # message.
+    if '' in names:
+        raise InvalidName(
+            "name must be a string giving a '.'-separated list of Python "
+            "identifiers, not %r" % (name,))
+
+    topLevelPackage = None
+    moduleNames = names[:]
+    while not topLevelPackage:
+        if moduleNames:
+            trialname = '.'.join(moduleNames)
+            try:
+                topLevelPackage = _importAndCheckStack(trialname)
+            except _NoModuleFound:
+                moduleNames.pop()
+        else:
+            if len(names) == 1:
+                raise ModuleNotFound("No module named %r" % (name,))
+            else:
+                raise ObjectNotFound('%r does not name an object' % (name,))
+
+    obj = topLevelPackage
+    for n in names[1:]:
+        obj = getattr(obj, n)
+
+    return obj
+
+######################
+# END OF COPIED CODE #
+######################
 
 def centered_half_cauchy_rand(S, size):
     """sample from a half Cauchy distribution with scale S"""

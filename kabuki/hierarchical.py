@@ -15,7 +15,6 @@ import warnings
 
 import kabuki
 from copy import copy, deepcopy
-from matplotlib.mlab import rec_drop_fields
 
 
 class Knode(object):
@@ -384,6 +383,10 @@ class Hierarchical(object):
         to depends_on.
 
         """
+
+        # Unfortunately, this function is quite complex as it
+        # recursively parcels the data.
+
         if len(depends_on) != 0: # If depends are present
             data_params = []
             # Get first param from depends_on
@@ -413,8 +416,8 @@ class Hierarchical(object):
                 data_param = self._get_data_depend_rec(data_dep,
                                                        depends_on=copy(depends_on),
                                                        params=copy(params),
-                                                       dep_name = copy(dep_name),
-                                                       param = param)
+                                                       dep_name=copy(dep_name),
+                                                       param=param)
                 data_params += data_param
                 # Remove last item (otherwise we would always keep
                 # adding the dep elems of in one column)
@@ -458,7 +461,6 @@ class Hierarchical(object):
                     self._set_dependent_param(param)
                 else:
                     self._set_independet_param(param)
-
 
             # Init bottom nodes
             for param in self.params_include.itervalues():
@@ -590,11 +592,11 @@ class Hierarchical(object):
 
         # Set values of nodes
         for name, node in max_map._dict_container.iteritems():
-            if type(node) is pm.ArrayContainer:
+            if isinstance(node, pm.ArrayContainer):
                 for i,subj_node in enumerate(node):
-                    if not subj_node.observed:
+                    if isinstance(node, pm.Node) and not subj_node.observed:
                         self.nodes[name][i].value = subj_node.value
-            elif not node.observed:
+            elif isinstance(node, pm.Node) and not node.observed:
                 self.nodes[name].value = node.value
 
         return max_map
@@ -681,37 +683,46 @@ class Hierarchical(object):
 
         """
 
-        #init mc if needed
+        # init mc if needed
         if self.mc == None:
             self.mcmc()
 
-        #suppress annoying warnings
+        # suppress annoying warnings
         if ('hdf5' in dir(pm.database)) and \
-           (type(self.mc.db) is pm.database.hdf5.Database):
-            with warnings.catch_warnings():
-                warnings.simplefilter('ignore', pm.database.hdf5.tables.NaturalNameWarning)
+           isinstance(self.mc.db, pm.database.hdf5.Database):
+            warnings.simplefilter('ignore', pm.database.hdf5.tables.NaturalNameWarning)
 
-        #sample
+        # sample
         self.mc.sample(*args, **kwargs)
 
         return self.mc
+
 
     def print_group_stats(self, fname=None):
         stats_str = kabuki.analyze.gen_group_stats(self.stats())
         if fname is None:
             print stats_str
+            print "DIC: %f" % self.mc.dic
+            print "logp: %f" % self.mc.logp
         else:
             with open(fname) as fd:
                 fd.write(stats_str)
+                fd.write("DIC: %f\n" % self.mc.dic)
+                fd.write("logp: %f\n" % self.mc.logp)
+
+
 
     def print_stats(self, fname=None):
         stats_str = kabuki.analyze.gen_stats(self.stats())
         if fname is None:
             print stats_str
+            print "DIC: %f" % self.mc.dic
+            print "logp: %f" % self.mc.logp
         else:
             with open(fname) as fd:
                 fd.write(stats_str)
-
+                fd.write("DIC: %f\n" % self.mc.dic)
+                fd.write("logp: %f\n" % self.mc.logp)
 
     def _set_dependent_param(self, param):
         """Set parameter that depends on data.
@@ -881,14 +892,21 @@ class Hierarchical(object):
                 Subject index.
 
         """
+
         if self.is_group_model:
-            for i,subj in enumerate(self._subjs):
+            for i, subj in enumerate(self._subjs):
                 # Select data belonging to subj
                 data_subj = data[data['subj_idx'] == subj]
                 # Skip if subject was not tested on this condition
                 if len(data_subj) == 0:
                     continue
-                # Select params belonging to subject
+
+                ########################################
+                # Unfortunately, this is a little hairy since we have
+                # to find the nodes of the right subject and the right
+                # condition.
+
+                # Here we'll store all nodes belonging to the subject
                 selected_subj_nodes = {}
                 # Create new params dict and copy over nodes
                 for selected_param in self.params_include.itervalues():
@@ -994,6 +1012,9 @@ class Hierarchical(object):
         # Set up model
         if not self.nodes:
             self.create_nodes()
+
+        # Ignore annoying sqlite warnings
+        warnings.simplefilter('ignore', UserWarning)
 
         # Open database
         db = db_loader(dbname)
@@ -1148,7 +1169,7 @@ class Hierarchical(object):
         before running mcmc() or map()
         """
 
-        #check if nodes were created. if they were it cause problems for deepcopy
+        # check if nodes were created. if they were it cause problems for deepcopy
         assert (not self.nodes), "function should be used before nodes are initialized."
 
         #init
@@ -1161,12 +1182,12 @@ class Hierarchical(object):
 
         self.create_nodes()
 
-        #fit and copy single subjects
+        # loop over subjects
         for i_subj in range(n_subjs):
-            #create and fit a single subject
-            print "*!*!* fitting subject %d *!*!*" % subjs[i_subj]
+            # create and fit single subject
+            if verbose > 1: print "*!*!* fitting subject %d *!*!*" % subjs[i_subj]
             t_data = self.data[self.data['subj_idx'] == subjs[i_subj]]
-            t_data = rec_drop_fields(t_data, ['data_idx'])
+            t_data = rec.drop_fields(t_data, ['data_idx'])
             s_model = deepcopy(empty_s_model)
             s_model.data = t_data
             s_model.map(method='fmin_powell', runs=runs, **map_kwargs)
