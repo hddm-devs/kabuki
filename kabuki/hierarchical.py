@@ -282,6 +282,9 @@ class Hierarchical(object):
         if self.is_group_model:
             self._subjs = np.unique(data['subj_idx'])
             self._num_subjs = self._subjs.shape[0]
+        else:
+            self._num_subjs = 1
+        self.num_subjs = self._num_subjs
 
         self._init_params(replace_params, update_params, trace_subjs, plot_subjs, plot_var)
 

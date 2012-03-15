@@ -6,7 +6,7 @@ from matplotlib.pylab import figure
 import matplotlib.pyplot as plt
 import sys, os
 from copy import copy
-
+import pymc.progressbar as pbar
 try:
     from collections import OrderedDict
 except ImportError:
@@ -171,9 +171,9 @@ def group_plot(model, params_to_plot=(), n_bins=50, save_to=None):
             continue
         if not param.has_subj_nodes:
             continue
-        
+
         for (node_tag, group_node) in param.group_nodes.iteritems():
-            
+
             #get subj nodes
             g_node_trace = model.mc.db.trace(group_node.__name__)[:]
             subj_nodes = param.subj_nodes[node_tag]
@@ -182,23 +182,23 @@ def group_plot(model, params_to_plot=(), n_bins=50, save_to=None):
             print "plotting %s" % group_node.__name__
             sys.stdout.flush()
             figure()
-            
+
             #get x axis
             lb = min([min(db.trace(x.__name__)[:]) for x in subj_nodes])
             lb = min(lb, min(g_node_trace))
             ub = max([max(db.trace(x.__name__)[:]) for x in subj_nodes])
             ub = max(ub, max(g_node_trace))
             x_data = np.linspace(lb, ub, n_bins)
-            
+
             #group histogram
             g_hist = np.histogram(g_node_trace,bins=n_bins, range=[lb, ub], normed=True)[0]
             plt.plot(x_data, g_hist, '--', label='group')
-            
+
             #subj histogram
             for i in subj_nodes:
                 g_hist = np.histogram(db.trace(i.__name__)[:],bins=n_bins, range=[lb, ub], normed=True)[0]
                 plt.plot(x_data, g_hist, label=re.search('[0-9]+$',i.__name__).group())
-                
+
             #legend and title
             leg = plt.legend(loc='best', fancybox=True)
             leg.get_frame().set_alpha(0.5)
@@ -523,7 +523,7 @@ def _post_pred_summary_bottom_node(bottom_node, samples=500, stats=None, plot=Fa
 
     return result
 
-def post_pred_check(model, samples=500, bins=100, stats=None, evals=None, plot=False):
+def post_pred_check(model, samples=500, bins=100, stats=None, evals=None, plot=False, progress_bar=True):
     """Run posterior predictive check on a model.
 
     :Arguments:
@@ -544,13 +544,26 @@ def post_pred_check(model, samples=500, bins=100, stats=None, evals=None, plot=F
             :Example: {'percentile': scoreatpercentile}
         plot : bool
             Whether to plot the posterior predictive distributions.
+        progress_bar: bool
+            Display progress bar while sampling.
+
 
     :Returns:
         Hierarchical pandas.DataFrame with the different statistics.
     """
     import pandas as pd
-    print "Sampling..."
     results = []
+
+    # Progress bar
+    if progress_bar:
+        n_iter = len(model.observed_nodes) * model.num_subjs
+        widgets = ['Sampling: ', pbar.Percentage(), ' ',
+                   pbar.Bar(marker='0',left='[',right=']'),
+                   ' ', pbar.Iterations(), '/', `n_iter`]
+        bar = pbar.ProgressBar(widgets=widgets, maxval=n_iter)
+        bar.start()
+    else:
+        print "Sampling..."
 
     for name, bottom_node in model.observed_nodes.iteritems():
         if isinstance(bottom_node, np.ndarray):
@@ -559,6 +572,8 @@ def post_pred_check(model, samples=500, bins=100, stats=None, evals=None, plot=F
             subjs = []
 
             for i_subj, bottom_node_subj in enumerate(bottom_node):
+                if progress_bar:
+                    bar.update(bar.currval+1)
                 if bottom_node_subj is None or not hasattr(bottom_node_subj, 'random'):
                     continue # Skip non-existant nodes
                 subjs.append(i_subj)
@@ -570,10 +585,15 @@ def post_pred_check(model, samples=500, bins=100, stats=None, evals=None, plot=F
                 results.append(result)
         else:
             # Flat model
+            if progress_bar:
+                bar.update(bar.currval+1)
             if bottom_node is None or not hasattr(bottom_node, 'random'):
                 continue # Skip
             result = _post_pred_summary_bottom_node(bottom_node, samples=samples, bins=bins, evals=evals, stats=stats, plot=plot)
             results.append(result)
+
+    if progress_bar:
+        bar.finish()
 
     return pd.concat(results, keys=model.observed_nodes.keys(), names=['node'])
 
@@ -647,7 +667,7 @@ def _post_pred_bottom_node(bottom_node, value_range, samples=10, bins=100, axis=
     return (y, y_std) #, hist, ranges)
 
 def plot_posterior_predictive(model, value_range=None, samples=10, columns=3, bins=100, savefig=False, prefix=None, figsize=(8,6)):
-    """Plot the posterior predictive of a kabuki hierarchical model.
+    """Plot the posterior predictive distribution of a kabuki hierarchical model.
 
     :Arguments:
 
