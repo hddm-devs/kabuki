@@ -473,7 +473,7 @@ def _evaluate_post_pred(sampled_stats, data_stats, evals=None):
         evals['std'] = lambda x,y: np.std(x)
         for q in [2.5, 25, 50, 75, 97.5]:
             key = str(q) + 'q'
-            evals[key] = lambda x,y: scoreatpercentile(x, q)
+            evals[key] = lambda x, y, q=q: scoreatpercentile(x, q)
 
     # Evaluate all eval-functions
     results = pd.DataFrame(index=sampled_stats.keys(), columns=evals.keys())
