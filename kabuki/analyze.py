@@ -464,9 +464,16 @@ def _evaluate_post_pred(sampled_stats, data_stats, evals=None):
     if evals is None:
         # Generate some default evals
         evals = OrderedDict()
-        evals['in credible interval'] = lambda x, y: (scoreatpercentile(x, 97.5) > y) and (scoreatpercentile(x, 2.5) < y)
+        evals['observed'] = lambda x, y: y
+        evals['credible'] = lambda x, y: (scoreatpercentile(x, 97.5) > y) and (scoreatpercentile(x, 2.5) < y)
         evals['quantile'] = percentileofscore
         evals['SEM'] = lambda x, y: (np.mean(x) - y)**2
+        evals['mahalanobis'] = lambda x, y: np.abs(np.mean(x) - y)/np.std(x)
+        evals['mean'] = lambda x,y: np.mean(x)
+        evals['std'] = lambda x,y: np.std(x)
+        for q in [2.5, 25, 50, 75, 97.5]:
+            key = str(q) + 'q'
+            evals[key] = lambda x,y: scoreatpercentile(x, q)
 
     # Evaluate all eval-functions
     results = pd.DataFrame(index=sampled_stats.keys(), columns=evals.keys())
@@ -558,7 +565,7 @@ def post_pred_check(model, samples=500, bins=100, stats=None, evals=None, plot=F
     if progress_bar:
         n_iter = len(model.observed_nodes) * model.num_subjs
         widgets = ['Sampling: ', pbar.Percentage(), ' ',
-                   pbar.Bar(marker='0',left='[',right=']'),
+                   pbar.Bar(marker='+',left='[',right=']'),
                    ' ', pbar.Iterations(), '/', `n_iter`]
         bar = pbar.ProgressBar(widgets=widgets, maxval=n_iter)
         bar.start()
