@@ -296,35 +296,28 @@ def savage_dickey(pos, post_trace, range=(-.3,.3), bins=40, prior_trace=None, pr
 
     return sav_dick
 
-def R_hat(samples):
-    n, num_chains = samples.shape # n=num_samples
-    chain_means = np.mean(samples, axis=1)
-    # Calculate between-sequence variance
-    between_var = n * np.var(chain_means, ddof=1)
-
-    chain_var = np.var(samples, axis=1, ddof=1)
-    within_var = np.mean(chain_var)
-
-    marg_post_var = ((n-1.)/n) * within_var + (1./n) * between_var # 11.2
-    R_hat_sqrt = np.sqrt(marg_post_var/within_var)
-
-    return R_hat_sqrt
-
-def test_chain_convergance(models):
-    # Calculate R statistic to check for chain convergance (Gelman at al 2004, 11.4)
-    params = models[0].group_params
-    R_hat_param = {}
-    for param_name in params.iterkeys():
+def gelman_rubin(models):
+    """
+    Calculate the gelman_rubin statistic (R_hat) for every stochastic in the model.
+    (Gelman at al 2004, 11.4)
+    Input:
+        models - list of models
+    """
+    names = models[0].stoch_by_name.keys()
+    R_hat_dict = {}
+    num_samples = models[0].stoch_by_name.values()[0].trace().shape[0] # samples
+    num_chains = len(models)
+    for name  in models[0].stoch_by_name.iterkeys():
         # Calculate mean for each chain
-        num_samples = models[0].group_params[param_name].trace().shape[0] # samples
-        num_chains = len(models)
         samples = np.empty((num_chains, num_samples))
         for i,model in enumerate(models):
-            samples[i,:] = model.group_params[param_name].trace()
+            samples[i,:] = model.stoch_by_name[name].trace()
 
-        R_hat_param[param_name] = R_hat(samples)
+        R_hat_dict[name] = pm.diagnostics.gelman_rubin(samples)
 
-    return R_hat_param
+    return R_hat_dict
+
+R_hat = gelman_rubin
 
 def check_geweke(model, assert_=True):
     # Test for convergence using geweke method
