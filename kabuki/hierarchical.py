@@ -710,7 +710,7 @@ class Hierarchical(object):
             print "DIC: %f" % self.mc.dic
             print "logp: %f" % self.mc.logp
         else:
-            with open(fname) as fd:
+            with open(fname, 'w') as fd:
                 fd.write(stats_str)
                 fd.write("DIC: %f\n" % self.mc.dic)
                 fd.write("logp: %f\n" % self.mc.logp)
@@ -724,7 +724,7 @@ class Hierarchical(object):
             print "DIC: %f" % self.mc.dic
             print "logp: %f" % self.mc.logp
         else:
-            with open(fname) as fd:
+            with open(fname, 'w') as fd:
                 fd.write(stats_str)
                 fd.write("DIC: %f\n" % self.mc.dic)
                 fd.write("logp: %f\n" % self.mc.logp)
