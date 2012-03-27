@@ -619,7 +619,7 @@ class Hierarchical(object):
                                 beta_step_method_args=param.subj_knode.step_method_args)
 
 
-    def mcmc(self, assign_step_methods = True, *args, **kwargs):
+    def mcmc(self, assign_step_methods=True, *args, **kwargs):
         """
         Returns pymc.MCMC object of model.
 
@@ -1007,12 +1007,26 @@ class Hierarchical(object):
 
 
 
-    def load_db(self, dbname, verbose=0, db_loader=None):
+    def load_db(self, dbname, verbose=0, db='sqlite'):
         """Load samples from a database created by an earlier model
         run (e.g. by calling .mcmc(dbname='test'))
+
+        :Arguments:
+            dbname : str
+                File name of database
+            verbose : int <default=0>
+                Verbosity level
+            db : str <default='sqlite'>
+                Which database backend to use, can be
+                sqlite, pickle, hdf5, txt.
         """
-        if db_loader is None:
-            db_loader = pm.database.sqlite.load
+
+        loader_db = {'sqlite': pm.database.sqlite.load,
+                     'pickle': pm.database.pickle.load,
+                     'hdf5': pm.database.hdf5.load,
+                     'txt': pm.database.txt.load}
+
+        db_loader = loader_db[db]
 
         # Set up model
         if not self.nodes:
