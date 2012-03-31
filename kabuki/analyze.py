@@ -296,35 +296,28 @@ def savage_dickey(pos, post_trace, range=(-.3,.3), bins=40, prior_trace=None, pr
 
     return sav_dick
 
-def R_hat(samples):
-    n, num_chains = samples.shape # n=num_samples
-    chain_means = np.mean(samples, axis=1)
-    # Calculate between-sequence variance
-    between_var = n * np.var(chain_means, ddof=1)
-
-    chain_var = np.var(samples, axis=1, ddof=1)
-    within_var = np.mean(chain_var)
-
-    marg_post_var = ((n-1.)/n) * within_var + (1./n) * between_var # 11.2
-    R_hat_sqrt = np.sqrt(marg_post_var/within_var)
-
-    return R_hat_sqrt
-
-def test_chain_convergance(models):
-    # Calculate R statistic to check for chain convergance (Gelman at al 2004, 11.4)
-    params = models[0].group_params
-    R_hat_param = {}
-    for param_name in params.iterkeys():
+def gelman_rubin(models):
+    """
+    Calculate the gelman_rubin statistic (R_hat) for every stochastic in the model.
+    (Gelman at al 2004, 11.4)
+    Input:
+        models - list of models
+    """
+    names = models[0].stoch_by_name.keys()
+    R_hat_dict = {}
+    num_samples = models[0].stoch_by_name.values()[0].trace().shape[0] # samples
+    num_chains = len(models)
+    for name  in models[0].stoch_by_name.iterkeys():
         # Calculate mean for each chain
-        num_samples = models[0].group_params[param_name].trace().shape[0] # samples
-        num_chains = len(models)
         samples = np.empty((num_chains, num_samples))
         for i,model in enumerate(models):
-            samples[i,:] = model.group_params[param_name].trace()
+            samples[i,:] = model.stoch_by_name[name].trace()
 
-        R_hat_param[param_name] = R_hat(samples)
+        R_hat_dict[name] = pm.diagnostics.gelman_rubin(samples)
 
-    return R_hat_param
+    return R_hat_dict
+
+R_hat = gelman_rubin
 
 def check_geweke(model, assert_=True):
     # Test for convergence using geweke method
@@ -464,9 +457,16 @@ def _evaluate_post_pred(sampled_stats, data_stats, evals=None):
     if evals is None:
         # Generate some default evals
         evals = OrderedDict()
-        evals['in credible interval'] = lambda x, y: (scoreatpercentile(x, 97.5) > y) and (scoreatpercentile(x, 2.5) < y)
+        evals['observed'] = lambda x, y: y
+        evals['credible'] = lambda x, y: (scoreatpercentile(x, 97.5) > y) and (scoreatpercentile(x, 2.5) < y)
         evals['quantile'] = percentileofscore
         evals['SEM'] = lambda x, y: (np.mean(x) - y)**2
+        evals['mahalanobis'] = lambda x, y: np.abs(np.mean(x) - y)/np.std(x)
+        evals['mean'] = lambda x,y: np.mean(x)
+        evals['std'] = lambda x,y: np.std(x)
+        for q in [2.5, 25, 50, 75, 97.5]:
+            key = str(q) + 'q'
+            evals[key] = lambda x, y, q=q: scoreatpercentile(x, q)
 
     # Evaluate all eval-functions
     results = pd.DataFrame(index=sampled_stats.keys(), columns=evals.keys())
@@ -558,7 +558,7 @@ def post_pred_check(model, samples=500, bins=100, stats=None, evals=None, plot=F
     if progress_bar:
         n_iter = len(model.observed_nodes) * model.num_subjs
         widgets = ['Sampling: ', pbar.Percentage(), ' ',
-                   pbar.Bar(marker='0',left='[',right=']'),
+                   pbar.Bar(marker='+',left='[',right=']'),
                    ' ', pbar.Iterations(), '/', `n_iter`]
         bar = pbar.ProgressBar(widgets=widgets, maxval=n_iter)
         bar.start()
@@ -645,11 +645,6 @@ def _post_pred_bottom_node(bottom_node, value_range, samples=10, bins=100, axis=
         print "WARNING! %s threw FloatingPointError over std computation. Setting to 0 and continuing." % bottom_node.__name__
         y_std = np.zeros_like(y)
 
-    #if len(bottom_node.value) != 0:
-        # No data assigned to node
-    #    return y, y_std
-
-    #hist, ranges = np.histogram(bottom_node.value, normed=True, bins=bins)
 
     if axis is not None:
         # Plot pp
@@ -660,7 +655,7 @@ def _post_pred_bottom_node(bottom_node, value_range, samples=10, bins=100, axis=
         if len(bottom_node.value) != 0:
             axis.hist(bottom_node.value, normed=True,
                       range=(value_range[0], value_range[-1]), label='data',
-                      bins=100, histtype='step', lw=2.)
+                      bins=bins, histtype='step', lw=2.)
 
         axis.set_ylim(bottom=0) # Likelihood and histogram can only be positive
 

@@ -27,7 +27,11 @@ def _add_noise(params, noise=.1, exclude_params=()):
 
     for param, value in params.iteritems():
         if param not in exclude_params:
-            params[param] = np.random.normal(loc=value, scale=noise)
+            if np.isscalar(noise):
+                params[param] = np.random.normal(loc=value, scale=noise)
+            else:
+                if noise.has_key(param):
+                    params[param] = np.random.normal(loc=value, scale=noise[param])
 
     return params
 
@@ -53,8 +57,11 @@ def gen_rand_data(dist, params, samples=50, subjs=1, subj_noise=.1, exclude_para
             How many subjects to generate data from. Individual subject parameters
             will be normal distributed around the provided parameters with variance
             subj_noise if subjs > 1. If only one subject is simulated no noise is added.
-        subj_noise : float <default: .1>
+        subj_noise : float or dictionary <default: .1>
             How much to perturb individual subj parameters.
+            if float then each parameter will be sampled from a normal distribution with std of subj_noise.
+            if dictionary then only parameters that are keys of subj_noise will be sampled, and the std of the sampling
+            distribution will be the value associated with them.
         exclude_params : tuple <default ()>
             Do not add noise to these parameters.
         column_name : str <default='data'>

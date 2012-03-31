@@ -710,7 +710,7 @@ class Hierarchical(object):
             print "DIC: %f" % self.mc.dic
             print "logp: %f" % self.mc.logp
         else:
-            with open(fname) as fd:
+            with open(fname, 'w') as fd:
                 fd.write(stats_str)
                 fd.write("DIC: %f\n" % self.mc.dic)
                 fd.write("logp: %f\n" % self.mc.logp)
@@ -724,7 +724,7 @@ class Hierarchical(object):
             print "DIC: %f" % self.mc.dic
             print "logp: %f" % self.mc.logp
         else:
-            with open(fname) as fd:
+            with open(fname, 'w') as fd:
                 fd.write(stats_str)
                 fd.write("DIC: %f\n" % self.mc.dic)
                 fd.write("logp: %f\n" % self.mc.logp)
@@ -1177,7 +1177,7 @@ class Hierarchical(object):
                 pm.Matplot.plot(node)
                 node.plot = plot_value
 
-    def subj_by_subj_map_init(self, runs=2, **map_kwargs):
+    def subj_by_subj_map_init(self, runs=2, verbose=1, **map_kwargs):
         """
         initializing nodes by finding the MAP for each subject separately
         Input:
@@ -1204,7 +1204,7 @@ class Hierarchical(object):
         # loop over subjects
         for i_subj in range(n_subjs):
             # create and fit single subject
-            if verbose > 1: print "*!*!* fitting subject %d *!*!*" % subjs[i_subj]
+            if verbose > 0: print "*!*!* fitting subject %d *!*!*" % subjs[i_subj]
             t_data = self.data[self.data['subj_idx'] == subjs[i_subj]]
             t_data = rec.drop_fields(t_data, ['data_idx'])
             s_model = deepcopy(empty_s_model)
