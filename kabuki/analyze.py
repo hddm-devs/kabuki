@@ -645,11 +645,6 @@ def _post_pred_bottom_node(bottom_node, value_range, samples=10, bins=100, axis=
         print "WARNING! %s threw FloatingPointError over std computation. Setting to 0 and continuing." % bottom_node.__name__
         y_std = np.zeros_like(y)
 
-    #if len(bottom_node.value) != 0:
-        # No data assigned to node
-    #    return y, y_std
-
-    #hist, ranges = np.histogram(bottom_node.value, normed=True, bins=bins)
 
     if axis is not None:
         # Plot pp
@@ -660,7 +655,7 @@ def _post_pred_bottom_node(bottom_node, value_range, samples=10, bins=100, axis=
         if len(bottom_node.value) != 0:
             axis.hist(bottom_node.value, normed=True,
                       range=(value_range[0], value_range[-1]), label='data',
-                      bins=100, histtype='step', lw=2.)
+                      bins=bins, histtype='step', lw=2.)
 
         axis.set_ylim(bottom=0) # Likelihood and histogram can only be positive
 
