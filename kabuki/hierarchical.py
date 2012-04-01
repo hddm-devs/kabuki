@@ -702,32 +702,49 @@ class Hierarchical(object):
 
         return self.mc
 
+    def dic_info(self):
+        """returns information about the model DIC"""
+
+        info = {}
+        info['DIC'] = self.mc.dic
+        info['deviance']  = np.mean(self.mc.db.trace('deviance')(), axis=0)
+        info['pD'] = info['DIC'] - info['deviance']
+
+        return info
+
+    def _output_stats(self, stats_str, fname=None):
+        """
+        used by print_stats and print_group_stats to print the stats to the screen
+        or to file
+        """
+        info = self.dic_info()
+        if fname is None:
+            print stats_str
+            print "DIC: %f" % self.mc.dic
+            print "deviance: %f" % info['deviance']
+            print "pD: %f" % info['pD']
+        else:
+            with open(fname, 'w') as fd:
+                fd.write(stats_str)
+                fd.write("DIC: %f\n" % self.mc.dic)
+                fd.write("deviance: %f\n" % info['deviance'])
+                fd.write("pD: %f\n" % info['pD'])
 
     def print_group_stats(self, fname=None):
+        """print statistics of group variables
+        Input (optional)
+            fname <string> - the output will be written to a file named fname
+        """
         stats_str = kabuki.analyze.gen_group_stats(self.stats())
-        if fname is None:
-            print stats_str
-            print "DIC: %f" % self.mc.dic
-            print "logp: %f" % self.mc.logp
-        else:
-            with open(fname, 'w') as fd:
-                fd.write(stats_str)
-                fd.write("DIC: %f\n" % self.mc.dic)
-                fd.write("logp: %f\n" % self.mc.logp)
-
-
+        self._output_stats(stats_str, fname)
 
     def print_stats(self, fname=None):
+        """print statistics of all variables
+        Input (optional)
+            fname <string> - the output will be written to a file named fname
+        """
         stats_str = kabuki.analyze.gen_stats(self.stats())
-        if fname is None:
-            print stats_str
-            print "DIC: %f" % self.mc.dic
-            print "logp: %f" % self.mc.logp
-        else:
-            with open(fname, 'w') as fd:
-                fd.write(stats_str)
-                fd.write("DIC: %f\n" % self.mc.dic)
-                fd.write("logp: %f\n" % self.mc.logp)
+        self._output_stats(stats_str, fname)
 
     def _set_dependent_param(self, param):
         """Set parameter that depends on data.
