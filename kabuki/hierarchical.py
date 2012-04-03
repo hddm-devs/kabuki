@@ -1038,12 +1038,15 @@ class Hierarchical(object):
                 sqlite, pickle, hdf5, txt.
         """
 
-        loader_db = {'sqlite': pm.database.sqlite.load,
-                     'pickle': pm.database.pickle.load,
-                     'hdf5': pm.database.hdf5.load,
-                     'txt': pm.database.txt.load}
 
-        db_loader = loader_db[db]
+        if db == 'sqlite':
+            db_loader = pm.database.sqlite.load
+        elif db == 'pickle':
+            db_loader = pm.database.pickle.load
+        elif db == 'hdf5':
+            db_loader = pm.database.hdf5.load
+        elif db == 'txt':
+            db_loader = pm.database.txt.load
 
         # Set up model
         if not self.nodes:
