@@ -584,7 +584,7 @@ def _post_pred_bottom_node(bottom_node, value_range, samples=10, bins=100, axis=
 
         # Plot data
         if len(bottom_node.value) != 0:
-            axis.hist(bottom_node.value, normed=True,
+            axis.hist(bottom_node.value, normed=True, color='r',
                       range=(value_range[0], value_range[-1]), label='data',
                       bins=bins, histtype='step', lw=2.)
 
