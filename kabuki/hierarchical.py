@@ -83,30 +83,6 @@ class Parameter(object):
         self.var_nodes = OrderedDict()
         self.subj_nodes = OrderedDict()
 
-        # Pointers that get overwritten
-        self.group = None
-        self.tag = None
-        self.data = None
-        self.idx = None
-
-    def reset(self):
-        self.group = None
-        self.tag = None
-        self.data = None
-        self.idx = None
-
-    def get_full_name(self):
-        if self.idx is not None:
-            if self.tag is not None:
-                return '%s%s%i'%(self.name, self.tag, self.idx)
-            else:
-                return '%s%i'%(self.name, self.idx)
-        else:
-            if self.tag is not None:
-                return '%s%s'%(self.name, self.tag)
-            else:
-                return self.name
-
     full_name = property(get_full_name)
 
     def __repr__(self):
@@ -131,6 +107,72 @@ class Parameter(object):
 
         else:
             raise ValueError, "unknown var_type"
+
+def get_overlapping_elements(t1, t2):
+    return tuple([i for i in t2 if i in t1])
+
+def test_subset_tuple():
+    assert get_overlapping_elements(('a', 'b' , 'c'), ('a',)) == ('a',)
+    assert get_overlapping_elements(('a', 'b' , 'c'), ('a', 'b')) == ('a', 'b')
+    assert get_overlapping_elements(('a', 'b' , 'c'), ('a', 'c')) == ('a', 'c')
+    assert get_overlapping_elements(('a', 'b' , 'c'), ('b', 'c')) == ('b', 'c')
+    assert get_overlapping_elements(('c', 'b', 'a'), ('b', 'c')) == ('b', 'c')
+
+
+class ParamInst(object):
+    def __init__(self, parameter, depends_on):
+        self.parameter = parameter
+        if isinstance(depends_on, str):
+            depends_on = tuple(depends_on)
+
+        self.col_dep_on = depends_on
+
+        self.elem_to_param = {}
+
+        # Pointers that get overwritten
+        self.group = None
+        self.tag = None
+        self.data = None
+        self.idx = None
+
+    def reset(self):
+        self.group = None
+        self.tag = None
+        self.data = None
+        self.idx = None
+
+    def get_full_name(self):
+        if self.idx is not None:
+            if self.tag is not None:
+                return '%s%s%i'%(self.name, self.tag, self.idx)
+            else:
+                return '%s%i'%(self.name, self.idx)
+        else:
+            if self.tag is not None:
+                return '%s%s'%(self.name, self.tag)
+            else:
+                return self.name
+
+    def add_node(self, depends_on, node, data):
+        self.elem_to_param[depends_on] = node
+
+    def get_node(self, col_to_elem):
+        """Return the node that depends on the same elements.
+
+        :Arguments:
+            col_to_elem : dict
+                Maps column names to elements.
+                e.g. {'col1': 'elem1', 'col2': 'elem3', 'col3': 'elem3'}
+        """
+
+        # Find the column names that overlap with the ones we have
+        overlapping_cols = get_overlapping_elements(col_to_elem.keys(), self.col_dep_on)
+
+        # Create new tag for the specific elements we are looking for (that overlap)
+        deps_on_elems = [col_to_elem[col] for col in overlapping_cols]
+
+        return self.elem_to_param[deps_on_elems]
+
 
 
 class Hierarchical(object):
@@ -214,6 +256,7 @@ class Hierarchical(object):
     def __init__(self, data, is_group_model=None, depends_on=None, trace_subjs=True,
                  plot_subjs=False, plot_var=False, include=(), replace_params=None,
                  update_params=None, overwrite_data_idx=False):
+
         # Init
         self.include = set(include)
 
@@ -260,6 +303,15 @@ class Hierarchical(object):
                     if elem not in self.data.dtype.names:
                         raise KeyError, "Column named %s not found in data." % elem
             self.depends_on = depends_on
+
+        # Create set that holds all columns. This is used for the
+        # observed nodes that have to be created for the smallest
+        # denominator.
+        self.depends_all = set()
+        [self.depends_all.add(dep) for p in self.depends_on.values() for dep in p]
+        self.depends_default = defaultdict(lambda: ())
+        [self.depends_default[key] = value for key, value in self.depends_on.iteritems()]
+
         self.depends_dict = OrderedDict()
 
         if is_group_model is None:
@@ -324,6 +376,9 @@ class Hierarchical(object):
             self.params_dict[param.name] = param
 
 
+    def create_parameters(self):
+        for name, param in self.params_include:
+            param.
 
     def _change_default_params(self, replace_params, update_params):
         """replace/update parameters with user defined parameters"""
@@ -354,91 +409,6 @@ class Hierarchical(object):
                 raise ValueError, "An invalid parameter (%s) was found in update_params" % (param_name)
 
 
-    def _get_data_depend(self):
-        """Partition data according to self.depends_on.
-
-        :Returns:
-            List of tuples with the data, the corresponding parameter
-            distribution and the parameter name.
-
-        """
-
-        params = {} # use subj parameters to feed into model
-        # Create new params dict and copy over nodes
-        for name, param in self.params_include.iteritems():
-            # Bottom nodes are created later
-            if name in self.depends_on or param.is_bottom_node:
-                continue
-            if self.is_group_model and (param.has_subj_nodes):
-                params[name] = param.subj_nodes['']
-            else:
-                params[name] = param.group_nodes['']
-
-        depends_on = copy(self.depends_on)
-
-        # Make call to recursive function that does the partitioning
-        data_dep = self._get_data_depend_rec(self.data, depends_on, params, [])
-
-        return data_dep
-
-    def _get_data_depend_rec(self, data, depends_on, params, dep_name, param=None):
-        """Recursive function to partition data and params according
-        to depends_on.
-
-        """
-
-        # Unfortunately, this function is quite complex as it
-        # recursively parcels the data.
-
-        if len(depends_on) != 0: # If depends are present
-            data_params = []
-            # Get first param from depends_on
-            param_name = depends_on.keys()[0]
-            col_name = depends_on.pop(param_name) # Take out param
-            depend_elements = np.unique(data[col_name])
-            # Loop through unique elements
-            for depend_element in depend_elements:
-                # Append dependent element name.
-                dep_name.append(depend_element)
-                # Extract rows containing unique element
-                data_dep = data[data[col_name] == depend_element]
-
-                # Add a key that is only the col_name that links to
-                # the correct dependent nodes. This is the central
-                # trick so that later on the get_bottom_node can use
-                # params[col_name] and the bottm node will get linked to
-                # the correct nodes automatically.
-                param = self.params_include[param_name]
-
-                # Add the node
-                if self.is_group_model and param.has_subj_nodes:
-                    params[param_name] = param.subj_nodes[str(depend_element)]
-                else:
-                    params[param_name] = param.group_nodes[str(depend_element)]
-                # Recursive call with one less dependency and the selected data.
-                data_param = self._get_data_depend_rec(data_dep,
-                                                       depends_on=copy(depends_on),
-                                                       params=copy(params),
-                                                       dep_name=copy(dep_name),
-                                                       param=param)
-                data_params += data_param
-                # Remove last item (otherwise we would always keep
-                # adding the dep elems of in one column)
-                dep_name.pop()
-            return data_params
-
-        else: # Data does not depend on anything (anymore)
-
-            #create_
-            if len(dep_name) != 0:
-                if len(dep_name) == 1:
-                    dep_name_str = str(dep_name[0])
-                else:
-                    dep_name_str = str(dep_name)
-            else:
-                dep_name_str = ''
-
-            return [(data, params, dep_name, dep_name_str)]
 
     def create_nodes(self, max_retries=8):
         """Set group level distributions. One distribution for each
@@ -550,6 +520,70 @@ class Hierarchical(object):
                 pass
 
         return self.nodes
+
+
+
+    def _set_dependent_param(self, param):
+        """Set parameter that depends on data.
+
+        :Arguments:
+            param_name : string
+                Name of parameter that depends on data for
+                which to set distributions.
+
+        """
+
+        # Get column names for provided param_name
+        depends_on = self.depends_on[param.name]
+
+        # Get unique elements from the columns
+        data_dep = self.data[depends_on]
+        uniq_data_dep = np.unique(data_dep)
+
+        #update depends_dict
+        self.depends_dict[param.name] = uniq_data_dep
+
+        # Loop through unique elements
+        for uniq_date in uniq_data_dep:
+            # Select data
+            data_dep_select = self.data[(data_dep == uniq_date)]
+
+            # Create name for parameter
+            tag = str(uniq_date)
+
+            # Create parameter distribution from factory
+            param.tag = tag
+            param.data = data_dep_select
+            param.group_nodes[tag] = self.create_pymc_node(param.group_knode, param.full_name)
+            param.reset()
+
+            if self.is_group_model and param.has_subj_nodes:
+                # Create appropriate subj parameter
+                self._set_subj_nodes(param, tag, data_dep_select)
+
+        return self
+
+    def _set_independet_param(self, param):
+        """Set parameter that does _not_ depend on data.
+
+        :Arguments:
+            param_name : string
+                Name of parameter.
+
+        """
+
+        # Parameter does not depend on data
+        # Set group parameter
+        param.tag = ''
+        param.group_nodes[''] = self.create_pymc_node(param.group_knode, param.full_name)
+        param.reset()
+
+        if self.is_group_model and param.has_subj_nodes:
+            self._set_subj_nodes(param, '', self.data)
+
+        return self
+
+
 
     def map(self, runs=2, warn_crit=5, method='fmin_powell', **kwargs):
         """
@@ -746,65 +780,6 @@ class Hierarchical(object):
         stats_str = kabuki.analyze.gen_stats(self.stats())
         self._output_stats(stats_str, fname)
 
-    def _set_dependent_param(self, param):
-        """Set parameter that depends on data.
-
-        :Arguments:
-            param_name : string
-                Name of parameter that depends on data for
-                which to set distributions.
-
-        """
-
-        # Get column names for provided param_name
-        depends_on = self.depends_on[param.name]
-
-        # Get unique elements from the columns
-        data_dep = self.data[depends_on]
-        uniq_data_dep = np.unique(data_dep)
-
-        #update depends_dict
-        self.depends_dict[param.name] = uniq_data_dep
-
-        # Loop through unique elements
-        for uniq_date in uniq_data_dep:
-            # Select data
-            data_dep_select = self.data[(data_dep == uniq_date)]
-
-            # Create name for parameter
-            tag = str(uniq_date)
-
-            # Create parameter distribution from factory
-            param.tag = tag
-            param.data = data_dep_select
-            param.group_nodes[tag] = self.create_pymc_node(param.group_knode, param.full_name)
-            param.reset()
-
-            if self.is_group_model and param.has_subj_nodes:
-                # Create appropriate subj parameter
-                self._set_subj_nodes(param, tag, data_dep_select)
-
-        return self
-
-    def _set_independet_param(self, param):
-        """Set parameter that does _not_ depend on data.
-
-        :Arguments:
-            param_name : string
-                Name of parameter.
-
-        """
-
-        # Parameter does not depend on data
-        # Set group parameter
-        param.tag = ''
-        param.group_nodes[''] = self.create_pymc_node(param.group_knode, param.full_name)
-        param.reset()
-
-        if self.is_group_model and param.has_subj_nodes:
-            self._set_subj_nodes(param, '', self.data)
-
-        return self
 
     def _set_subj_nodes(self, param, tag, data):
         """Set nodes with a parent.
