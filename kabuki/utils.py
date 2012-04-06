@@ -6,6 +6,60 @@ from copy import copy, deepcopy
 import sys
 import kabuki
 
+def get_traces(model):
+    """Returns recarray of all traces in the model.
+
+    :Arguments:
+        model : kabuki.Hierarchical submodel or pymc.MCMC model
+
+    :Returns:
+        trace_array : recarray
+
+    """
+    if isinstance(model, pm.MCMC):
+        m = model
+    else:
+        m = model.mc
+
+    nodes = list(m.stochastics)
+
+    names = [node.__name__ for node in nodes]
+    dtype = [(name, np.float) for name in names]
+    traces = np.empty(nodes[0].trace().shape[0], dtype=dtype)
+
+    # Store traces in one array
+    for name, node in zip(names, nodes):
+        traces[name] = node.trace()[:]
+
+    return traces
+
+def logp_trace(model):
+    """
+    return a trace of logp for model
+    """
+
+    #init
+    db = model.mc.db
+    n_samples = db.trace('deviance').length()
+    logp = np.empty(n_samples, np.double)
+
+    #loop over all samples
+    for i_sample in xrange(n_samples):
+        #set the value of all stochastic to their 'i_sample' value
+        for stochastic in model.mc.stochastics:
+            try:
+                value = db.trace(stochastic.__name__)[i_sample]
+                stochastic.value = value
+
+            except KeyError:
+                print "No trace available for %s. " % stochastic.__name__
+
+        #get logp
+        logp[i_sample] = model.mc.logp
+
+    return logp
+
+
 def interpolate_trace(x, trace, range=(-1,1), bins=100):
     """Interpolate distribution (from samples) at position x.
 
