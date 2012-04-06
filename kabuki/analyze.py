@@ -151,14 +151,17 @@ def compare_all_pairwise(model):
     from scipy.stats import scoreatpercentile
     from itertools import combinations
     print "Parameters\tMean difference\t5%\t95%"
+    
     # Loop through dependent parameters and generate stats
-    for params in model.group_nodes_dep.itervalues():
+    for param in model.params_dict.itervalues():
+        if len(param.group_nodes) < 2:
+            continue
         # Loop through all pairwise combinations
-        for p0,p1 in combinations(params, 2):
-            diff = model.group_nodes[p0].trace() - model.group_nodes[p1].trace()
+        for p0,p1 in combinations(param.group_nodes.values(), 2):
+            diff = p0.trace() - p1.trace()
             perc_5 = scoreatpercentile(diff, 5)
             perc_95 = scoreatpercentile(diff, 95)
-            print "%s vs %s\t%.3f\t%.3f\t%.3f" %(p0, p1, np.mean(diff), perc_5, perc_95)
+            print "%s vs %s\t%.3f\t%.3f\t%.3f" %(p0.__name__, p1.__name__, np.mean(diff), perc_5, perc_95)
 
 
 def plot_all_pairwise(model):

@@ -11,19 +11,14 @@ class TestAnalyze(unittest.TestCase):
 
     @classmethod
     def setUpClass(self):
-        
+
         #load models
         self.models = self.load_models()
         self.n_models = len(self.models)
 
         #run models
-        print "in init"
-        import time
-        time.sleep(0.1)
-
-#        kabuki.debug_here()
         self.sample_from_models()
-    
+
     @classmethod
     def load_models(self):
         """
@@ -96,32 +91,36 @@ class TestAnalyze(unittest.TestCase):
     def test_compare_all_pairwise(self):
         for model in self.models:
             ka.compare_all_pairwise(model)
-    
+
     def plot_all_pairwise(self):
         for model in self.models:
             ka.plot_all_pairwise(model)
-            
+
     @unittest.skip("Not implemented")
     def test_savage_dickey(self):
         raise NotImplementedError
-    
+
     @unittest.skip("Not implemented")
     def test_gelman_rubin(self):
         raise NotImplementedError
-    
+
     @unittest.skip("Not implemented")
     def test_check_geweke(self):
         raise NotImplementedError
-    
+
     def test_group_cond_diff(self):
         for model in self.models:
-            ka.group_cond_diff(model,'v', 0, 1)
-    
+            if model.is_group_model:
+                if model.depends_on:
+                    (name, cond) = model.depends_on.items()[0]
+                    tags = model.params_dict[name].group_nodes.keys()[:2]
+                ka.group_cond_diff(model,name, *tags)
+
     def test_post_pred_check(self):
         for model in self.models:
             ka.post_pred_check(model, samples=20, bins=100, plot=True, progress_bar=False)
             close('all')
-            
+
     def test_plot_posterior_predictive(self):
         for model in self.models:
             ka.plot_posterior_predictive(model, samples=10)
