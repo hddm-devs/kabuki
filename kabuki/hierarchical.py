@@ -569,6 +569,10 @@ class Hierarchical(object):
 
         """
 
+        if self.is_group_model:
+            raise NotImplementedError("""Sorry, This method is not yet implemented for group models.
+            you might consider using the subj_by_subj_map_init method""")
+
         from operator import attrgetter
 
         maps = []
