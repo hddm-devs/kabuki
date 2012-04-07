@@ -5,70 +5,24 @@ import unittest
 import scipy.stats
 import kabuki.analyze as ka
 from matplotlib.pyplot import close
+import test_utils
 
 
-class TestAnalyze(unittest.TestCase):
+class TestAnalyzeBreakdown(unittest.TestCase):
+    """
+    test unit for analyze.py
+    the unit only tests to see if the functions donot raise an error.
+    it does not check the validity of the results.
+    """
 
     @classmethod
     def setUpClass(self):
 
         #load models
-        self.models = self.load_models()
-        self.n_models = len(self.models)
+        self.models = test_utils.load_models()
 
         #run models
-        self.sample_from_models()
-
-    @classmethod
-    def load_models(self):
-        """
-        This function returns a list of models that are going to be tested
-        """
-        import hddm
-        n = 400
-        dtype = [('response', np.int), ('rt', np.float), ('subj_idx', np.int32), ('cond1', 'S20'), ('cond2', 'S20')]
-        data = np.empty(n, dtype=dtype)
-        data['rt'] = np.random.rand(n) + 0.5;
-        data['response'] = np.random.randint(2, size=n)
-        data['cond1'] = np.array(['A','B'])[np.random.randint(2, size=n)]
-        data['cond2'] = np.array(['A','B'])[np.random.randint(2, size=n)]
-        data['subj_idx'] = np.zeros(n)
-
-        models = []
-        #model 1
-        m = hddm.HDDM(data, depends_on = {'v':'cond1'})
-        models.append(m)
-
-        #model 2
-        m = hddm.HDDM(data, depends_on = {'v':['cond1', 'cond2'], 'a':'cond1'}, include =['z','V'])
-        models.append(m)
-
-        data['subj_idx'] = np.random.randint(5, size=n)
-        #model 3
-        m = hddm.HDDM(data, depends_on = {'v':'cond1'})
-        models.append(m)
-
-        #model 4
-        v_dict = {'share_var': True}
-
-        #sv has no subj nodes, and it is switched to half-cauchy
-        V_g = Knode(kabuki.utils.HalfCauchy, S=10, value=1)
-        V = kabuki.Parameter('V', group_knode=V_g,
-                             optional=True, default=0)
-
-        m = hddm.HDDM(data, depends_on = {'v':['cond1', 'cond2'], 'a':'cond1'}, include =['V'],
-                      update_params = {'v' : v_dict}, replace_params = [V])
-        models.append(m)
-
-        return models
-
-    @classmethod
-    def sample_from_models(self):
-        """sample from all models"""
-        n_iters = 200
-        for i, model in enumerate(self.models):
-            print "sample model", i
-            model.sample(n_iters)
+        test_utils.sample_from_models(self.models, n_iter=200)
 
     def runTest(self):
         pass
@@ -80,8 +34,9 @@ class TestAnalyze(unittest.TestCase):
 
     def test_group_plot(self):
         for model in self.models:
-            ka.group_plot(model)
-            close('all')
+            if model.is_group_model:
+                ka.group_plot(model)
+                close('all')
 
     def test_plot_posteriors_nodes(self):
         for model in self.models:
@@ -123,4 +78,4 @@ class TestAnalyze(unittest.TestCase):
 
     def test_plot_posterior_predictive(self):
         for model in self.models:
-            ka.plot_posterior_predictive(model, samples=10)
+            ka.plot_posterior_predictive(model, value_range = np.arange(-2,2,10), samples=10)
