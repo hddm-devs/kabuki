@@ -704,8 +704,6 @@ class Hierarchical(object):
         # sample
         self.mc.sample(*args, **kwargs)
 
-        return self.mc
-
     def dic_info(self):
         """returns information about the model DIC"""
 
