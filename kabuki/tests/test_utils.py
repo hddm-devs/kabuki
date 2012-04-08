@@ -1,6 +1,7 @@
 import kabuki
 from kabuki.hierarchical import Knode
 import numpy as np
+import pymc as pm
 
 def load_models():
     """
@@ -31,7 +32,8 @@ def load_models():
     models.append(m)
 
     #model 4
-    v_dict = {'share_var': True}
+    v_g = Knode(pm.Normal, mu=0, tau=20**-2, value=0, step_method=kabuki.steps.kNormalNormal)
+    v_dict = {'share_var': True, 'group_knode': v_g}
 
     #sv has no subj nodes, and it is switched to half-cauchy
     V_g = Knode(kabuki.utils.HalfCauchy, S=10, value=1)
