@@ -151,14 +151,17 @@ def compare_all_pairwise(model):
     from scipy.stats import scoreatpercentile
     from itertools import combinations
     print "Parameters\tMean difference\t5%\t95%"
+    
     # Loop through dependent parameters and generate stats
-    for params in model.group_nodes_dep.itervalues():
+    for param in model.params_dict.itervalues():
+        if len(param.group_nodes) < 2:
+            continue
         # Loop through all pairwise combinations
-        for p0,p1 in combinations(params, 2):
-            diff = model.group_nodes[p0].trace() - model.group_nodes[p1].trace()
+        for p0,p1 in combinations(param.group_nodes.values(), 2):
+            diff = p0.trace() - p1.trace()
             perc_5 = scoreatpercentile(diff, 5)
             perc_95 = scoreatpercentile(diff, 95)
-            print "%s vs %s\t%.3f\t%.3f\t%.3f" %(p0, p1, np.mean(diff), perc_5, perc_95)
+            print "%s vs %s\t%.3f\t%.3f\t%.3f" %(p0.__name__, p1.__name__, np.mean(diff), perc_5, perc_95)
 
 
 def plot_all_pairwise(model):
@@ -171,7 +174,7 @@ def plot_all_pairwise(model):
     fig = plt.figure()
     fig.subplots_adjust(wspace=0.4, hspace=0.4)
     # Loop through all pairwise combinations
-    for i, (p0, p1) in enumerate(combinations(model.group_nodes.values())):
+    for i, (p0, p1) in enumerate(combinations(model.group_nodes.values(), 2)):
         fig.add_subplot(6,6,i+1)
         plt.plot(p0.trace(), p1.trace(), '.')
         (a_s, b_s, r, tt, stderr) = sp.stats.linregress(p0.trace(), p1.trace())
@@ -313,59 +316,6 @@ def group_cond_diff(hm, node, cond1, cond2, threshold=0):
     mass_under = sp.stats.norm.cdf(threshold,pooled_mean, np.sqrt(pooled_var))
 
     return pooled_mean, pooled_var, mass_under
-
-def get_traces(model):
-    """Returns recarray of all traces in the model.
-
-    :Arguments:
-        model : kabuki.Hierarchical submodel or pymc.MCMC model
-
-    :Returns:
-        trace_array : recarray
-
-    """
-    if isinstance(model, pm.MCMC):
-        m = model
-    else:
-        m = model.mc
-
-    nodes = list(m.stochastics)
-
-    names = [node.__name__ for node in nodes]
-    dtype = [(name, np.float) for name in names]
-    traces = np.empty(nodes[0].trace().shape[0], dtype=dtype)
-
-    # Store traces in one array
-    for name, node in zip(names, nodes):
-        traces[name] = node.trace()[:]
-
-    return traces
-
-def logp_trace(model):
-    """
-    return a trace of logp for model
-    """
-
-    #init
-    db = model.mc.db
-    n_samples = db.trace('deviance').length()
-    logp = np.empty(n_samples, np.double)
-
-    #loop over all samples
-    for i_sample in xrange(n_samples):
-        #set the value of all stochastic to their 'i_sample' value
-        for stochastic in model.mc.stochastics:
-            try:
-                value = db.trace(stochastic.__name__)[i_sample]
-                stochastic.value = value
-
-            except KeyError:
-                print "No trace available for %s. " % stochastic.__name__
-
-        #get logp
-        logp[i_sample] = model.mc.logp
-
-    return logp
 
 def _evaluate_post_pred(sampled_stats, data_stats, evals=None):
     """Evaluate a summary statistics of sampled sets.
