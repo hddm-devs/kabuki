@@ -1167,7 +1167,7 @@ class Hierarchical(object):
 
         return assigned
 
-    def plot_posteriors(self, parameters=None, plot_subjs=False):
+    def plot_posteriors(self, parameters=None, plot_subjs=False, **kwargs):
         """
         plot the nodes posteriors
         Input:
@@ -1179,11 +1179,11 @@ class Hierarchical(object):
         """
 
         if parameters is None: #plot the model
-            pm.Matplot.plot(self.mc)
+            pm.Matplot.plot(self.mc, **kwargs)
 
         else: #plot only the given parameters
 
-            if type(parameters) != list:
+            if not isinstance(parameters, list):
                  parameters = [parameters]
 
             #get the nodes which will be plotted
@@ -1196,7 +1196,7 @@ class Hierarchical(object):
             for node in nodes:
                 plot_value = node.plot
                 node.plot = True
-                pm.Matplot.plot(node)
+                pm.Matplot.plot(node, **kwargs)
                 node.plot = plot_value
 
     def subj_by_subj_map_init(self, runs=2, verbose=1, **map_kwargs):
