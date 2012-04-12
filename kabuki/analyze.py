@@ -151,7 +151,7 @@ def compare_all_pairwise(model):
     from scipy.stats import scoreatpercentile
     from itertools import combinations
     print "Parameters\tMean difference\t5%\t95%"
-    
+
     # Loop through dependent parameters and generate stats
     for param in model.params_dict.itervalues():
         if len(param.group_nodes) < 2:
@@ -541,7 +541,7 @@ def _post_pred_bottom_node(bottom_node, value_range, samples=10, bins=100, axis=
 
     return (y, y_std) #, hist, ranges)
 
-def plot_posterior_predictive(model, value_range=None, samples=10, columns=3, bins=100, savefig=False, prefix=None, figsize=(8,6)):
+def plot_posterior_predictive(model, value_range=None, samples=10, columns=3, bins=100, savefig=False, path=None, figsize=(8,6)):
     """Plot the posterior predictive distribution of a kabuki hierarchical model.
 
     :Arguments:
@@ -567,7 +567,7 @@ def plot_posterior_predictive(model, value_range=None, samples=10, columns=3, bi
         savefig : bool (default=False)
             Whether to save the figure to a file.
 
-        prefix : str (default=None)
+        path : str (default=None)
             Save figure into directory prefix
 
     :Note:
@@ -578,7 +578,8 @@ def plot_posterior_predictive(model, value_range=None, samples=10, columns=3, bi
 
     if value_range is None:
         # Infer from data by finding the min and max from the nodes
-        value_range = np.linspace(model.data)
+        raise NotImplementedError, "value_range keyword argument must be supplied."
+        #value_range = np.linspace(model.data)
 
     for name, bottom_node in model.observed_nodes.iteritems():
         if isinstance(bottom_node, np.ndarray):
@@ -610,9 +611,9 @@ def plot_posterior_predictive(model, value_range=None, samples=10, columns=3, bi
             plt.legend()
 
         if savefig:
-            if prefix is not None:
-                fig.savefig(os.path.join(prefix, name) + '.svg', format='svg')
-                fig.savefig(os.path.join(prefix, name) + '.png', format='png')
+            if path is not None:
+                fig.savefig(os.path.join(path, name) + '.svg', format='svg')
+                fig.savefig(os.path.join(path, name) + '.png', format='png')
             else:
                 fig.savefig(name + '.svg', format='svg')
                 fig.savefig(name + '.png', format='png')

@@ -128,7 +128,7 @@ def analyze_experiment(experiment, plot_groups=True, plot_traces=True, plot_post
 
     if plot_post_pred:
         print "Plotting posterior predictive"
-        kabuki.analyze.plot_posterior_predictive(model, np.linspace(-1.2, 1.2, 80), savefig=True, prefix=name, columns=7, figsize=(18,18))
+        kabuki.analyze.plot_posterior_predictive(model, np.linspace(-1.2, 1.2, 80), savefig=True, path=name, columns=7, figsize=(18,18))
 
     if ppd:
         ppd = kabuki.analyze.post_pred_check(model, stats=stats)
