@@ -287,7 +287,7 @@ if __name__=='__main__':
                    {'name': 'condition_influences_threshold', 'data': data, 'model_type': 'hddm.HDDM', 'kwargs': {'depends_on': {'a': 'condition'}}}]
 
     print "Running experiments..."
-    #run_experiments(experiments)
+    run_experiments(experiments)
 
     print "Analyzing experiments..."
     analyze_experiments(experiments, ppc=False)
