@@ -438,11 +438,8 @@ def post_pred_check(model, samples=500, bins=100, stats=None, evals=None, plot=F
     # Progress bar
     if progress_bar:
         n_iter = len(model.observed_nodes) * model.num_subjs
-        widgets = ['Sampling: ', pbar.Percentage(), ' ',
-                   pbar.Bar(marker='+',left='[',right=']'),
-                   ' ', pbar.Iterations(), '/', `n_iter`]
-        bar = pbar.ProgressBar(widgets=widgets, maxval=n_iter)
-        bar.start()
+        bar = pbar.ProgressBar(n_iter)
+        bar_iter = 0
     else:
         print "Sampling..."
 
@@ -454,7 +451,8 @@ def post_pred_check(model, samples=500, bins=100, stats=None, evals=None, plot=F
 
             for i_subj, bottom_node_subj in enumerate(bottom_node):
                 if progress_bar:
-                    bar.update(bar.currval+1)
+                    bar_iter +=1
+                    bar.animate(bar_iter)
                 if bottom_node_subj is None or not hasattr(bottom_node_subj, 'random'):
                     continue # Skip non-existant nodes
                 subjs.append(i_subj)
@@ -467,14 +465,15 @@ def post_pred_check(model, samples=500, bins=100, stats=None, evals=None, plot=F
         else:
             # Flat model
             if progress_bar:
-                bar.update(bar.currval+1)
+                bar_iter +=1
+                bar.animate(bar_iter)
             if bottom_node is None or not hasattr(bottom_node, 'random'):
                 continue # Skip
             result = _post_pred_summary_bottom_node(bottom_node, samples=samples, bins=bins, evals=evals, stats=stats, plot=plot)
             results.append(result)
-
-    if progress_bar:
-        bar.finish()
+        
+        if progress_bar:
+            bar.animate(n_iter)
 
     return pd.concat(results, keys=model.observed_nodes.keys(), names=['node'])
 
