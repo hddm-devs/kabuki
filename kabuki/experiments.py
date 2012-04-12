@@ -11,6 +11,10 @@ def sort_dict(d):
 
 
 def _model_type_to_class(model_type):
+    """Takes either a (inherited) class of Hierarchical or a str with
+    the name of the class and returns the class.
+
+    """
     if isinstance(model_type, kabuki.Hierarchical):
         model_class = model_type
     elif isinstance(model_type, str):
@@ -42,6 +46,32 @@ def _parse_experiment(experiment):
 
 
 def run_experiment(experiment, db='sqlite', samples=10000, burn=5000, thin=3, subj_map_init=True):
+    """Run a single experiment: Builds the model, initializes,
+    samples. See analyze_experiment() for how to generate output
+    statistics of your finished model run.
+
+    :Arguments:
+        experiment : dict
+            dict containing the following mappings:
+            * 'data' -> np.ndarray
+            * 'model_type' -> Hierarchical class or str name of class
+            * 'name' -> str of name of experiment (optional)
+            * 'kwargs' -> Keyword arguments to be supplied at model creation
+        db : str (default='sqlite')
+            Which database backend to use
+        samples : int (default=10000)
+            How many posterior samples to draw
+        burn : int (default=5000)
+            How many posterior samples to throw away as burn-in
+        thin : int (default=3)
+            How much thinning to apply
+        subj_map_init : bool (default=True)
+            Whether to initialize the model using subj_by_subj_map_init().
+
+    :Returns:
+        Str of summary statistics.
+
+    """
     import os
 
     data, model_class, kwargs, name = _parse_experiment(experiment)
@@ -67,6 +97,24 @@ def run_experiment(experiment, db='sqlite', samples=10000, burn=5000, thin=3, su
 
 
 def run_experiments(experiments, mpi=False, **kwargs):
+    """Run a list of experiments. Optionally using MPI.
+
+    :Arguments:
+        experiments : list of dicts
+            One entry for each experiment to run. Each experiment should have a dict like this:
+            * 'data' -> np.ndarray
+            * 'model_type' -> Hierarchical class or str name of class
+            * 'name' -> str of name of experiment (optional)
+            * 'kwargs' -> Keyword arguments to be supplied at model creation
+        mpi : bool (default=False)
+            Whether to run experiments in parallel using MPI. If set to True you must call
+            your script (which calls this function) using mpirun.
+            This requires mpi4py_map and mpi4py to be installed.
+            E.g. pip install mpi4py mpi4py_map
+        kwargs : dict
+            Additional keyword arguments to be passed to run_experiment (see run_experiment),
+            such as samples, burn etc.
+    """
     if mpi:
         import mpi4py_map
         results = mpi4py_map.map(run_experiment, experiments, **kwargs)
@@ -76,15 +124,29 @@ def run_experiments(experiments, mpi=False, **kwargs):
     return results
 
 
-def load_experiment(experiment, db_loader=pm.database.sqlite.load, db_fname='traces.db'):
-    experiment['model'] = load_model(experiment, db_loader=db_loader, db_fname=db_fname)
+def load_experiment(experiment, dbname='traces.db', db='sqlite'):
+    """Load specific experiment from a database file.
+
+    :Arguments:
+        experiment : dict (see run_experiment for the contents)
+        dbname : str (default='traces.db')
+            Name of the database file.
+        db : str (default='sqlite')
+            Which database backend to use, can be
+            sqlite, pickle, hdf5, txt.
+
+    :Return:
+        Same experiment with a new 'model' key linking to the loaded model.
+    """
+
+    experiment['model'] = load_model(experiment, db=db, dbname=dbname)
     return experiment
 
-def load_model(experiment, db_loader=pm.database.sqlite.load, db_fname='traces.db'):
+def load_model(experiment, db='sqlite', dbname='traces.db'):
     data, model_class, kwargs, name = _parse_experiment(experiment)
     m = model_class(data, **kwargs)
 
-    m.load_db(os.path.join(name, db_fname), db_loader=db_loader)
+    m.load_db(os.path.join(name, dbname), db='sqlite')
 
     return m
 
@@ -110,7 +172,27 @@ def load_ppcs(experiments):
     return (model_names, post_preds)
     #return pd.concat(post_preds, keys=model_names, names=['model'])
 
-def analyze_experiment(experiment, plot_groups=True, plot_traces=True, plot_post_pred=True, ppd=True, stats=None):
+def analyze_experiment(experiment, plot_groups=True, plot_traces=True, plot_post_pred=True, ppc=True, stats=None):
+    """Analyze a single experiment. Writes output statitics and various plots into a subdirectory.
+
+    :Arguments:
+        experiment : dict
+            Should be a dict like this:
+            * 'data' -> np.ndarray
+            * 'model_type' -> Hierarchical class or str name of class
+            * 'name' -> str of name of experiment (optional)
+            * 'kwargs' -> Keyword arguments to be supplied at model creation
+        plot_groups : bool (default=True)
+            Whether to plot all traces in a group plot.
+        plot_traces : bool (default=True)
+            Whether to plot all traces in a trace plot.
+        plot_post_pred : bool (default=True)
+            Whether to plot the posterior predictive.
+        ppc : bool (default=True)
+            Whether to run a posterior predictive check.
+        stats : dict (default=None)
+            The stats to be used for the posterior predictive check (see kabuki.analyze.post_pred_check)
+    """
     data, model_class, kwargs, name = _parse_experiment(experiment)
 
     if 'model' in experiment:
@@ -130,13 +212,40 @@ def analyze_experiment(experiment, plot_groups=True, plot_traces=True, plot_post
         print "Plotting posterior predictive"
         kabuki.analyze.plot_posterior_predictive(model, np.linspace(-1.2, 1.2, 80), savefig=True, path=name, columns=7, figsize=(18,18))
 
-    if ppd:
-        ppd = kabuki.analyze.post_pred_check(model, stats=stats)
-        print ppd
-        ppd.to_csv(os.path.join(name, 'post_pred.csv'))
+    if ppc:
+        ppc = kabuki.analyze.post_pred_check(model, stats=stats)
+        print ppc
+        ppc.to_csv(os.path.join(name, 'post_pred.csv'))
 
 
 def analyze_experiments(experiments, mpi=False, plot_dic=True, **kwargs):
+    """Analyze multiple experiments. Outputs will be saved to
+    subdirectories. Can optionally analyze in parallel.
+
+    :Arguments:
+        experiments : list of dicts
+            One entry for each experiment to analyze. Each experiment should have a dict like this:
+            * 'data' -> np.ndarray
+            * 'model_type' -> Hierarchical class or str name of class
+            * 'name' -> str of name of experiment (optional)
+            * 'kwargs' -> Keyword arguments to be supplied at model creation
+        mpi : bool (default=False)
+            Whether to run experiments in parallel using MPI. If set to True you must call
+            your script (which calls this function) using mpirun.
+            This requires mpi4py_map and mpi4py to be installed.
+            E.g. pip install mpi4py mpi4py_map
+        plot_dic : bool (default=True)
+            Whether to create a bar plot of DIC values for each model.
+        kwargs : dict
+            Keyword arguments to be passed to analyze_experiment. See analyze_experiment.
+
+    """
+
+    # Load models if necessary
+    for experiment in experiments:
+        if 'model' not in experiment:
+            experiment['model'] = load_model(experiment)
+
     if mpi:
         import mpi4py_map
         results = mpi4py_map.map(analyze_experiment, experiments, **kwargs)
@@ -157,3 +266,32 @@ def analyze_experiments(experiments, mpi=False, plot_dic=True, **kwargs):
         fig.savefig('dic.pdf')
 
     return results
+
+if __name__=='__main__':
+    from copy import copy
+
+    # Example, requires HDDM
+    import hddm
+
+    # Generate data
+    params_single = hddm.generate.gen_rand_params()
+    params = {'cond1': copy(params_single), 'cond2': copy(params_single)}
+    params['cond2']['v'] = 0
+    data = kabuki.generate.gen_rand_data(hddm.likelihoods.wfpt_like,
+                                         params=params, samples=100, subjs=10, column_name='rt')[0]
+
+    # Create different models to test our various hypotheses.
+    experiments = [
+                   {'name': 'baseline', 'data': data, 'model_type': 'hddm.HDDM', 'kwargs': {'depends_on': {}}},
+                   {'name': 'condition_influences_drift', 'data': data, 'model_type': 'hddm.HDDM', 'kwargs': {'depends_on': {'v': 'condition'}}},
+                   {'name': 'condition_influences_threshold', 'data': data, 'model_type': 'hddm.HDDM', 'kwargs': {'depends_on': {'a': 'condition'}}}]
+
+    print "Running experiments..."
+    run_experiments(experiments)
+
+    print "Analyzing experiments..."
+    analyze_experiments(experiments, ppc=False)
+
+    print "Done! Check the newly created subdirectories."
+
+

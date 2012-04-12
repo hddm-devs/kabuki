@@ -448,13 +448,19 @@ class Hierarchical(object):
             retry : int
                 How often to retry when model creation
                 failed (due to bad starting values).
-
-        TODO: max_retries is causing bugs, so it was commented out.
-            we need to delete the nodes that are created using _create before the next retry.
-            I would like to check if we actually need this option
-
         """
+        # TODO: max_retries is causing bugs, so it was commented out.
+        #     we need to delete the nodes that are created using _create before the next retry.
+        #     I would like to check if we actually need this option
+        # TW: We definitely need it, model creation fails all the time. Wouldn't it be enough
+        #     to just delete all the nodes then?
+
         def _create():
+            # Initialize parameter dicts.
+            self.group_nodes = OrderedDict()
+            self.var_nodes = OrderedDict()
+            self.subj_nodes = OrderedDict()
+
             for name, param in self.params_include.iteritems():
                 # Bottom nodes are created elsewhere
                 if param.is_bottom_node:
@@ -490,16 +496,16 @@ class Hierarchical(object):
             if param.name in self.include or not param.optional:
                 self.params_include[param.name] = param
 
-#        for tries in range(max_retries):
-#            try:
-#                _create()
-#            except (pm.ZeroProbability, ValueError) as e:
-#                continue
-#            break
-#        else:
-#            print "After %f retries, still not good fit found." %(tries)
-#            _create()
-        _create()
+        for tries in range(max_retries):
+            try:
+                _create()
+            except (pm.ZeroProbability, ValueError) as e:
+                continue
+            break
+        else:
+            print "After %f retries, still no good fit found." %(tries)
+            _create()
+        #_create()
 
 
         # Create model dictionaries
