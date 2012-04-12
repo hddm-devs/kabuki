@@ -479,7 +479,7 @@ def post_pred_check(model, samples=500, bins=100, stats=None, evals=None, plot=F
 
 def _parents_to_random_posterior_sample(bottom_node, pos=None):
     """Walks through parents and sets them to pos sample."""
-    for i, parent in enumerate(bottom_node.parents.itervalues()):
+    for i, parent in enumerate(bottom_node.extended_parents):
         if not isinstance(parent, pm.Node): # Skip non-stochastic nodes
             continue
 
