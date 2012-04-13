@@ -415,13 +415,19 @@ class Hierarchical(object):
             retry : int
                 How often to retry when model creation
                 failed (due to bad starting values).
-
-        TODO: max_retries is causing bugs, so it was commented out.
-            we need to delete the nodes that are created using _create before the next retry.
-            I would like to check if we actually need this option
-
         """
+        # TODO: max_retries is causing bugs, so it was commented out.
+        #     we need to delete the nodes that are created using _create before the next retry.
+        #     I would like to check if we actually need this option
+        # TW: We definitely need it, model creation fails all the time. Wouldn't it be enough
+        #     to just delete all the nodes then?
+
         def _create():
+            # Initialize parameter dicts.
+            self.group_nodes = OrderedDict()
+            self.var_nodes = OrderedDict()
+            self.subj_nodes = OrderedDict()
+
             for name, param in self.params_include.iteritems():
                 # Bottom nodes are created elsewhere
                 if param.is_bottom_node:
@@ -457,16 +463,16 @@ class Hierarchical(object):
             if param.name in self.include or not param.optional:
                 self.params_include[param.name] = param
 
-#        for tries in range(max_retries):
-#            try:
-#                _create()
-#            except (pm.ZeroProbability, ValueError) as e:
-#                continue
-#            break
-#        else:
-#            print "After %f retries, still not good fit found." %(tries)
-#            _create()
-        _create()
+        for tries in range(max_retries):
+            try:
+                _create()
+            except (pm.ZeroProbability, ValueError) as e:
+                continue
+            break
+        else:
+            print "After %f retries, still no good fit found." %(tries)
+            _create()
+        #_create()
 
 
         # Create model dictionaries
@@ -1123,7 +1129,7 @@ class Hierarchical(object):
 
         return assigned
 
-    def plot_posteriors(self, parameters=None, plot_subjs=False):
+    def plot_posteriors(self, parameters=None, plot_subjs=False, **kwargs):
         """
         plot the nodes posteriors
         Input:
@@ -1135,11 +1141,11 @@ class Hierarchical(object):
         """
 
         if parameters is None: #plot the model
-            pm.Matplot.plot(self.mc)
+            pm.Matplot.plot(self.mc, **kwargs)
 
         else: #plot only the given parameters
 
-            if type(parameters) != list:
+            if not isinstance(parameters, list):
                  parameters = [parameters]
 
             #get the nodes which will be plotted
@@ -1152,7 +1158,7 @@ class Hierarchical(object):
             for node in nodes:
                 plot_value = node.plot
                 node.plot = True
-                pm.Matplot.plot(node)
+                pm.Matplot.plot(node, **kwargs)
                 node.plot = plot_value
 
     def subj_by_subj_map_init(self, runs=2, verbose=1, **map_kwargs):

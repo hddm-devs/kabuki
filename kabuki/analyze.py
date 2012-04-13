@@ -151,14 +151,17 @@ def compare_all_pairwise(model):
     from scipy.stats import scoreatpercentile
     from itertools import combinations
     print "Parameters\tMean difference\t5%\t95%"
+
     # Loop through dependent parameters and generate stats
-    for params in model.group_nodes_dep.itervalues():
+    for param in model.params_dict.itervalues():
+        if len(param.group_nodes) < 2:
+            continue
         # Loop through all pairwise combinations
-        for p0,p1 in combinations(params, 2):
-            diff = model.group_nodes[p0].trace() - model.group_nodes[p1].trace()
+        for p0,p1 in combinations(param.group_nodes.values(), 2):
+            diff = p0.trace() - p1.trace()
             perc_5 = scoreatpercentile(diff, 5)
             perc_95 = scoreatpercentile(diff, 95)
-            print "%s vs %s\t%.3f\t%.3f\t%.3f" %(p0, p1, np.mean(diff), perc_5, perc_95)
+            print "%s vs %s\t%.3f\t%.3f\t%.3f" %(p0.__name__, p1.__name__, np.mean(diff), perc_5, perc_95)
 
 
 def plot_all_pairwise(model):
@@ -171,7 +174,7 @@ def plot_all_pairwise(model):
     fig = plt.figure()
     fig.subplots_adjust(wspace=0.4, hspace=0.4)
     # Loop through all pairwise combinations
-    for i, (p0, p1) in enumerate(combinations(model.group_nodes.values())):
+    for i, (p0, p1) in enumerate(combinations(model.group_nodes.values(), 2)):
         fig.add_subplot(6,6,i+1)
         plt.plot(p0.trace(), p1.trace(), '.')
         (a_s, b_s, r, tt, stderr) = sp.stats.linregress(p0.trace(), p1.trace())
@@ -314,59 +317,6 @@ def group_cond_diff(hm, node, cond1, cond2, threshold=0):
 
     return pooled_mean, pooled_var, mass_under
 
-def get_traces(model):
-    """Returns recarray of all traces in the model.
-
-    :Arguments:
-        model : kabuki.Hierarchical submodel or pymc.MCMC model
-
-    :Returns:
-        trace_array : recarray
-
-    """
-    if isinstance(model, pm.MCMC):
-        m = model
-    else:
-        m = model.mc
-
-    nodes = list(m.stochastics)
-
-    names = [node.__name__ for node in nodes]
-    dtype = [(name, np.float) for name in names]
-    traces = np.empty(nodes[0].trace().shape[0], dtype=dtype)
-
-    # Store traces in one array
-    for name, node in zip(names, nodes):
-        traces[name] = node.trace()[:]
-
-    return traces
-
-def logp_trace(model):
-    """
-    return a trace of logp for model
-    """
-
-    #init
-    db = model.mc.db
-    n_samples = db.trace('deviance').length()
-    logp = np.empty(n_samples, np.double)
-
-    #loop over all samples
-    for i_sample in xrange(n_samples):
-        #set the value of all stochastic to their 'i_sample' value
-        for stochastic in model.mc.stochastics:
-            try:
-                value = db.trace(stochastic.__name__)[i_sample]
-                stochastic.value = value
-
-            except KeyError:
-                print "No trace available for %s. " % stochastic.__name__
-
-        #get logp
-        logp[i_sample] = model.mc.logp
-
-    return logp
-
 def _evaluate_post_pred(sampled_stats, data_stats, evals=None):
     """Evaluate a summary statistics of sampled sets.
 
@@ -488,11 +438,8 @@ def post_pred_check(model, samples=500, bins=100, stats=None, evals=None, plot=F
     # Progress bar
     if progress_bar:
         n_iter = len(model.observed_nodes) * model.num_subjs
-        widgets = ['Sampling: ', pbar.Percentage(), ' ',
-                   pbar.Bar(marker='+',left='[',right=']'),
-                   ' ', pbar.Iterations(), '/', `n_iter`]
-        bar = pbar.ProgressBar(widgets=widgets, maxval=n_iter)
-        bar.start()
+        bar = pbar.ProgressBar(n_iter)
+        bar_iter = 0
     else:
         print "Sampling..."
 
@@ -504,7 +451,8 @@ def post_pred_check(model, samples=500, bins=100, stats=None, evals=None, plot=F
 
             for i_subj, bottom_node_subj in enumerate(bottom_node):
                 if progress_bar:
-                    bar.update(bar.currval+1)
+                    bar_iter +=1
+                    bar.animate(bar_iter)
                 if bottom_node_subj is None or not hasattr(bottom_node_subj, 'random'):
                     continue # Skip non-existant nodes
                 subjs.append(i_subj)
@@ -517,20 +465,21 @@ def post_pred_check(model, samples=500, bins=100, stats=None, evals=None, plot=F
         else:
             # Flat model
             if progress_bar:
-                bar.update(bar.currval+1)
+                bar_iter +=1
+                bar.animate(bar_iter)
             if bottom_node is None or not hasattr(bottom_node, 'random'):
                 continue # Skip
             result = _post_pred_summary_bottom_node(bottom_node, samples=samples, bins=bins, evals=evals, stats=stats, plot=plot)
             results.append(result)
-
-    if progress_bar:
-        bar.finish()
+        
+        if progress_bar:
+            bar.animate(n_iter)
 
     return pd.concat(results, keys=model.observed_nodes.keys(), names=['node'])
 
 def _parents_to_random_posterior_sample(bottom_node, pos=None):
     """Walks through parents and sets them to pos sample."""
-    for i, parent in enumerate(bottom_node.parents.itervalues()):
+    for i, parent in enumerate(bottom_node.extended_parents):
         if not isinstance(parent, pm.Node): # Skip non-stochastic nodes
             continue
 
@@ -592,7 +541,7 @@ def _post_pred_bottom_node(bottom_node, value_range, samples=10, bins=100, axis=
 
     return (y, y_std) #, hist, ranges)
 
-def plot_posterior_predictive(model, value_range=None, samples=10, columns=3, bins=100, savefig=False, prefix=None, figsize=(8,6)):
+def plot_posterior_predictive(model, value_range=None, samples=10, columns=3, bins=100, savefig=False, path=None, figsize=(8,6)):
     """Plot the posterior predictive distribution of a kabuki hierarchical model.
 
     :Arguments:
@@ -618,7 +567,7 @@ def plot_posterior_predictive(model, value_range=None, samples=10, columns=3, bi
         savefig : bool (default=False)
             Whether to save the figure to a file.
 
-        prefix : str (default=None)
+        path : str (default=None)
             Save figure into directory prefix
 
     :Note:
@@ -629,7 +578,8 @@ def plot_posterior_predictive(model, value_range=None, samples=10, columns=3, bi
 
     if value_range is None:
         # Infer from data by finding the min and max from the nodes
-        value_range = np.linspace(model.data)
+        raise NotImplementedError, "value_range keyword argument must be supplied."
+        #value_range = np.linspace(model.data)
 
     for name, bottom_node in model.observed_nodes.iteritems():
         if isinstance(bottom_node, np.ndarray):
@@ -661,9 +611,9 @@ def plot_posterior_predictive(model, value_range=None, samples=10, columns=3, bi
             plt.legend()
 
         if savefig:
-            if prefix is not None:
-                fig.savefig(os.path.join(prefix, name) + '.svg', format='svg')
-                fig.savefig(os.path.join(prefix, name) + '.png', format='png')
+            if path is not None:
+                fig.savefig(os.path.join(path, name) + '.svg', format='svg')
+                fig.savefig(os.path.join(path, name) + '.png', format='png')
             else:
                 fig.savefig(name + '.svg', format='svg')
                 fig.savefig(name + '.png', format='png')

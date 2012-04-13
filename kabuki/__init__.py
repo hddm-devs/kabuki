@@ -3,10 +3,9 @@ from hierarchical import *
 import utils
 import analyze
 import step_methods as steps
-import tests
-import generate
 import generate
 import distributions
+import tests
 
 try:
     from IPython.core.debugger import Tracer; debug_here = Tracer()
