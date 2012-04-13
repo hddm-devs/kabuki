@@ -93,11 +93,6 @@ class Parameter(object):
 
         self.has_subj_nodes = None
 
-        if isinstance(depends_on, str):
-            depends_on = tuple(depends_on)
-
-        self.col_dep_on = depends_on
-
         self.elem_to_param = {}
 
         # Pointers that get overwritten
@@ -124,6 +119,25 @@ class Parameter(object):
             else:
                 return self.name
 
+    def add_group_node(self, node, key=()):
+        key = tuple(key)
+        self.group_nodes[key] = node
+
+    def add_var_node(self, node, key=()):
+        key = tuple(key)
+        self.var_nodes[key] = node
+
+    def init_subj_nodes(self, key, subjs):
+        key = tuple(key)
+        self.subj_nodes[key] = np.empty(subjs, dtype=object)
+
+    def add_subj_node(self, node, subj, key=()):
+        key = tuple(key)
+        if key in self.subj_nodes:
+            self.subj_nodes[key][subj] = node
+        else:
+            raise KeyError('subj_nodes not initialized for '+str(node))
+
     def get_node(self, cols, elems, subj=None):
         """Return the node that depends on the same elements.
 
@@ -141,10 +155,9 @@ class Parameter(object):
         overlapping_cols = get_overlapping_elements(cols, self.col_dep_on)
 
         # Create new tag for the specific elements we are looking for (that overlap)
-        deps_on_elems = [col_to_elem[col] for col in overlapping_cols]
-
+        deps_on_elems = tuple([col_to_elem[col] for col in overlapping_cols])
         if self.has_subj_nodes and subj is not None:
-            return self.subj_nodes[deps_on_elems]
+            return self.subj_nodes[deps_on_elems][subj]
         else:
             return self.group_nodes[deps_on_elems]
 
@@ -309,6 +322,7 @@ class Hierarchical(object):
         # denominator.
         self.depends_all = set()
         [self.depends_all.add(dep) for p in self.depends_on.values() for dep in p]
+        from collections import defaultdict
         self.depends_default = defaultdict(lambda: ())
         for key, value in self.depends_on.iteritems():
             self.depends_default[key] = value
@@ -428,6 +442,15 @@ class Hierarchical(object):
             self.var_nodes = OrderedDict()
             self.subj_nodes = OrderedDict()
 
+            # Tell parameters what they depend on
+            for param in self.params:
+                if param.name in self.depends_on:
+                    param.col_dep_on = self.depends_on[param.name]
+                elif param.is_bottom_node:
+                    param.col_dep_on = self.depends_all
+                else:
+                    param.col_dep_on = []
+
             for name, param in self.params_include.iteritems():
                 # Bottom nodes are created elsewhere
                 if param.is_bottom_node:
@@ -474,7 +497,6 @@ class Hierarchical(object):
             _create()
         #_create()
 
-
         # Create model dictionaries
         self.nodes = {}
         self.group_nodes = {}
@@ -491,21 +513,24 @@ class Hierarchical(object):
 
         for name, param in self.params_include.iteritems():
             for tag, node in param.group_nodes.iteritems():
+                tag = str(tag)
                 self.nodes[name+tag+'_group'] = node
                 self.group_nodes[name+tag] = node
                 self.stoch_by_tuple[(name,'g',tag,-1)] = node
                 self.stoch_by_name[node.__name__] = node
             for tag, node in param.var_nodes.iteritems():
+                tag = str(tag)
                 self.nodes[name+tag+'_var'] = node
                 self.var_nodes[name+tag] = node
                 self.stoch_by_tuple[(name,'v',tag,-1)] = node
                 self.stoch_by_name[node.__name__] = node
             for tag, nodes in param.subj_nodes.iteritems():
+                tag = str(tag)
                 self.nodes[name+tag+'_subj'] = nodes
                 if param.is_bottom_node:
                     self.observed_nodes[name+tag] = nodes
                 else:
-                    self.subj_nodes[name+tag] = nodes
+                    self.subj_nodes[tag] = nodes
                     for (idx, node) in enumerate(nodes):
                         self.stoch_by_tuple[(name,'s',tag,idx)] = node
                         self.stoch_by_name[node.__name__] = node
@@ -552,12 +577,12 @@ class Hierarchical(object):
             data_dep_select = self.data[(data_dep == uniq_date)]
 
             # Create name for parameter
-            tag = str(uniq_date)
+            tag = tuple(uniq_date)
 
             # Create parameter distribution from factory
-            param.tag = tag
+            param.tag = str(tag)
             param.data = data_dep_select
-            param.group_nodes[tag] = self.create_pymc_node(param.group_knode, param.full_name)
+            param.add_group_node(self.create_pymc_node(param.group_knode, param.full_name), tag)
             param.reset()
 
             if self.is_group_model and param.has_subj_nodes:
@@ -578,11 +603,11 @@ class Hierarchical(object):
         # Parameter does not depend on data
         # Set group parameter
         param.tag = ''
-        param.group_nodes[''] = self.create_pymc_node(param.group_knode, param.full_name)
+        param.group_nodes[()] = self.create_pymc_node(param.group_knode, param.full_name)
         param.reset()
 
-        if self.is_group_model and param.has_subj_nodes:
-            self._set_subj_nodes(param, '', self.data)
+        if self.is_group_model and param.has_subj_nodes and not param.is_bottom_node:
+            self._set_subj_nodes(param, (), self.data)
 
         return self
 
@@ -607,14 +632,14 @@ class Hierarchical(object):
         if param.share_var:
             param.tag = 'var'
         else:
-            param.tag = 'var' + tag
+            param.tag = 'var' + str(tag)
 
         #if param does not share variance or this is the first node created
         # then we create the node
         if (len(param.var_nodes) == 0) or (not param.share_var):
-            param.var_nodes[tag] = self.create_pymc_node(param.var_knode, param.full_name)
+            param.add_var_node(self.create_pymc_node(param.var_knode, param.full_name), tag)
         else: #we copy the first node
-            param.var_nodes[tag] = param.var_nodes.values()[0]
+            param.add_var_node(param.var_nodes.values()[0], tag)
 
         #Create subj parameters
         param.reset()
@@ -637,13 +662,13 @@ class Hierarchical(object):
             param.subj_knode.args[param.var_label] = var_node
 
         # Init nodes
-        param.subj_nodes[tag] = np.empty(self._num_subjs, dtype=object)
+        param.init_subj_nodes(tag, self._num_subjs)
         # now create subj parameter distribution for each subject
         for subj_idx,subj in enumerate(self._subjs):
             data_subj = data[data['subj_idx']==subj]
             param.data = data_subj
             param.idx = subj_idx
-            param.subj_nodes[tag][subj_idx] = self.create_pymc_node(param.subj_knode, param.full_name)
+            param.add_subj_node(self.create_pymc_node(param.subj_knode, param.full_name), subj_idx, tag)
 
         param.reset()
         return self
@@ -663,20 +688,29 @@ class Hierarchical(object):
         import pandas as pd
 
         # Divide data and parameter distributions according to self.depends_on
-        data_group = pd.DataFrame(self.data).groupby(self.depends_all)
+        if len(self.depends_all) == 0:
+            data_group = [('', self.data)]
+        else:
+            data_group = pd.DataFrame(self.data).groupby(list(self.depends_all))
 
         # Loop through parceled data and create an observed stochastic
         for i, (dep_elems, data_grouped) in enumerate(data_group):
+            if isinstance(dep_elems, str):
+                dep_elems = (dep_elems,)
             # Loop over and init/create individual observed nodes
-            for bottom_node in self.bottom_nodes:
-                full_name = bottom_node.name + dep_elems
+            for param in self.params:
+                if not param.is_bottom_node:
+                    continue
+                full_name = param.name + str(dep_elems)
                 if init:
                     if self.is_group_model and param.has_subj_nodes:
-                        param.subj_nodes[full_name] = np.empty(self._num_subjs, dtype=object)
+                        param.init_subj_nodes(dep_elems, self._num_subjs)
                     else:
-                        param.subj_nodes[full_name] = None
+                        # TODO: figure out what to do
+                        pass
+
                 else:
-                    self._create_bottom_node(bottom_node, data_grouped, full_name, dep_elems, i)
+                    self._create_bottom_node(param, data_grouped, full_name, dep_elems, i)
 
         return self
 
@@ -722,30 +756,34 @@ class Hierarchical(object):
                 bottom_node = self.get_bottom_node(param, selected_subj_nodes)
                 if bottom_node is not None and len(bottom_node.value) == 0:
                     print "Warning! Bottom node %s is not linked to data. Replacing with None." % param.full_name
-                    param.subj_nodes[dep_name][i] = None
+                    param.add_subj_node(None, i, dep_name)
                 else:
-                    param.subj_nodes[dep_name][i] = bottom_node
+                    param.add_subj_node(bottom_node, i, dep_name)
                 param.reset()
         else: # Do not use subj params, but group ones
             # Since group nodes are not created in this function we
             # have to search for the correct node and include it in
             # the params
+            # TODO FIX
+            selected_nodes = {}
+
             for param in self.params_include.itervalues():
-                selected_nodes[param.name] = param.get_node(self.depends_all, dep_name)
+                if not param.is_bottom_node:
+                    selected_nodes[param.name] = param.get_node(self.depends_all, dep_name)
 
             if len(data) == 0:
                 # If no data is present, do not create node.
-                param.subj_nodes[dep_name][i] = None
+                param.add_group_node(None, i, dep_name)
             else:
                 param.tag = dep_name
                 param.data = data
                 # Call to user-defined function
-                bottom_node = self.get_bottom_node(param, params)
+                bottom_node = self.get_bottom_node(param, selected_nodes)
                 if bottom_node is not None and len(bottom_node.value) == 0:
                     print "Warning! Bottom node %s is not linked to data. Replacing with None." % param.full_name
-                    param.subj_nodes[dep_name] = None
+                    param.add_group_node(None, dep_name)
                 else:
-                    param.subj_nodes[dep_name] = bottom_node
+                    param.add_group_node(bottom_node, dep_name)
 
             param.reset()
 
@@ -1124,7 +1162,6 @@ class Hierarchical(object):
             self.mc.use_step_method(pm.Metropolis, node, proposal_sd = pre_sd)
             assigned = True
         else:
-            kabuki.debug_here()
             assigned = False
 
         return assigned
@@ -1150,7 +1187,7 @@ class Hierarchical(object):
 
             #get the nodes which will be plotted
             for param in parameters:
-                nodes = np.unique(param.group_nodes.values() + param.var_nodes.values())
+                nodes = tuple(np.unique(param.group_nodes.values() + param.var_nodes.values()))
                 if plot_subjs:
                     for nodes_array in param.subj_nodes.values():
                         nodes += list(nodes_array)
