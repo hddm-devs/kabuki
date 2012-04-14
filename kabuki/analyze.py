@@ -33,6 +33,8 @@ def gen_stats(stats):
 
     for name in names:
         i_stats = stats[name]
+        if i_stats is None:
+            continue
         if not np.isscalar(i_stats['mean']):
             continue
         s += "%s: %6.3f %6.3f %6.3f %6.3f %6.3f %6.3f %6.3f %6.3f\n" % \
