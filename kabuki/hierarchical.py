@@ -511,19 +511,29 @@ class Hierarchical(object):
         #idx (int) - for subject nodes it's the subject idx, for other nodes its -1
         self.stoch_by_tuple = {}
 
+        # go over all nodes in params and assign them to the dictionaries
         for name, param in self.params_include.iteritems():
+
+            #group nodes
             for tag, node in param.group_nodes.iteritems():
                 tag = str(tag)
+                if param.is_bottom_node:
+                    self.observed_nodes[name+tag] = node
+                    continue
                 self.nodes[name+tag+'_group'] = node
                 self.group_nodes[name+tag] = node
                 self.stoch_by_tuple[(name,'g',tag,-1)] = node
                 self.stoch_by_name[node.__name__] = node
+
+            #var nodes
             for tag, node in param.var_nodes.iteritems():
                 tag = str(tag)
                 self.nodes[name+tag+'_var'] = node
                 self.var_nodes[name+tag] = node
                 self.stoch_by_tuple[(name,'v',tag,-1)] = node
                 self.stoch_by_name[node.__name__] = node
+
+            #subj nodes
             for tag, nodes in param.subj_nodes.iteritems():
                 tag = str(tag)
                 self.nodes[name+tag+'_subj'] = nodes

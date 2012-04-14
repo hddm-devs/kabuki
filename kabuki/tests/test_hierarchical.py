@@ -10,8 +10,8 @@ class TestHierarchicalBreakDown(unittest.TestCase):
     simple tests to see if hierarchical merthods do not raise and error
     """
 
-    #@classmethod
-    def setUp(self):
+    @classmethod
+    def setUpClass(self):
 
         #load models
         self.models = test_utils.load_models()
