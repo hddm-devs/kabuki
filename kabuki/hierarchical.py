@@ -819,6 +819,15 @@ class Hierarchical(object):
 
         from operator import attrgetter
 
+        # I.S: when using MAP with Hierarchical model the subjects nodes should be
+        # integrated out before the computation of the MAP (see Pinheiro JC, Bates DM., 1995, 2000).
+        # since we are not integrating we get a point estimation for each
+        # subject which is not what we want.
+        if self.is_group_model:
+            raise NotImplementedError("""Sorry, This method is not yet implemented for group models.
+            you might consider using the subj_by_subj_map_init method""")
+
+
         maps = []
 
         for i in range(runs):
