@@ -5,11 +5,9 @@ from copy import copy
 import numpy as np
 import numpy.lib.recfunctions as rec
 
-try:
-    from collections import OrderedDict
-except ImportError:
-    from ordereddict import OrderedDict
+from collections import OrderedDict, defaultdict
 
+import pandas as pd
 import pymc as pm
 import warnings
 
@@ -34,6 +32,185 @@ def test_subset_tuple():
     assert get_overlapping_elements(('a', 'b' , 'c'), ('a', 'c')) == ('a', 'c')
     assert get_overlapping_elements(('a', 'b' , 'c'), ('b', 'c')) == ('b', 'c')
     assert get_overlapping_elements(('c', 'b', 'a'), ('b', 'c')) == ('b', 'c')
+
+class ParameterContainer(object):
+    def __init__(self, params, is_group_model, replace_params, update_params, trace_subjs, plot_subjs, plot_var, include=()):
+        """initialize self.params"""
+
+        self.is_group_model = is_group_model
+        self.include = include
+        self.params = params
+
+        # Initialize parameter dicts.
+        self.group_nodes = OrderedDict()
+        self.var_nodes = OrderedDict()
+        self.subj_nodes = OrderedDict()
+        self.bottom_nodes = OrderedDict()
+
+        if replace_params == None:
+            replace_params = ()
+
+        #change the default parametrs
+        self._change_default_params(replace_params, update_params)
+
+        for param in self.params:
+            #set has_x_node
+            param.has_group_nodes = (param.group_knode is not None)
+            param.has_var_nodes = (param.var_knode is not None)
+            param.has_subj_nodes = (param.subj_knode is not None)
+
+            #set other attributes
+            if param.is_bottom_node:
+                param.has_subj_nodes = True
+                continue
+            if not trace_subjs and param.has_subj_nodes:
+                param.subj_knode.args['trace'] = False
+            if not plot_subjs and param.has_subj_nodes:
+                param.subj_knode.args['plot'] = False
+            if not plot_var and param.has_var_nodes:
+                param.var_knode.args['plot'] = False
+
+        #set params_dict
+        self.params_dict = {}
+        for param in self.params:
+            if param.name in self.include or not param.optional:
+                param.include = True
+            else:
+                param.include = False
+            self.params_dict[param.name] = param
+
+
+    def iter_group_nodes(self):
+        for name, node in self.group_nodes.iteritems():
+            yield (name, node)
+
+    def iter_var_nodes(self):
+        for name, node in self.var_nodes.iteritems():
+            yield (name, node)
+
+    def iter_subj_nodes(self):
+        for name, node in self.subj_nodes.iteritems():
+            yield (name, node)
+
+    def iter_bottom_nodes(self):
+        for name, node in self.bottom_nodes.iteritems():
+            yield (name, node)
+
+    def iter_params(self, optional=False, include=False, bottom=False):
+        for name, param in self.params_dict.iteritems():
+            if optional and not param.optional:
+                continue
+
+            if include and not param.include:
+                continue
+
+            if not bottom and param.is_bottom_node:
+                continue
+
+            yield (name, param)
+
+
+    def _change_default_params(self, replace_params, update_params):
+        """replace/update parameters with user defined parameters"""
+        #replace params
+        if type(replace_params)==Parameter:
+            replace_params = [replace_params]
+        for new_param in replace_params:
+            for i in range(len(self.params)):
+                if self.params[i].name == new_param.name:
+                    self.params[i] = new_param
+
+        #update params
+        if update_params == None:
+            return
+
+        for (param_name, dict) in update_params.iteritems():
+            found_param = False
+            for i in range(len(self.params)):
+                if self.params[i].name == param_name:
+                    for (key, new_value) in dict.iteritems():
+                        if hasattr(self.params[i], key):
+                            setattr(self.params[i], key, new_value)
+                        else:
+                            raise ValueError, "An invalid key (%s) was found in update_params for Parameter %s" % (key, param_name)
+                    found_param = True
+                    break
+            if not found_param:
+                raise ValueError, "An invalid parameter (%s) was found in update_params" % (param_name)
+
+
+    def reinit(self):
+        # Initialize parameter dicts.
+        self.group_nodes = OrderedDict()
+        self.var_nodes = OrderedDict()
+        self.subj_nodes = OrderedDict()
+        self.bottom_nodes = OrderedDict()
+        self.nodes = OrderedDict()
+
+        #dictionary of stochastics. the keys are names of single nodes
+        self.stoch_by_name = {}
+        #dictionary of stochastics. the keys are (param_name, h_type, tag, idx)
+        #htype (string)= 'g':group, 'v':var, 's':subject
+        #idx (int) - for subject nodes it's the subject idx, for other nodes its -1
+        self.stoch_by_tuple = {}
+
+        # go over all nodes in params and assign them to the dictionaries
+        for name, param in self.iter_params(include=True):
+            #group nodes
+            for tag, node in param.group_nodes.iteritems():
+                tag = str(tag)
+                if param.is_bottom_node:
+                    self.bottom_nodes[name+tag] = node
+                    continue
+                self.nodes[name+tag+'_group'] = node
+                self.group_nodes[name+tag] = node
+                self.stoch_by_tuple[(name,'g',tag,-1)] = node
+                self.stoch_by_name[node.__name__] = node
+
+            #var nodes
+            for tag, node in param.var_nodes.iteritems():
+                tag = str(tag)
+                self.nodes[name+tag+'_var'] = node
+                self.var_nodes[name+tag] = node
+                self.stoch_by_tuple[(name,'v',tag,-1)] = node
+                self.stoch_by_name[node.__name__] = node
+
+            #subj nodes
+            for tag, nodes in param.subj_nodes.iteritems():
+                tag = str(tag)
+                self.nodes[name+tag+'_subj'] = nodes
+                self.subj_nodes[tag] = nodes
+                for (idx, node) in enumerate(nodes):
+                    self.stoch_by_tuple[(name,'s',tag,idx)] = node
+                    self.stoch_by_name[node.__name__] = node
+
+            #bottom nodes
+            if self.is_group_model:
+                for tag, node in param.bottom_nodes.iteritems():
+                    tag = str(tag)
+                    self.nodes[name+tag+'_bottom'] = node
+                    self.bottom_nodes[name+tag] = node
+                    if self.is_group_model:
+                        for (idx, node) in enumerate(nodes):
+                            self.stoch_by_tuple[(name,'b',tag,idx)] = node
+                            self.stoch_by_name[node.__name__] = node
+                    else:
+                        self.stoch_by_tuple[(name,'b',tag,-1)] = node
+                        self.stoch_by_name[node.__name__] = node
+
+        #update knodes
+        for name, param in self.iter_params(include=True):
+            if param.is_bottom_node:
+                continue
+            param.knodes['group'].nodes = param.group_nodes
+            #try to update var knodes and subj knodes if they exist
+            try:
+                param.knodes['var'].nodes = param.var_nodes
+                param.knodes['subj'].nodes = param.subj_nodes
+            except AttributeError:
+                pass
+
+        return self.nodes
 
 class Parameter(object):
     """Specify a parameter of a model.
@@ -294,61 +471,36 @@ class Hierarchical(object):
         self.nodes = {}
         self.mc = None
 
-        # Add data_idx field to data. Since we are restructuring the
-        # data, this provides a means of getting the data out of
-        # kabuki and sorting to according to data_idx to get the
-        # original order.
-        #create data_idx field if needed
-        if ('data_idx' in data.dtype.names) and not overwrite_data_idx:
-            data_idx_msg = """
-            A field named data_idx was found in the data file, please change it.
-            Alternatively, you can overwrite this field by setting the overwrite_data_idx
-            argument to True"""
-            raise ValueError, data_idx_msg
-
-        elif ('data_idx' not in data.dtype.names):
-            new_dtype = data.dtype.descr + [('data_idx', '<i8')]
-
-        else:
-            new_dtype = data.dtype.descr
-
-        #copy data
-        new_data = np.empty(data.shape, dtype=new_dtype)
-        for field in data.dtype.fields:
-            new_data[field] = data[field]
-        new_data['data_idx'] = np.arange(len(data))
-        data = new_data
-        self.data = data
+        self.data = pd.DataFrame(data)
 
         if not depends_on:
-            self.depends_on = {}
+            depends_on = {}
         else:
             # Support for supplying columns as a single string
             # -> transform to list
             for key in depends_on:
-                if type(depends_on[key]) is str:
+                if isinstance(depends_on[key], str):
                     depends_on[key] = [depends_on[key]]
             # Check if column names exist in data
             for depend_on in depends_on.itervalues():
                 for elem in depend_on:
-                    if elem not in self.data.dtype.names:
+                    if elem not in self.data.columns:
                         raise KeyError, "Column named %s not found in data." % elem
-            self.depends_on = depends_on
 
         # Create set that holds all columns. This is used for the
         # observed nodes that have to be created for the smallest
         # denominator.
         self.depends_all = set()
-        [self.depends_all.add(dep) for p in self.depends_on.values() for dep in p]
-        from collections import defaultdict
+        [self.depends_all.add(dep) for p in depends_on.values() for dep in p]
+
         self.depends_default = defaultdict(lambda: ())
-        for key, value in self.depends_on.iteritems():
+        for key, value in depends_on.iteritems():
             self.depends_default[key] = value
 
-        self.depends_dict = OrderedDict()
 
+        # Determine if group model
         if is_group_model is None:
-            if 'subj_idx' in data.dtype.names:
+            if 'subj_idx' in self.data.columns:
                 if len(np.unique(data['subj_idx'])) != 1:
                     self.is_group_model = True
                 else:
@@ -371,73 +523,7 @@ class Hierarchical(object):
             self._num_subjs = 1
         self.num_subjs = self._num_subjs
 
-        self._init_params(replace_params, update_params, trace_subjs, plot_subjs, plot_var)
-
-
-
-    def _init_params(self, replace_params, update_params, trace_subjs, plot_subjs, plot_var):
-        """initialize self.params"""
-
-       #set Parameters
-        self.params = self.create_params()
-        if replace_params == None:
-            replace_params = ()
-
-        #change the default parametrs
-        self._change_default_params(replace_params, update_params)
-
-        for param in self.params:
-            #set has_x_node
-            param.has_group_nodes = (param.group_knode is not None)
-            param.has_var_nodes = (param.var_knode is not None)
-            param.has_subj_nodes = (param.subj_knode is not None)
-
-            #set other attributes
-            if param.is_bottom_node:
-                param.has_subj_nodes = True
-                continue
-            if not trace_subjs and param.has_subj_nodes:
-                param.subj_knode.args['trace'] = False
-            if not plot_subjs and param.has_subj_nodes:
-                param.subj_knode.args['plot'] = False
-            if not plot_var and param.has_var_nodes:
-                param.var_knode.args['plot'] = False
-
-        #set params_dict
-        self.params_dict = {}
-        for param in self.params:
-            self.params_dict[param.name] = param
-
-
-    def _change_default_params(self, replace_params, update_params):
-        """replace/update parameters with user defined parameters"""
-        #replace params
-        if type(replace_params)==Parameter:
-            replace_params = [replace_params]
-        for new_param in replace_params:
-            for i in range(len(self.params)):
-                if self.params[i].name == new_param.name:
-                    self.params[i] = new_param
-
-        #update params
-        if update_params == None:
-            return
-
-        for (param_name, dict) in update_params.iteritems():
-            found_param = False
-            for i in range(len(self.params)):
-                if self.params[i].name == param_name:
-                    for (key, new_value) in dict.iteritems():
-                        if hasattr(self.params[i], key):
-                            setattr(self.params[i], key, new_value)
-                        else:
-                            raise ValueError, "An invalid key (%s) was found in update_params for Parameter %s" % (key, param_name)
-                    found_param = True
-                    break
-            if not found_param:
-                raise ValueError, "An invalid parameter (%s) was found in update_params" % (param_name)
-
-
+        self.param_container = ParameterContainer(self.create_params(), is_group_model, replace_params, update_params, trace_subjs, plot_subjs, plot_var, include=include)
 
     def create_nodes(self, max_retries=8):
         """Set group level distributions. One distribution for each
@@ -455,55 +541,25 @@ class Hierarchical(object):
         #     to just delete all the nodes then?
 
         def _create():
-            # Initialize parameter dicts.
-            self.group_nodes = OrderedDict()
-            self.var_nodes = OrderedDict()
-            self.subj_nodes = OrderedDict()
-            self.bottom_nodes = OrderedDict()
+            self.param_container.reinit()
 
             # Tell parameters what they depend on
-            for param in self.params:
-                if param.name in self.depends_on:
-                    param.col_dep_on = self.depends_on[param.name]
-                elif param.is_bottom_node:
-                    param.col_dep_on = self.depends_all
-                else:
-                    param.col_dep_on = []
+            for name, param in self.param_container.iter_params(include=True, bottom=False):
+                param.col_dep_on = self.depends_default[param.name]
+            for name, param in self.param_container.iter_bottom_nodes():
+                param.col_dep_on = self.depends_all
 
-            for name, param in self.params_include.iteritems():
-                # Bottom nodes are created elsewhere
-                if param.is_bottom_node:
-                    continue
-                # Check if parameter depends on data
-                if name in self.depends_on.keys():
-                    self._set_dependent_param(param)
-                else:
-                    self._set_independet_param(param)
+            for name, param in self.param_container.iter_params(include=True, bottom=False):
+                self._set_param(param)
 
             # Init bottom nodes
-            for param in self.params_include.itervalues():
-                if not param.is_bottom_node:
-                    continue
+            for param in self.param_container.iter_bottom_nodes():
                 self._set_bottom_nodes(param, init=True)
 
             # Create bottom nodes
-            for param in self.params_include.itervalues():
-                if not param.is_bottom_node:
-                    continue
+            for param in self.param_container.iter_bottom_nodes():
                 self._set_bottom_nodes(param, init=False)
 
-        # Include all defined parameters by default.
-        self.non_optional_params = [param.name for param in self.params if not param.optional]
-
-        # Create params dictionary
-        self.params_dict = OrderedDict()
-        for param in self.params:
-            self.params_dict[param.name] = param
-
-        self.params_include = OrderedDict()
-        for param in self.params:
-            if param.name in self.include or not param.optional:
-                self.params_include[param.name] = param
 
         for tries in range(max_retries):
             try:
@@ -516,82 +572,8 @@ class Hierarchical(object):
             _create()
         #_create()
 
-        # Create model dictionaries
-        self.nodes = {}
-        self.group_nodes = {}
-        self.var_nodes = {}
-        self.subj_nodes = {}
-        self.bottom_nodes = {}
 
-        #dictionary of stochastics. the keys are names of single nodes
-        self.stoch_by_name = {}
-        #dictionary of stochastics. the keys are (param_name, h_type, tag, idx)
-        #htype (string)= 'g':group, 'v':var, 's':subject
-        #idx (int) - for subject nodes it's the subject idx, for other nodes its -1
-        self.stoch_by_tuple = {}
-
-        # go over all nodes in params and assign them to the dictionaries
-        for name, param in self.params_include.iteritems():
-
-            #group nodes
-            for tag, node in param.group_nodes.iteritems():
-                tag = str(tag)
-                if param.is_bottom_node:
-                    self.observed_nodes[name+tag] = node
-                    continue
-                self.nodes[name+tag+'_group'] = node
-                self.group_nodes[name+tag] = node
-                self.stoch_by_tuple[(name,'g',tag,-1)] = node
-                self.stoch_by_name[node.__name__] = node
-
-            #var nodes
-            for tag, node in param.var_nodes.iteritems():
-                tag = str(tag)
-                self.nodes[name+tag+'_var'] = node
-                self.var_nodes[name+tag] = node
-                self.stoch_by_tuple[(name,'v',tag,-1)] = node
-                self.stoch_by_name[node.__name__] = node
-
-            #subj nodes
-            for tag, nodes in param.subj_nodes.iteritems():
-                tag = str(tag)
-                self.nodes[name+tag+'_subj'] = nodes
-                self.subj_nodes[tag] = nodes
-                for (idx, node) in enumerate(nodes):
-                    self.stoch_by_tuple[(name,'s',tag,idx)] = node
-                    self.stoch_by_name[node.__name__] = node
-
-            #bottom nodes
-            if self.is_group_model:
-                for tag, node in param.bottom_nodes.iteritems():
-                    tag = str(tag)
-                    self.nodes[name+tag+'_bottom'] = node
-                    self.bottom_nodes[name+tag] = node
-                    if self.is_group_model:
-                        for (idx, node) in enumerate(nodes):
-                            self.stoch_by_tuple[(name,'b',tag,idx)] = node
-                            self.stoch_by_name[node.__name__] = node
-                    else:
-                        self.stoch_by_tuple[(name,'b',tag,-1)] = node
-                        self.stoch_by_name[node.__name__] = node
-
-        #update knodes
-        for name, param in self.params_include.iteritems():
-            if param.is_bottom_node:
-                continue
-            param.knodes['group'].nodes = param.group_nodes
-            #try to update var knodes and subj knodes if they exist
-            try:
-                param.knodes['var'].nodes = param.var_nodes
-                param.knodes['subj'].nodes = param.subj_nodes
-            except AttributeError:
-                pass
-
-        return self.nodes
-
-
-
-    def _set_dependent_param(self, param):
+    def _set_param(self, param):
         """Set parameter that depends on data.
 
         :Arguments:
@@ -602,52 +584,22 @@ class Hierarchical(object):
         """
 
         # Get column names for provided param_name
-        depends_on = self.depends_on[param.name]
-
-        # Get unique elements from the columns
-        data_dep = self.data[depends_on]
-        uniq_data_dep = np.unique(data_dep)
-
-        #update depends_dict
-        self.depends_dict[param.name] = uniq_data_dep
+        if len(self.depends_default[param.name]) == 0:
+            grouped = [('', self.data)]
+        else:
+            grouped = self.data.groupby(list(self.depends_default[param.name]))
 
         # Loop through unique elements
-        for uniq_date in uniq_data_dep:
-            # Select data
-            data_dep_select = self.data[(data_dep == uniq_date)]
-
-            # Create name for parameter
-            tag = tuple(uniq_date)
-
+        for name, groups in grouped:
             # Create parameter distribution from factory
-            param.tag = str(tag)
-            param.data = data_dep_select
-            param.add_group_node(self.create_pymc_node(param.group_knode, param.full_name), tag)
+            param.tag = name
+            param.data = groups
+            param.add_group_node(self.create_pymc_node(param.group_knode, param.full_name), (name,))
             param.reset()
 
             if self.is_group_model and param.has_subj_nodes:
                 # Create appropriate subj parameter
-                self._set_subj_nodes(param, tag, data_dep_select)
-
-        return self
-
-    def _set_independet_param(self, param):
-        """Set parameter that does _not_ depend on data.
-
-        :Arguments:
-            param_name : string
-                Name of parameter.
-
-        """
-
-        # Parameter does not depend on data
-        # Set group parameter
-        param.tag = ''
-        param.group_nodes[()] = self.create_pymc_node(param.group_knode, param.full_name)
-        param.reset()
-
-        if self.is_group_model and param.has_subj_nodes and not param.is_bottom_node:
-            self._set_subj_nodes(param, (), self.data)
+                self._set_subj_nodes(param, (name,), groups)
 
         return self
 
@@ -672,7 +624,7 @@ class Hierarchical(object):
         if param.share_var:
             param.tag = 'var'
         else:
-            param.tag = 'var' + str(tag)
+            param.tag = 'var.' + str(tag)
 
         #if param does not share variance or this is the first node created
         # then we create the node
@@ -731,16 +683,14 @@ class Hierarchical(object):
         if len(self.depends_all) == 0:
             data_group = [('', self.data)]
         else:
-            data_group = pd.DataFrame(self.data).groupby(list(self.depends_all))
+            data_group = self.data.groupby(list(self.depends_all))
 
         # Loop through parceled data and create an observed stochastic
         for i, (dep_elems, data_grouped) in enumerate(data_group):
             if isinstance(dep_elems, str):
                 dep_elems = (dep_elems,)
             # Loop over and init/create individual observed nodes
-            for param in self.params:
-                if not param.is_bottom_node:
-                    continue
+            for name, param in self.params_container.iter_bottom_nodes:
                 full_name = param.name + str(dep_elems)
                 if init:
                     param.init_bottom_nodes(dep_elems, self._num_subjs)
@@ -772,8 +722,8 @@ class Hierarchical(object):
             selected_subj_nodes = {}
 
             # Create new params dict and copy over nodes
-            for param in self.params_include.itervalues():
-                selected_subj_nodes[param.name] = param.get_node(self.depends_all, dep_name, subj=subj)
+            for name, param in self.params_container.iter_params(include=True):
+                selected_subj_nodes[name] = param.get_node(self.depends_all, dep_name, subj=subj)
 
             # Set up param
             param.tag = dep_name
