@@ -40,9 +40,15 @@ def load_models():
     V = kabuki.Parameter('V', group_knode=V_g,
                          optional=True, default=0)
 
-    m = hddm.HDDM(data, depends_on = {'v':['cond1', 'cond2'], 'a':'cond1'}, include =['V'],
+    m = hddm.HDDM(data, depends_on = {'v':['cond1', 'cond2'], 'a':'cond1'}, include =['V','z'],
                   update_params = {'v' : v_dict}, replace_params = [V])
     models.append(m)
+
+
+    #models 5
+    m = hddm.HDDM(data)
+    models.append(m)
+
 
     return models
 
