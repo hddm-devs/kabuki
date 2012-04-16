@@ -1086,12 +1086,12 @@ class Hierarchical(object):
         else:
             return knode.stoch(name, **knode.args)
 
-    def init_from_existing_model(self, pre_model, assign_values=True, assign_step_methods=True,
+    def init_from_existing_model(self, existing_model, assign_values=True, assign_step_methods=True,
                                  match=None, **mcmc_kwargs):
         """
         initialize the value and step methods of the model using an existing model
         Input:
-            pre_model - existing mode
+            existing_model - existing mode
 
             assign_values (boolean) - should values of nodes from the existing model
                 be assigned to the new model
@@ -1106,15 +1106,15 @@ class Hierarchical(object):
                 to the new_tag.
         """
         if not self.mc:
-            self.mcmc(assign_step_methods=False, **mcmc_kwargs)
+            self.mcmc(assign_step_methods=True, **mcmc_kwargs)
 
-        pre_d = pre_model.stoch_by_tuple
+        pre_d = existing_model.stoch_by_tuple
         assigned_s = 0; assigned_v = 0
 
         #set the new nodes
         for (key, node) in self.stoch_by_tuple.iteritems():
             name, h_type, tag, idx = key
-            if name not in pre_model.params_include.keys():
+            if name not in existing_model.params_include.keys():
                 continue
 
             #if the key was found then match_nodes is the assign the old node value to the new node
@@ -1141,16 +1141,16 @@ class Hierarchical(object):
 
             #assign step method
             if assign_step_methods:
-                assigned_s += self._assign_step_methods_from_existing(node, pre_model, matched_nodes)
+                assigned_s += self._assign_step_methods_from_existing(node, existing_model, matched_nodes)
 
         print "assigned %d values (out of %d)." % (assigned_v, len(self.mc.stochastics))
         print "assigned %d step methods (out of %d)." % (assigned_s, len(self.mc.stochastics))
 
 
-    def _assign_step_methods_from_existing(self, node, pre_model, matched_nodes):
+    def _assign_step_methods_from_existing(self, node, existing_model, matched_nodes):
         """
         private funciton used by init_from_existing_model to assign a node
-        using matched_nodes from pre_model
+        using matched_nodes from existing_model
         Output:
              assigned (boolean) - step method was assigned
 
@@ -1159,8 +1159,13 @@ class Hierarchical(object):
         if isinstance(matched_nodes, pm.Node):
             matched_node = [matched_nodes]
 
+        #assign step methods to the existing_model if needed.
+        # usefull when the step methods were saved in a database
+        if not hasattr(existing_model.mc, "step_methods"):
+            existing_model.mc.assign_step_methods()
+
         #find the step methods
-        steps = [pre_model.mc.step_method_dict[x][0] for x in matched_nodes]
+        steps = [existing_model.mc.step_method_dict[x][0] for x in matched_nodes]
 
         #only assign it if it's a Metropolis
         if isinstance(steps[0], pm.Metropolis):
