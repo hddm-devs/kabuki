@@ -686,7 +686,6 @@ class Hierarchical(object):
                 Initialize parameter.
 
         """
-        import pandas as pd
 
         # Divide data and parameter distributions according to self.depends_on
         if len(self.depends_all) == 0:
@@ -700,7 +699,6 @@ class Hierarchical(object):
                 dep_elems = (dep_elems,)
             # Loop over and init/create individual observed nodes
             for name, param in self.param_container.iter_bottom_params():
-                full_name = param.name + str(dep_elems)
                 if init:
                     param.init_bottom_nodes(dep_elems, self._num_subjs)
                 else:
@@ -869,7 +867,7 @@ class Hierarchical(object):
     def mcmc_step_methods(self):
 
         #assign step methods
-        for param in self.params:
+        for param in self.param_container.iterparams():
             #assign SPX when share_var
             if param.use_spx and param.share_var:
                 loc = param.group_nodes.values()
@@ -1226,7 +1224,7 @@ class Hierarchical(object):
                         subjless[name] = [node.value]
 
         #set group and var nodes for params with subjs
-        for (param_name, param) in self.params_dict.iteritems():
+        for (param_name, param) in self.param_container.iterparams():
             #if param has subj nodes than compute group and var nodes from them
             if param.has_subj_nodes:
                 for (tag, nodes) in param.subj_nodes.iteritems():
