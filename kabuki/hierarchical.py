@@ -867,7 +867,7 @@ class Hierarchical(object):
     def mcmc_step_methods(self):
 
         #assign step methods
-        for param in self.param_container.iterparams():
+        for param in self.param_container.iter_params():
             #assign SPX when share_var
             if param.use_spx and param.share_var:
                 loc = param.group_nodes.values()
@@ -1224,7 +1224,7 @@ class Hierarchical(object):
                         subjless[name] = [node.value]
 
         #set group and var nodes for params with subjs
-        for (param_name, param) in self.param_container.iterparams():
+        for (param_name, param) in self.param_container.iter_params():
             #if param has subj nodes than compute group and var nodes from them
             if param.has_subj_nodes:
                 for (tag, nodes) in param.subj_nodes.iteritems():
