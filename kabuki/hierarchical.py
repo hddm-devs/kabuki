@@ -1202,7 +1202,7 @@ class Hierarchical(object):
                 nodes = np.unique(param.group_nodes.values() + param.var_nodes.values())
                 if plot_subjs:
                     for nodes_array in param.subj_nodes.values():
-                        nodes += list(nodes_array)
+                        nodes = np.concatenate((nodes, nodes_array))
             #this part does the ploting
             for node in nodes:
                 plot_value = node.plot
