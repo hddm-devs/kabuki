@@ -658,7 +658,7 @@ class Hierarchical(object):
     def mcmc_step_methods(self):
 
         #assign step methods
-        for param in self.params:
+        for param in self.params_include.itervalues():
             #assign SPX when share_var
             if param.use_spx and param.share_var:
                 loc = param.group_nodes.values()
