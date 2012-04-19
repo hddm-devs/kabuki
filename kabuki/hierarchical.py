@@ -47,6 +47,8 @@ class ParameterContainer(object):
         self.subj_nodes = OrderedDict()
         self.bottom_nodes = OrderedDict()
 
+        self.nodes = None
+
         if replace_params == None:
             replace_params = ()
 
@@ -81,7 +83,7 @@ class ParameterContainer(object):
 
 
     def iter_group_nodes(self):
-        for name, node in self.bottom_nodes.iteritems():
+        for name, node in self.group_nodes.iteritems():
             yield (name, node)
 
     def iter_var_nodes(self):
@@ -285,6 +287,8 @@ class Parameter(object):
         self.data = None
         self.idx = None
 
+        self.use_spx = use_spx
+
     def reset(self):
         self.group = None
         self.tag = None
@@ -474,7 +478,6 @@ class Hierarchical(object):
         # Init
         self.include = set(include)
 
-        self.nodes = {}
         self.mc = None
 
         self.data = pd.DataFrame(data)
@@ -527,6 +530,7 @@ class Hierarchical(object):
             self._num_subjs = self._subjs.shape[0]
         else:
             self._num_subjs = 1
+
         self.num_subjs = self._num_subjs
 
         self.param_container = ParameterContainer(self.create_params(), is_group_model, replace_params, update_params, trace_subjs, plot_subjs, plot_var, include=include)
@@ -663,7 +667,7 @@ class Hierarchical(object):
             param.subj_knode.args[param.var_label] = var_node
 
         # Init nodes
-        param.init_subj_nodes(tag, self._num_subjs)
+        param.init_subj_nodes(tag, self.num_subjs)
         # now create subj parameter distribution for each subject
         for subj_idx,subj in enumerate(self._subjs):
             data_subj = data[data['subj_idx']==subj]
@@ -795,10 +799,10 @@ class Hierarchical(object):
         for i in range(runs):
             # (re)create nodes to get new initival values.
             #nodes are not created for the first iteration if they already exist
-            if (i > 0) or (not self.nodes):
+            if (i > 0) or (not self.param_container.nodes):
                 self.create_nodes()
 
-            m = pm.MAP(self.nodes)
+            m = pm.MAP(self.param_container.nodes)
             m.fit(method, **kwargs)
             print m.logp
             maps.append(m)
@@ -819,9 +823,9 @@ class Hierarchical(object):
             if isinstance(node, pm.ArrayContainer):
                 for i,subj_node in enumerate(node):
                     if isinstance(node, pm.Node) and not subj_node.observed:
-                        self.nodes[name][i].value = subj_node.value
+                        self.param_container.nodes[name][i].value = subj_node.value
             elif isinstance(node, pm.Node) and not node.observed:
-                self.nodes[name].value = node.value
+                self.param_container.nodes[name].value = node.value
 
         return max_map
 
@@ -848,11 +852,11 @@ class Hierarchical(object):
             The rest of the arguments are forwards to pymc.MCMC
         """
 
-        if not self.nodes:
+        if not self.param_container.nodes:
             self.create_nodes()
 
         nodes ={}
-        for (name, value) in self.nodes.iteritems():
+        for (name, value) in self.param_container.nodes.iteritems():
             if value != None:
                 nodes[name] = value
 
@@ -865,9 +869,8 @@ class Hierarchical(object):
 
 
     def mcmc_step_methods(self):
-
         #assign step methods
-        for param in self.param_container.iter_params():
+        for name, param in self.param_container.iter_params(include=True):
             #assign SPX when share_var
             if param.use_spx and param.share_var:
                 loc = param.group_nodes.values()
@@ -1030,7 +1033,7 @@ class Hierarchical(object):
             db_loader = pm.database.txt.load
 
         # Set up model
-        if not self.nodes:
+        if not self.param_container.nodes:
             self.create_nodes()
 
         # Ignore annoying sqlite warnings
@@ -1040,7 +1043,7 @@ class Hierarchical(object):
         db = db_loader(dbname)
 
         # Create mcmc instance reading from the opened database
-        self.mc = pm.MCMC(self.nodes, db=db, verbose=verbose)
+        self.mc = pm.MCMC(self.param_container.nodes, db=db, verbose=verbose)
 
         # Not sure if this does anything useful, but calling for good luck
         self.mc.restore_sampler_state()
@@ -1081,13 +1084,13 @@ class Hierarchical(object):
         if not self.mc:
             self.mcmc(assign_step_methods=False, **mcmc_kwargs)
 
-        pre_d = pre_model.stoch_by_tuple
+        pre_d = pre_model.param_container.stoch_by_tuple
         assigned_s = 0; assigned_v = 0
 
         #set the new nodes
-        for (key, node) in self.stoch_by_tuple.iteritems():
+        for (key, node) in self.param_container.stoch_by_tuple.iteritems():
             name, h_type, tag, idx = key
-            if name not in pre_model.params_include.keys():
+            if name not in pre_model.param_container.params:
                 continue
 
             #if the key was found then match_nodes is the assign the old node value to the new node
@@ -1189,7 +1192,7 @@ class Hierarchical(object):
         """
 
         # check if nodes were created. if they were it cause problems for deepcopy
-        assert (not self.nodes), "function should be used before nodes are initialized."
+        assert (not self.param_container.nodes), "function should be used before nodes are initialized."
 
         #init
         subjless = {}
@@ -1197,7 +1200,7 @@ class Hierarchical(object):
         n_subjs = len(subjs)
         empty_s_model = deepcopy(self)
         empty_s_model.is_group_model = False
-        del empty_s_model._num_subjs, empty_s_model._subjs, empty_s_model.data
+        del empty_s_model.num_subjs, empty_s_model._subjs, empty_s_model.data
 
         self.create_nodes()
 
@@ -1206,16 +1209,15 @@ class Hierarchical(object):
             # create and fit single subject
             if verbose > 0: print "*!*!* fitting subject %d *!*!*" % subjs[i_subj]
             t_data = self.data[self.data['subj_idx'] == subjs[i_subj]]
-            t_data = rec.drop_fields(t_data, ['data_idx'])
             s_model = deepcopy(empty_s_model)
             s_model.data = t_data
             s_model.map(method='fmin_powell', runs=runs, **map_kwargs)
 
             # copy to original model
-            for (name, node) in s_model.group_nodes.iteritems():
+            for (name, node) in s_model.param_container.iter_group_nodes():
                 #try to assign the value of the node to the original model
                 try:
-                    self.subj_nodes[name][i_subj].value = node.value
+                    self.param_container.subj_nodes[name][i_subj].value = node.value
                 #if it fails it mean the param has no subj nodes
                 except KeyError:
                     if subjless.has_key(name):
@@ -1238,4 +1240,4 @@ class Hierarchical(object):
 
         #set group nodes of subjless nodes
         for (name, values) in subjless.iteritems():
-            self.group_nodes[name].value = np.mean(subjless[name])
+            self.param_container.group_nodes[name].value = np.mean(subjless[name])
