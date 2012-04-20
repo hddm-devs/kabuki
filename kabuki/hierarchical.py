@@ -715,8 +715,9 @@ class Hierarchical(object):
 
         info = {}
         info['DIC'] = self.mc.dic
-        info['deviance']  = np.mean(self.mc.db.trace('deviance')(), axis=0)
-        info['pD'] = info['DIC'] - info['deviance']
+        info['avg deviance'] = np.mean(self.mc.db.trace('deviance')(), axis=0)
+        info['deviance avg'] = 2 * info['avg deviance'] - info['DIC']
+        info['pD'] = info['DIC'] - info['avg deviance']
 
         return info
 
@@ -729,7 +730,8 @@ class Hierarchical(object):
         if fname is None:
             print stats_str
             print "DIC: %f" % self.mc.dic
-            print "deviance: %f" % info['deviance']
+            print "D(avg theta): %f" % info['deviance avg']
+            print "avg D(theta): %f" % info['avg deviance']
             print "pD: %f" % info['pD']
         else:
             with open(fname, 'w') as fd:
