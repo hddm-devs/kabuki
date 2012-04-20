@@ -1,5 +1,4 @@
 import kabuki
-from kabuki.hierarchical import Parameter
 import numpy as np
 import unittest
 import pymc as pm
@@ -32,17 +31,17 @@ class TestHierarchicalBreakDown(unittest.TestCase):
                     pass
             else:
                 model.map(runs=2)
-    
+
     def test_dic_info(self):
         for model in self.models:
             model.dic_info()
-            
+
     def test_print_stats(self):
         for model in self.models:
             model.print_stats()
             model.print_group_stats()
-    
-    @unittest.skip("Not implemented")    
+
+    @unittest.skip("Not implemented")
     def load_db(self):
         pass
 
@@ -50,10 +49,10 @@ class TestHierarchicalBreakDown(unittest.TestCase):
         new_models = test_utils.load_models()
         for (i_m, pre_model) in enumerate(self.models):
             new_models[i_m].init_from_existing_model(pre_model)
-        
+
     def test_plot_posteriors(self):
         pass
-    
+
     def test_subj_by_subj_map_init(self):
         models = test_utils.load_models()
         for model in models:

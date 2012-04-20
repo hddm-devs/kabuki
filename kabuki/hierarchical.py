@@ -15,15 +15,112 @@ import kabuki
 from copy import copy, deepcopy
 
 
-class Knode(object):
-    def __init__(self, stoch, step_method=None, step_method_args=None, **kwargs):
-        self.stoch = stoch
-        self.step_method = step_method
-        self.args = kwargs
-        if step_method_args is None:
-            self.step_method_args = {}
+# (defaultdict) param_name -> (defaultdict) column_names -> elems
+#self.create_model(depends={'v':('col1')})
 
-def get_overlapping_elements(t1, t2):
+# defaultdict(lambda: defaultdict(lambda: ()))
+
+class Knode(object):
+    def __init__(self, pymc_node, name, depends=(), col_name='', subj=False, **kwargs):
+        self.pymc_node = pymc_node
+        self.name = name
+        self.kwargs = kwargs
+        self.subj = subj
+        self.col_name = col_name
+        self.nodes = OrderedDict()
+
+        #create self.parents
+        self.parents = {}
+        for (name, value) in self.kwargs.iteritems():
+            if isinstance(value, Knode):
+                self.parents[name] = value
+
+        # Create depends set and update based on parents' depends
+        depends = set(depends)
+        if self.subj:
+            depends.add('subj_idx')
+        depends.update(self.get_parent_depends())
+
+        self.depends = sorted(list(depends))
+
+        self.observed =  'observed' in kwargs
+
+    def set_data(self, data):
+        self.data = data
+
+    def get_parent_depends(self):
+        union_parent_depends = set()
+        for name, parent in self.parents.iteritems():
+            union_parent_depends.update(set(parent.depends))
+        return union_parent_depends
+
+    def create(self):
+
+        #group data
+        if len(self.depends) == 0:
+            grouped = [((), self.data)]
+        else:
+            grouped = self.data.groupby(self.depends)
+
+        #create all the knodes
+        for uniq_elem, grouped_data in grouped:
+            if not isinstance(uniq_elem, tuple):
+                uniq_elem = (uniq_elem,)
+
+            # create new kwargs to pass to the new pymc node
+            kwargs = self.kwargs.copy()
+
+            # update kwarg with the right parent
+            for name, parent in self.parents.iteritems():
+                kwargs[name] = parent.get_node(self.depends, uniq_elem)
+
+            #get node name
+            node_name = self.create_node_name(uniq_elem)
+
+            #get value for observed node
+            if self.observed:
+                kwargs['value'] = grouped_data[self.col_name].values
+
+            #treat deterministic nodes
+
+            #actually create the node
+            node = self.pymc_node(node_name, **kwargs)
+
+            self.nodes[uniq_elem] = node
+
+    def create_node_name(self, uniq_elem):
+        # TODO
+        return self.name + str(uniq_elem)
+
+
+    def get_node(self, cols, elems):
+        """Return the node that depends on the same elements.
+
+        Called by the child to receive specific parent node.
+
+        :Arguments:
+            col_to_elem : dict
+                Maps column names to elements.
+                e.g. {'col1': 'elem1', 'col2': 'elem2', 'col3': 'elem3'}
+        """
+
+        col_to_elem = {}
+        for col, elem in zip(cols, elems):
+            col_to_elem[col] = elem
+
+        # Find the column names that overlap with the ones we have
+        overlapping_cols = intersect(cols, self.depends)
+
+        # Create new tag for the specific elements we are looking for (that overlap)
+        deps_on_elems = tuple([col_to_elem[col] for col in overlapping_cols])
+
+        return self.nodes[deps_on_elems]
+
+
+# in Hierarchical: self.create_model(): for... knode.set_data(self.data); knode.create()
+
+def intersect(t1, t2):
+    # Preserves order, unlike set.
     return tuple([i for i in t2 if i in t1])
 
 def test_subset_tuple():
@@ -34,7 +131,7 @@ def test_subset_tuple():
     assert get_overlapping_elements(('c', 'b', 'a'), ('b', 'c')) == ('b', 'c')
 
 class ParameterContainer(object):
-    def __init__(self, params, is_group_model, replace_params, update_params, trace_subjs, plot_subjs, plot_var, include=()):
+    def __init__(self, params, is_group_model, trace_subjs, plot_subjs, plot_var, include=()):
         """initialize self.params"""
 
         self.is_group_model = is_group_model
@@ -43,7 +140,6 @@ class ParameterContainer(object):
 
         # Initialize parameter dicts.
         self.group_nodes = OrderedDict()
-        self.var_nodes = OrderedDict()
         self.subj_nodes = OrderedDict()
         self.bottom_nodes = OrderedDict()
 
@@ -220,178 +316,6 @@ class ParameterContainer(object):
 
         return self.nodes
 
-class Parameter(object):
-    """Specify a parameter of a model.
-
-    :Arguments:
-        name <str>: Name of parameter.
-
-    :Optional:
-        is_bottom_node <bool=False>: Is node at the bottom of the hierarchy (e.g. likelihoods)
-
-        subj_knode <Knode>: the Knode of the subject
-
-        group_knode <Knode>: the Knode of the group
-
-        var_knode <Knode>: the Knode of the var
-
-        group_label <string>: the label that the subj node gives to the group parameter
-
-        var_label <string>: the label that the subj node gives to the var parameter
-
-        transform <function> : a function which take the group and var nodes and return
-            new group and var nodes. for instance if the var node is define as a prior
-            over the standard devision and one would like to get a prior on the precision
-            then one will define lambda mu,var:(mu, var**-2).
-
-        bottom_stoch
-
-        vars <dict>: User-defined variables, can be anything you later
-            want to access.
-
-        optional <bool=False>: Only create distribution when included.
-            Otherwise, set to default value (see below).
-
-        default <float>: Default value if optional=True.
-
-        verbose <int=0>: Verbosity.
-
-        var_type <string>: type of the var node, can be one of ['std', 'precision', 'sample_size']
-    """
-
-    def __init__(self, name, is_bottom_node=False, vars=None, default=None, optional=False,
-                 subj_knode=None, group_knode=None, var_knode=None,
-                 group_label=None, var_label=None, var_type=None,
-                 transform=None, share_var=False, use_spx=False, verbose=0):
-
-        for (attr, value) in locals().iteritems():
-            setattr(self, attr, value)
-
-        self.knodes = {'group': group_knode, 'var': var_knode, 'subj': subj_knode}
-
-        if self.optional and self.default is None:
-            raise ValueError("Optional parameters have to have a default value.")
-
-        self.group_nodes = OrderedDict()
-        self.var_nodes = OrderedDict()
-        self.subj_nodes = OrderedDict()
-        self.bottom_nodes = OrderedDict()
-
-        self.has_subj_nodes = None
-
-        self.elem_to_param = {}
-
-        # Pointers that get overwritten
-        self.group = None
-        self.tag = None
-        self.data = None
-        self.idx = None
-
-        self.use_spx = use_spx
-
-    def reset(self):
-        self.group = None
-        self.tag = None
-        self.data = None
-        self.idx = None
-
-    def get_full_name(self):
-        if self.idx is not None:
-            if self.tag is not None:
-                return '%s%s%i'%(self.name, self.tag, self.idx)
-            else:
-                return '%s%i'%(self.name, self.idx)
-        else:
-            if self.tag is not None:
-                return '%s%s'%(self.name, self.tag)
-            else:
-                return self.name
-
-    def add_group_node(self, node, key=()):
-        key = tuple(key)
-        self.group_nodes[key] = node
-
-    def add_var_node(self, node, key=()):
-        key = tuple(key)
-        self.var_nodes[key] = node
-
-    def init_subj_nodes(self, key, subjs):
-        key = tuple(key)
-        self.subj_nodes[key] = np.empty(subjs, dtype=object)
-
-    def add_subj_node(self, node, subj, key=()):
-        key = tuple(key)
-        if key in self.subj_nodes:
-            self.subj_nodes[key][subj] = node
-        else:
-            raise KeyError('subj_nodes not initialized for '+str(node))
-
-    def init_bottom_nodes(self, key, subjs):
-        key = tuple(key)
-        self.bottom_nodes[key] = np.empty(subjs, dtype=object)
-
-    def add_bottom_node(self, node, subj=None, key=()):
-        key = tuple(key)
-        if subj is not None:
-            self.bottom_nodes[key][subj] = node
-        else:
-            self.bottom_nodes[key] = node
-
-    def get_node(self, cols, elems, subj=None):
-        """Return the node that depends on the same elements.
-
-        :Arguments:
-            col_to_elem : dict
-                Maps column names to elements.
-                e.g. {'col1': 'elem1', 'col2': 'elem3', 'col3': 'elem3'}
-        """
-
-        col_to_elem = {}
-        for col, elem in zip(cols, elems):
-            col_to_elem[col] = elem
-
-        # Find the column names that overlap with the ones we have
-        overlapping_cols = get_overlapping_elements(cols, self.col_dep_on)
-
-        # Create new tag for the specific elements we are looking for (that overlap)
-        deps_on_elems = tuple([col_to_elem[col] for col in overlapping_cols])
-
-        if self.is_bottom_node:
-            if subj is not None:
-                return self.bottom_nodes[deps_on_elems][subj]
-            else:
-                return self.bottom_nodes[deps_on_elems]
-
-        if self.has_subj_nodes and subj is not None:
-            return self.subj_nodes[deps_on_elems][subj]
-        else:
-            return self.group_nodes[deps_on_elems]
-
-
-    full_name = property(get_full_name)
-
-    def __repr__(self):
-        return object.__repr__(self).replace(' object ', " '%s' "%self.name)
-
-
-    def var_func(self, values):
-        """ applay the varinace node func (according to var type) on values"""
-        if self.var_type == 'std':
-            return np.std(values)
-
-        elif self.var_type == 'var':
-            return np.std(values) ** 2
-
-        elif self.var_type == 'precision':
-            return np.std(values) ** -2
-
-        elif self.var_type == 'sample_size':
-            v = np.var(values)
-            m = np.mean(values)
-            return (m * (1 - m)) / v - 1
-
-        else:
-            raise ValueError, "unknown var_type"
 
 class Hierarchical(object):
     """Creation of hierarchical Bayesian models in which each subject
@@ -472,8 +396,7 @@ class Hierarchical(object):
     """
 
     def __init__(self, data, is_group_model=None, depends_on=None, trace_subjs=True,
-                 plot_subjs=False, plot_var=False, include=(), replace_params=None,
-                 update_params=None, overwrite_data_idx=False):
+                 plot_subjs=False, plot_var=False, include=()):
 
         # Init
         self.include = set(include)
@@ -496,15 +419,10 @@ class Hierarchical(object):
                     if elem not in self.data.columns:
                         raise KeyError, "Column named %s not found in data." % elem
 
-        # Create set that holds all columns. This is used for the
-        # observed nodes that have to be created for the smallest
-        # denominator.
-        self.depends_all = set()
-        [self.depends_all.add(dep) for p in depends_on.values() for dep in p]
 
-        self.depends_default = defaultdict(lambda: ())
+        self.depends = defaultdict(lambda: ())
         for key, value in depends_on.iteritems():
-            self.depends_default[key] = value
+            self.depends[key] = value
 
 
         # Determine if group model
@@ -533,9 +451,17 @@ class Hierarchical(object):
 
         self.num_subjs = self._num_subjs
 
-        self.param_container = ParameterContainer(self.create_params(), is_group_model, replace_params, update_params, trace_subjs, plot_subjs, plot_var, include=include)
+        # self.param_container = ParameterContainer(self.create_params(), is_group_model, trace_subjs, plot_subjs, plot_var, include=include)
 
-    def create_nodes(self, max_retries=8):
+        self.knodes = self.create_knodes()
+
+        #add data to knodes
+        for knode in self.knodes:
+            knode.set_data(self.data)
+
+        self.create_model()
+
+    def create_model(self, max_retries=8):
         """Set group level distributions. One distribution for each
         parameter.
 
@@ -551,24 +477,10 @@ class Hierarchical(object):
         #     to just delete all the nodes then?
 
         def _create():
-            self.param_container.reinit()
+            # self.param_container.reinit()
 
-            # Tell parameters what they depend on
-            for name, param in self.param_container.iter_params(include=True, bottom=False):
-                param.col_dep_on = self.depends_default[param.name]
-            for name, param in self.param_container.iter_bottom_params():
-                param.col_dep_on = self.depends_all
-
-            for name, param in self.param_container.iter_params(include=True, bottom=False):
-                self._set_param(param)
-
-            # Init bottom nodes
-            for param in self.param_container.iter_bottom_params():
-                self._set_bottom_nodes(param, init=True)
-
-            # Create bottom nodes
-            for param in self.param_container.iter_bottom_params():
-                self._set_bottom_nodes(param, init=False)
+            for knode in self.knodes:
+                knode.create()
 
         for tries in range(max_retries):
             try:
@@ -579,189 +491,6 @@ class Hierarchical(object):
         else:
             print "After %f retries, still no good fit found." %(tries)
             _create()
-
-        return self.param_container.reinit()
-
-    def _set_param(self, param):
-        """Set parameter that depends on data.
-
-        :Arguments:
-            param_name : string
-                Name of parameter that depends on data for
-                which to set distributions.
-
-        """
-
-        # Get column names for provided param_name
-        if len(self.depends_default[param.name]) == 0:
-            grouped = [((), self.data)]
-        else:
-            grouped = self.data.groupby(list(self.depends_default[param.name]))
-
-        # Loop through unique elements
-        for name, groups in grouped:
-            # Create parameter distribution from factory
-            if isinstance(name, str):
-                name = (name,)
-            param.tag = name
-            param.data = groups
-            param.add_group_node(self.create_pymc_node(param.group_knode, param.full_name), name)
-            param.reset()
-
-            if self.is_group_model and param.has_subj_nodes:
-                # Create appropriate subj parameter
-                self._set_subj_nodes(param, name, groups)
-
-        return self
-
-
-    def _set_subj_nodes(self, param, tag, data):
-        """Set nodes with a parent.
-
-        :Arguments:
-            param_name : string
-                Name of parameter.
-            tag : string
-                Element name.
-            data : numpy.recarray
-                Part of the data the parameter
-                depends on.
-
-        """
-        # Generate subj variability parameter var
-
-        #Gen variance parameter
-        param.data = data
-        if param.share_var:
-            param.tag = '.var'
-        else:
-            param.tag = '.var' + str(tag)
-
-        #if param does not share variance or this is the first node created
-        # then we create the node
-        if (len(param.var_nodes) == 0) or (not param.share_var):
-            param.add_var_node(self.create_pymc_node(param.var_knode, param.full_name), tag)
-        else: #we copy the first node
-            param.add_var_node(param.var_nodes.values()[0], tag)
-
-        #Create subj parameters
-        param.reset()
-        param.tag = tag
-
-        #first set parents
-        param.group = param.group_nodes[tag]
-        param.var = param.var_nodes[tag]
-
-        if param.transform == None:
-            group_node = param.group
-            var_node = param.var
-        else:
-            group_node, var_node = param.transform(param.group, param.var)
-
-        #set subj_stoch_args according to parnets labels
-        if param.group_label != None:
-            param.subj_knode.args[param.group_label] = group_node
-        if param.var_label != None:
-            param.subj_knode.args[param.var_label] = var_node
-
-        # Init nodes
-        param.init_subj_nodes(tag, self.num_subjs)
-        # now create subj parameter distribution for each subject
-        for subj_idx,subj in enumerate(self._subjs):
-            data_subj = data[data['subj_idx']==subj]
-            param.data = data_subj
-            param.idx = subj_idx
-            param.add_subj_node(self.create_pymc_node(param.subj_knode, param.full_name), subj_idx, tag)
-
-        param.reset()
-        return self
-
-    def _set_bottom_nodes(self, param, init=False):
-        """Set parameter node that has no parent.
-
-        :Arguments:
-            param_name : string
-                Name of parameter.
-
-        :Optional:
-            init : bool
-                Initialize parameter.
-
-        """
-
-        # Divide data and parameter distributions according to self.depends_on
-        if len(self.depends_all) == 0:
-            data_group = [((), self.data)]
-        else:
-            data_group = self.data.groupby(list(self.depends_all))
-
-        # Loop through parceled data and create an observed stochastic
-        for i, (dep_elems, data_grouped) in enumerate(data_group):
-            if isinstance(dep_elems, str):
-                dep_elems = (dep_elems,)
-            # Loop over and init/create individual observed nodes
-            for name, param in self.param_container.iter_bottom_params():
-                if init:
-                    param.init_bottom_nodes(dep_elems, self._num_subjs)
-                else:
-                    self._create_bottom_node(param, data_grouped, dep_elems, i)
-
-        return self
-
-    def _create_bottom_node(self, bottom_param, data, dep_name, idx):
-        """Create parameter node object which has no parent.
-
-        :Note:
-            Called by self._set_bottom_node().
-
-        :Arguments:
-            param_name : string
-                Name of parameter.
-            data : numpy.recarray
-                Data on which parameter depends on.
-            params : list
-                List of parameters the node depends on.
-            dep_name : str
-                Element name the node depends on.
-            idx : int
-                Subject index.
-
-        """
-        def _add_bottom_nodes(data, subj=None):
-            selected_subj_nodes = {}
-
-            # Create new params dict and copy over nodes
-            for name, param in self.param_container.iter_params(include=True):
-                selected_subj_nodes[name] = param.get_node(self.depends_all, dep_name, subj=subj)
-
-            # Set up param
-            bottom_param.tag = dep_name
-            bottom_param.idx = subj
-            bottom_param.data = data
-
-            # Call to the user-defined function!
-            bottom_node = self.get_bottom_node(bottom_param, selected_subj_nodes)
-
-            if bottom_node is not None and len(bottom_node.value) == 0:
-                print "Warning! Bottom node %s is not linked to data. Replacing with None." % param.full_name
-                bottom_param.add_bottom_node(None, subj=subj, key=dep_name)
-            else:
-                bottom_param.add_bottom_node(bottom_node, subj=subj, key=dep_name)
-            bottom_param.reset()
-
-        if self.is_group_model:
-            for i, subj_num in enumerate(self._subjs):
-                # Select data belonging to subj
-                data_subj = data[data['subj_idx'] == subj_num]
-                # Skip if subject was not tested on this condition
-                if len(data_subj) == 0:
-                    continue
-                _add_bottom_nodes(data_subj, i)
-
-        else:
-            _add_bottom_nodes(data)
-
-        return self
 
     def map(self, runs=2, warn_crit=5, method='fmin_powell', **kwargs):
         """
@@ -1052,13 +781,6 @@ class Hierarchical(object):
         return self
 
 
-    def create_pymc_node(self, knode, name):
-        """Create pymc node named 'name' out of knode """
-
-        if knode is None:
-            return None
-        else:
-            return knode.stoch(name, **knode.args)
 
     def init_from_existing_model(self, pre_model, assign_values=True, assign_step_methods=True,
                                  match=None, **mcmc_kwargs):
