@@ -570,8 +570,6 @@ class Hierarchical(object):
             for param in self.param_container.iter_bottom_params():
                 self._set_bottom_nodes(param, init=False)
 
-        self.param_container.reinit()
-
         for tries in range(max_retries):
             try:
                 _create()
