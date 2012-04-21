@@ -478,11 +478,6 @@ class Hierarchical(object):
                 How often to retry when model creation
                 failed (due to bad starting values).
         """
-        # TODO: max_retries is causing bugs, so it was commented out.
-        #     we need to delete the nodes that are created using _create before the next retry.
-        #     I would like to check if we actually need this option
-        # TW: We definitely need it, model creation fails all the time. Wouldn't it be enough
-        #     to just delete all the nodes then?
 
         def _create():
             # self.param_container.reinit()
