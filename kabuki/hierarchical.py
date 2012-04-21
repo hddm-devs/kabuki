@@ -49,12 +49,14 @@ class Knode(object):
         self.data = data
 
     def get_parent_depends(self):
+        """returns the depends of the parents"""
         union_parent_depends = set()
         for name, parent in self.parents.iteritems():
             union_parent_depends.update(set(parent.depends))
         return union_parent_depends
 
     def create(self):
+        """create the pymc nodes"""
 
         #group data
         if len(self.depends) == 0:
@@ -82,6 +84,8 @@ class Knode(object):
                 kwargs['value'] = grouped_data[self.col_name].values
 
             #treat deterministic nodes
+            if 'lam_fun' in kwargs:
+                self.replace_lam_fun_defaults(kwargs['lam_fun'])
 
             #actually create the node
             node = self.pymc_node(node_name, **kwargs)
@@ -91,6 +95,10 @@ class Knode(object):
     def create_node_name(self, uniq_elem):
         # TODO
         return self.name + str(uniq_elem)
+
+    def replace_lam_fun_defaults(self, func):
+        # aparently this is not so simple sine copy(func) does not really copy the function
+        pass
 
 
     def get_node(self, cols, elems):
