@@ -101,6 +101,7 @@ class Knode(object):
             node = self.pymc_node(name=node_name, **kwargs)
 
             self.nodes[uniq_elem] = node
+
         print self.nodes
 
 
@@ -146,81 +147,40 @@ def test_subset_tuple():
     assert get_overlapping_elements(('a', 'b' , 'c'), ('b', 'c')) == ('b', 'c')
     assert get_overlapping_elements(('c', 'b', 'a'), ('b', 'c')) == ('b', 'c')
 
-class ParameterContainer(object):
-    def __init__(self, params, is_group_model, trace_subjs, plot_subjs, plot_var, include=()):
+class NodeContainer(object):
+
+    # TODO:
+    # Write a property dictionary that describes everything about each node.
+    # e.g.: {'v_tau_2': {'name': 'v_tau', 'dep_on_col':{'col1':'elem1'}, 'stochastic': True, 'observed': False, 'subj_node':False}
+    def __init__(self, knodes):
         """initialize self.params"""
 
         self.is_group_model = is_group_model
-        self.include = include
-        self.params = params
 
-        # Initialize parameter dicts.
-        self.group_nodes = OrderedDict()
-        self.subj_nodes = OrderedDict()
-        self.bottom_nodes = OrderedDict()
-
-        self.nodes = None
-
-        if replace_params == None:
-            replace_params = ()
-
-        #change the default parametrs
-        self._change_default_params(replace_params, update_params)
-
-        for param in self.params:
-            #set has_x_node
-            param.has_group_nodes = (param.group_knode is not None)
-            param.has_var_nodes = (param.var_knode is not None)
-            param.has_subj_nodes = (param.subj_knode is not None)
-
-            #set other attributes
-            if param.is_bottom_node:
-                param.has_subj_nodes = True
-                continue
-            if not trace_subjs and param.has_subj_nodes:
-                param.subj_knode.args['trace'] = False
-            if not plot_subjs and param.has_subj_nodes:
-                param.subj_knode.args['plot'] = False
-            if not plot_var and param.has_var_nodes:
-                param.var_knode.args['plot'] = False
-
-        #set params_dict
-        self.params_dict = {}
-        for param in self.params:
-            if param.name in self.include or not param.optional:
-                param.include = True
-            else:
-                param.include = False
-            self.params_dict[param.name] = param
-
+        self.knodes = OrderedDict()
+        for knode in knodes:
+            self.knodes[knode.name] = knode
 
     def iter_group_nodes(self):
         for name, node in self.group_nodes.iteritems():
-            yield (name, node)
-
-    def iter_var_nodes(self):
-        for name, node in self.var_nodes.iteritems():
             yield (name, node)
 
     def iter_subj_nodes(self):
         for name, node in self.subj_nodes.iteritems():
             yield (name, node)
 
-    def iter_bottom_nodes(self):
-        for name, param in self.params_dict.iteritems():
-            if not param.is_bottom_node:
-                continue
-            for tag, node in param.bottom_nodes.iteritems():
-                yield name, tag, node
+    def iter_observed_nodes(self):
+        for name, param in self.observed_nodes.iteritems():
+            yield name, node
 
-    def iter_bottom_params(self, include=True):
+    def iter_observed_params(self, include=True):
         for name, param in self.params_dict.iteritems():
-            if not param.is_bottom_node or not param.include:
+            if not param.is_observed_node or not param.include:
                 continue
 
             yield name, param
 
-    def iter_params(self, optional=False, include=True, bottom=False):
+    def iter_params(self, optional=False, include=True, observed=False):
         for name, param in self.params_dict.iteritems():
             if optional and not param.optional:
                 continue
@@ -228,47 +188,16 @@ class ParameterContainer(object):
             if include and not param.include:
                 continue
 
-            if not bottom and param.is_bottom_node:
+            if not observed and param.is_observed_node:
                 continue
 
             yield (name, param)
 
-
-    def _change_default_params(self, replace_params, update_params):
-        """replace/update parameters with user defined parameters"""
-        #replace params
-        if type(replace_params)==Parameter:
-            replace_params = [replace_params]
-        for new_param in replace_params:
-            for i in range(len(self.params)):
-                if self.params[i].name == new_param.name:
-                    self.params[i] = new_param
-
-        #update params
-        if update_params == None:
-            return
-
-        for (param_name, dict) in update_params.iteritems():
-            found_param = False
-            for i in range(len(self.params)):
-                if self.params[i].name == param_name:
-                    for (key, new_value) in dict.iteritems():
-                        if hasattr(self.params[i], key):
-                            setattr(self.params[i], key, new_value)
-                        else:
-                            raise ValueError, "An invalid key (%s) was found in update_params for Parameter %s" % (key, param_name)
-                    found_param = True
-                    break
-            if not found_param:
-                raise ValueError, "An invalid parameter (%s) was found in update_params" % (param_name)
-
-
-    def reinit(self):
+    def fill(self):
         # Initialize parameter dicts.
         self.group_nodes = OrderedDict()
-        self.var_nodes = OrderedDict()
         self.subj_nodes = OrderedDict()
-        self.bottom_nodes = OrderedDict()
+        self.observed_nodes = OrderedDict()
         self.nodes = OrderedDict()
 
         #dictionary of stochastics. the keys are names of single nodes
@@ -305,11 +234,11 @@ class ParameterContainer(object):
                     self.stoch_by_tuple[(name,'s',tag,idx)] = node
                     self.stoch_by_name[node.__name__] = node
 
-        #bottom nodes
-        for name, tag, nodes in self.iter_bottom_nodes():
+        #observed nodes
+        for name, tag, nodes in self.iter_observed_nodes():
             tag = str(tag)
-            self.nodes[name+tag+'_bottom'] = nodes
-            self.bottom_nodes[name+tag] = nodes
+            self.nodes[name+tag+'_observed'] = nodes
+            self.observed_nodes[name+tag] = nodes
             if self.is_group_model:
                 for (idx, node) in enumerate(nodes):
                     self.stoch_by_tuple[(name,'b',tag,idx)] = node
@@ -320,7 +249,7 @@ class ParameterContainer(object):
 
         #update knodes
         for name, param in self.iter_params(include=True):
-            if param.is_bottom_node:
+            if param.is_observed_node:
                 continue
             param.knodes['group'].nodes = param.group_nodes
             #try to update var knodes and subj knodes if they exist
@@ -383,28 +312,6 @@ class Hierarchical(object):
 
         plot_var : bool
              Plot group variability parameters
-             (i.e. variance of Normal distribution.)
-
-        replace_params : list of Parameters
-            User defined parameters to replace the default ones.
-
-        update_params : dictionary that holds dictionaries
-            User defined parameters that to update files in the default ones.
-            the keys of the dictionary should be the names of the parameters that
-            one wants to update. The values are another dictionary with keys for the
-            attributes the will be updated to the associated values.
-            e.g., to change parameter x's group_step_method to Metropolis
-            one should pass the following
-            {'x' : {'group_step_method': Metropolis}}
-
-
-    :Note:
-        This class must be inherited. The child class must provide
-        the following functions:
-            * get_bottom_node(param, params): Return distribution
-                  for nodes at the bottom of the hierarchy param (e.g. the model
-                  likelihood). params contains the associated model
-                  parameters.
 
         In addition, the variable self.params must be defined as a
         list of Paramater().
