@@ -22,12 +22,13 @@ class HNodeSimpleVar(kabuki.Hierarchical):
     def create_knodes(self):
         v_g = Knode(pm.Uniform, 'v_g', lower=-5, upper=5, depends=self.depends['v'])
         v_std = Knode(pm.Uniform, 'v_std', lower=1e-8, upper=100, depends=self.depends['v_std'])
-        v_tau = Knode(pm.Lambda, 'v_tau', lam_fun=lambda x=v_std: x**-2, plot=False, trace=False)
+        v_tau = Knode(pm.Deterministic, 'v_tau', doc='v_tau', eval=lambda x: x**-2, x=v_std, plot=False, trace=False)
+        #v_tau = Knode(pm.Lambda, 'v_tau', lam_fun=lambda x=v_std: x**-2, plot=False, trace=False)
         v_subj = Knode(pm.Normal, 'v_subj', mu=v_g, tau=v_tau, subj=True)
 
         like = Knode(pm.Normal, 'like', mu=v_subj, tau=1, col_name='data', observed=True)
 
-        return [v_g, v_tau, v_subj, like]
+        return [v_g, v_std, v_tau, v_subj, like]
 
 class TestModels(unittest.TestCase):
 

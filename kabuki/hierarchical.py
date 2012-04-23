@@ -83,22 +83,30 @@ class Knode(object):
             if self.observed:
                 kwargs['value'] = grouped_data[self.col_name].values
 
-            #treat deterministic nodes
-            if 'lam_fun' in kwargs:
-                self.replace_lam_fun_defaults(kwargs['lam_fun'])
+            # Deterministic nodes require a parent argument that is a
+            # dict mapping parent names to parent nodes. Knode wraps
+            # this; so here we have to fish out the parent nodes from
+            # kwargs, put them into a parent dict and put that back
+            # into kwargs, which will make pm.Determinstic() get a
+            # parent dict as an argument.
+            if self.pymc_node is pm.Deterministic:
+                parents_dict = {}
+                for name, parent in self.parents.iteritems():
+                    parents_dict[name] = parent.get_node(self.depends, uniq_elem)
+                    kwargs.pop(name)
+                kwargs['parents'] = parents_dict
+
 
             #actually create the node
-            node = self.pymc_node(node_name, **kwargs)
+            node = self.pymc_node(name=node_name, **kwargs)
 
             self.nodes[uniq_elem] = node
+        print self.nodes
+
 
     def create_node_name(self, uniq_elem):
         # TODO
         return self.name + str(uniq_elem)
-
-    def replace_lam_fun_defaults(self, func):
-        # aparently this is not so simple sine copy(func) does not really copy the function
-        pass
 
 
     def get_node(self, cols, elems):
