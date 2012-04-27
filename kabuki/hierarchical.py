@@ -102,9 +102,6 @@ class Knode(object):
 
             self.nodes[uniq_elem] = node
 
-        print self.nodes
-
-
     def create_node_name(self, uniq_elem):
         # TODO
         return self.name + str(uniq_elem)
@@ -151,7 +148,9 @@ class NodeContainer(object):
 
     # TODO:
     # Write a property dictionary that describes everything about each node.
-    # e.g.: {'v_tau_2': {'name': 'v_tau', 'dep_on_col':{'col1':'elem1'}, 'stochastic': True, 'observed': False, 'subj_node':False}
+    # e.g.: {'v_tau_2': {'name': 'v_tau', 'col1':'elem1'}, 'stochastic': True, 'observed': False, 'subj_node':False}
+    # properties (column names): name, stochastic, observed, subj_node, subj_idx, col1, col2, ..., node_object, mean, std, quantiles shit...,
+    # elements of col1: elem1 col2: elem2
     def __init__(self, knodes):
         """initialize self.params"""
 
@@ -376,13 +375,50 @@ class Hierarchical(object):
 
         # self.param_container = ParameterContainer(self.create_params(), is_group_model, trace_subjs, plot_subjs, plot_var, include=include)
 
+        # create knodes (does not build according pymc nodes)
         self.knodes = self.create_knodes()
 
         #add data to knodes
         for knode in self.knodes:
             knode.set_data(self.data)
 
+        # constructs pymc nodes etc and connects them appropriately
         self.create_model()
+
+        # create node container
+        self.create_nodes_db()
+
+    def create_node_container(self):
+        data_col_names = list(self.data.columns)
+        stats = ['mean', 'std'] # TODO: Add more stats
+        node_descriptors = ['knode_name', 'stochastic', 'observed', 'subj', 'node_object']
+        columns = node_descriptors + data_col_names + stats
+
+        # indices will be the pymc node names
+        node_names = []
+        for knode in self.knodes:
+            names = [node.__name__ for node in knode.nodes.itervalues()]
+            node_names.extend(names)
+
+        # create central dataframe
+        self.nodes_db = pd.DataFrame(columns=columns, index=node_names)
+
+        # populate nodes_db
+        # TODO : Move this to each individual knode that contains a dataframe of itself and then concatenate them here.
+        for knode in self.knodes:
+            for node in knode.nodes.itervalues():
+                name = node.__name__
+                line = self.nodes.ix[name]
+                line['observed'] = knode.observed
+                line['stochastic'] = knode.stochastic
+                line['subj'] = knode.subj
+                line['node_object'] = node
+
+        #self.nodes_db[self.nodes_db['group_node'] == True]
+
+        # query from ppc col1 col2 while model is only dep on col1
+        nodes_db.name == 'v' & nodes_db.col1 == 'e1' & nodes_db.col2 == 'e2'
+
 
     def create_model(self, max_retries=8):
         """Set group level distributions. One distribution for each
@@ -395,8 +431,6 @@ class Hierarchical(object):
         """
 
         def _create():
-            # self.param_container.reinit()
-
             for knode in self.knodes:
                 knode.create()
 
