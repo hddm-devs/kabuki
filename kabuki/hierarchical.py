@@ -43,7 +43,7 @@ class Knode(object):
 
         self.depends = sorted(list(depends))
 
-        self.observed =  'observed' in kwargs
+        self.observed = 'observed' in kwargs
 
     def set_data(self, data):
         self.data = data
@@ -55,8 +55,35 @@ class Knode(object):
             union_parent_depends.update(set(parent.depends))
         return union_parent_depends
 
+    def init_nodes_db(self):
+        data_col_names = list(self.data.columns)
+        #stats = ['mean', 'std'] # TODO: Add more stats
+        node_descriptors = ['knode_name', 'stochastic', 'observed', 'subj', 'node']
+        columns = node_descriptors + data_col_names
+
+        # create central dataframe
+        self.nodes_db = pd.DataFrame(columns=columns)
+
+    def append_node_to_db(self, node, uniq_elem):
+        #create db entry for knode
+        line = {}
+        line['knode_name'] = self.name
+        line['observed'] = self.observed
+        line['stochastic'] = isinstance(node, pm.Stochastic)
+        line['subj'] = self.subj
+        line['node'] = node
+
+        line = pd.DataFrame(data=[line], columns=self.nodes_db.columns, index=[node.__name__])
+
+        for dep, elem in zip(self.depends, uniq_elem):
+            line[dep] = elem
+
+        self.nodes_db = self.nodes_db.append(line)
+
     def create(self):
         """create the pymc nodes"""
+
+        self.init_nodes_db()
 
         #group data
         if len(self.depends) == 0:
@@ -66,6 +93,7 @@ class Knode(object):
 
         #create all the knodes
         for uniq_elem, grouped_data in grouped:
+
             if not isinstance(uniq_elem, tuple):
                 uniq_elem = (uniq_elem,)
 
@@ -102,6 +130,9 @@ class Knode(object):
 
             self.nodes[uniq_elem] = node
 
+            self.append_node_to_db(node, uniq_elem)
+
+
     def create_node_name(self, uniq_elem):
         # TODO
         return self.name + str(uniq_elem)
@@ -131,6 +162,7 @@ class Knode(object):
         return self.nodes[deps_on_elems]
 
 
+
 # in Hierarchical: self.create_model(): for... knode.set_data(self.data); knode.create()
 
 def intersect(t1, t2):
@@ -143,122 +175,6 @@ def test_subset_tuple():
     assert get_overlapping_elements(('a', 'b' , 'c'), ('a', 'c')) == ('a', 'c')
     assert get_overlapping_elements(('a', 'b' , 'c'), ('b', 'c')) == ('b', 'c')
     assert get_overlapping_elements(('c', 'b', 'a'), ('b', 'c')) == ('b', 'c')
-
-class NodeContainer(object):
-
-    # TODO:
-    # Write a property dictionary that describes everything about each node.
-    # e.g.: {'v_tau_2': {'name': 'v_tau', 'col1':'elem1'}, 'stochastic': True, 'observed': False, 'subj_node':False}
-    # properties (column names): name, stochastic, observed, subj_node, subj_idx, col1, col2, ..., node_object, mean, std, quantiles shit...,
-    # elements of col1: elem1 col2: elem2
-    def __init__(self, knodes):
-        """initialize self.params"""
-
-        self.is_group_model = is_group_model
-
-        self.knodes = OrderedDict()
-        for knode in knodes:
-            self.knodes[knode.name] = knode
-
-    def iter_group_nodes(self):
-        for name, node in self.group_nodes.iteritems():
-            yield (name, node)
-
-    def iter_subj_nodes(self):
-        for name, node in self.subj_nodes.iteritems():
-            yield (name, node)
-
-    def iter_observed_nodes(self):
-        for name, param in self.observed_nodes.iteritems():
-            yield name, node
-
-    def iter_observed_params(self, include=True):
-        for name, param in self.params_dict.iteritems():
-            if not param.is_observed_node or not param.include:
-                continue
-
-            yield name, param
-
-    def iter_params(self, optional=False, include=True, observed=False):
-        for name, param in self.params_dict.iteritems():
-            if optional and not param.optional:
-                continue
-
-            if include and not param.include:
-                continue
-
-            if not observed and param.is_observed_node:
-                continue
-
-            yield (name, param)
-
-    def fill(self):
-        # Initialize parameter dicts.
-        self.group_nodes = OrderedDict()
-        self.subj_nodes = OrderedDict()
-        self.observed_nodes = OrderedDict()
-        self.nodes = OrderedDict()
-
-        #dictionary of stochastics. the keys are names of single nodes
-        self.stoch_by_name = {}
-        #dictionary of stochastics. the keys are (param_name, h_type, tag, idx)
-        #htype (string)= 'g':group, 'v':var, 's':subject
-        #idx (int) - for subject nodes it's the subject idx, for other nodes its -1
-        self.stoch_by_tuple = {}
-
-        # go over all nodes in params and assign them to the dictionaries
-        for name, param in self.iter_params(include=True):
-            #group nodes
-            for tag, node in param.group_nodes.iteritems():
-                tag = str(tag)
-                self.nodes[name+tag+'_group'] = node
-                self.group_nodes[name+tag] = node
-                self.stoch_by_tuple[(name,'g',tag,-1)] = node
-                self.stoch_by_name[node.__name__] = node
-
-            #var nodes
-            for tag, node in param.var_nodes.iteritems():
-                tag = str(tag)
-                self.nodes[name+tag+'_var'] = node
-                self.var_nodes[name+tag] = node
-                self.stoch_by_tuple[(name,'v',tag,-1)] = node
-                self.stoch_by_name[node.__name__] = node
-
-            #subj nodes
-            for tag, nodes in param.subj_nodes.iteritems():
-                tag = str(tag)
-                self.nodes[name+tag+'_subj'] = nodes
-                self.subj_nodes[tag] = nodes
-                for (idx, node) in enumerate(nodes):
-                    self.stoch_by_tuple[(name,'s',tag,idx)] = node
-                    self.stoch_by_name[node.__name__] = node
-
-        #observed nodes
-        for name, tag, nodes in self.iter_observed_nodes():
-            tag = str(tag)
-            self.nodes[name+tag+'_observed'] = nodes
-            self.observed_nodes[name+tag] = nodes
-            if self.is_group_model:
-                for (idx, node) in enumerate(nodes):
-                    self.stoch_by_tuple[(name,'b',tag,idx)] = node
-                    self.stoch_by_name[name] = node
-            else:
-                self.stoch_by_tuple[(name,'b',tag,-1)] = nodes
-                self.stoch_by_name[name] = nodes
-
-        #update knodes
-        for name, param in self.iter_params(include=True):
-            if param.is_observed_node:
-                continue
-            param.knodes['group'].nodes = param.group_nodes
-            #try to update var knodes and subj knodes if they exist
-            try:
-                param.knodes['var'].nodes = param.var_nodes
-                param.knodes['subj'].nodes = param.subj_nodes
-            except AttributeError:
-                pass
-
-        return self.nodes
 
 
 class Hierarchical(object):
@@ -373,8 +289,6 @@ class Hierarchical(object):
 
         self.num_subjs = self._num_subjs
 
-        # self.param_container = ParameterContainer(self.create_params(), is_group_model, trace_subjs, plot_subjs, plot_var, include=include)
-
         # create knodes (does not build according pymc nodes)
         self.knodes = self.create_knodes()
 
@@ -384,40 +298,6 @@ class Hierarchical(object):
 
         # constructs pymc nodes etc and connects them appropriately
         self.create_model()
-
-        # create node container
-        self.create_nodes_db()
-
-    def create_node_container(self):
-        data_col_names = list(self.data.columns)
-        stats = ['mean', 'std'] # TODO: Add more stats
-        node_descriptors = ['knode_name', 'stochastic', 'observed', 'subj', 'node_object']
-        columns = node_descriptors + data_col_names + stats
-
-        # indices will be the pymc node names
-        node_names = []
-        for knode in self.knodes:
-            names = [node.__name__ for node in knode.nodes.itervalues()]
-            node_names.extend(names)
-
-        # create central dataframe
-        self.nodes_db = pd.DataFrame(columns=columns, index=node_names)
-
-        # populate nodes_db
-        # TODO : Move this to each individual knode that contains a dataframe of itself and then concatenate them here.
-        for knode in self.knodes:
-            for node in knode.nodes.itervalues():
-                name = node.__name__
-                line = self.nodes.ix[name]
-                line['observed'] = knode.observed
-                line['stochastic'] = knode.stochastic
-                line['subj'] = knode.subj
-                line['node_object'] = node
-
-        #self.nodes_db[self.nodes_db['group_node'] == True]
-
-        # query from ppc col1 col2 while model is only dep on col1
-        nodes_db.name == 'v' & nodes_db.col1 == 'e1' & nodes_db.col2 == 'e2'
 
 
     def create_model(self, max_retries=8):
@@ -443,6 +323,14 @@ class Hierarchical(object):
         else:
             print "After %f retries, still no good fit found." %(tries)
             _create()
+
+        # create node container
+        self.create_nodes_db()
+
+
+    def create_nodes_db(self):
+        self.nodes_db = pd.concat([knode.nodes_db for knode in self.knodes])
+
 
     def map(self, runs=2, warn_crit=5, method='fmin_powell', **kwargs):
         """
@@ -478,10 +366,10 @@ class Hierarchical(object):
         for i in range(runs):
             # (re)create nodes to get new initival values.
             #nodes are not created for the first iteration if they already exist
-            if (i > 0) or (not self.param_container.nodes):
-                self.create_nodes()
+            if i != 0:
+                self.create_model()
 
-            m = pm.MAP(self.param_container.nodes)
+            m = pm.MAP(self.nodes_db.nodes.values)
             m.fit(method, **kwargs)
             print m.logp
             maps.append(m)
@@ -531,15 +419,7 @@ class Hierarchical(object):
             The rest of the arguments are forwards to pymc.MCMC
         """
 
-        if not self.param_container.nodes:
-            self.create_nodes()
-
-        nodes ={}
-        for (name, value) in self.param_container.nodes.iteritems():
-            if value != None:
-                nodes[name] = value
-
-        self.mc = pm.MCMC(nodes, *args, **kwargs)
+        self.mc = pm.MCMC(self.nodes_db.node.values, *args, **kwargs)
 
         if assign_step_methods and self.is_group_model:
             self.mcmc_step_methods()

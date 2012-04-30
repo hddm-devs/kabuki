@@ -46,33 +46,33 @@ class TestModels(unittest.TestCase):
     def test_simple_no_deps(self):
         m = HNodeSimple(self.data)
         n_nodes = 1 + self.n_subj*2 #v_g + n_subj * (v_subj + like)
-        assert(len(m.nodes) == n_nodes)
+        self.assertEqual(len(m.nodes_db), n_nodes)
 
     def test_simple_deps(self):
         m = HNodeSimple(self.data, depends_on={'v': 'condition'})
         n_nodes = 2 * (1 + self.n_subj*2) #n_conds * (v_g + n_subj * (v_subj + like))
-        assert(len(m.nodes) == n_nodes)
+        self.assertEqual(len(m.nodes_db), n_nodes)
 
     def test_simplevar_partly_deps(self):
         m = HNodeSimpleVar(self.data, depends_on={'v': 'condition'})
-        n_nodes = 1 + 2 * (1 + self.n_subj*2) #v_std + n_conds * (v_g + n_subj * (v_subj + like))
-        assert(len(m.nodes) == n_nodes)
+        n_nodes = 1 + 1 + 2 * (1 + self.n_subj*2) #v_std + v_tau + n_conds * (v_g + n_subj * (v_subj + like))
+        self.assertEqual(len(m.nodes_db), n_nodes)
 
     def test_simplevar_deps(self):
         m = HNodeSimpleVar(self.data, depends_on={'v': 'condition', 'v_std':'condition'})
-        #n_nodes = n_conds * (v_std + v_g + n_subj * (v_subj + like))
-        n_nodes = 2 * (2 + self.n_subj*2)
-        assert(len(m.nodes) == n_nodes)
+        #n_nodes = n_conds * (v_std + v_tau + v_g + n_subj * (v_subj + like))
+        n_nodes = 2 * (1 + 1 + 1 + self.n_subj*2)
+        self.assertEqual(len(m.nodes_db), n_nodes)
 
     def test_simplevar_double_deps_A(self):
         m = HNodeSimpleVar(self.data, depends_on={'v': 'condition', 'v_std':'condition2'})
-        #n_nodes = 2*v_std + 2*v_g + 4*n_subj*(v_subj + like))
-        n_nodes = 2 + 2 + 4 * self.n_subj * 2
-        assert(len(m.nodes) == n_nodes)
+        #n_nodes = 2*v_tau + 2*v_std + 2*v_g + 4*n_subj*(v_subj + like))
+        n_nodes = 2 + 2 + 2 + 4 * self.n_subj * 2
+        self.assertEqual(len(m.nodes_db), n_nodes)
 
     def test_simplevar_double_deps_B(self):
         m = HNodeSimpleVar(self.data, depends_on={'v': ['condition', 'condition2'], 'v_std':'condition2'})
-        #n_nodes = 2*v_std + 4*v_g + 4*n_subj*(v_subj + like))
-        n_nodes = 2 + 4 + 4 * self.n_subj * 2
-        assert(len(m.nodes) == n_nodes)
+        #n_nodes = 2*v_tau + 2*v_std + 4*v_g + 4*n_subj*(v_subj + like))
+        n_nodes = 2 + 2 + 4 + 4 * self.n_subj * 2
+        self.assertEqual(len(m.nodes_db), n_nodes)
 
