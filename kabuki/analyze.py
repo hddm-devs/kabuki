@@ -352,11 +352,18 @@ def _evaluate_post_pred(sampled_stats, data_stats, evals=None):
             evals[key] = lambda x, y, q=q: scoreatpercentile(x, q)
 
     # Evaluate all eval-functions
-    results = pd.DataFrame(index=sampled_stats.keys(), columns=evals.keys())
+    results = pd.DataFrame(index=sampled_stats.keys(), columns=evals.keys() + ['NaN'])
     results.index.names = ['stat']
     for stat_name in sampled_stats.iterkeys():
+        #update NaN column with the no. of NaNs and remove them
+        s = sampled_stats[stat_name]
+        results.ix[stat_name]['NaN'] = sum(np.isnan(s))
+        s = s[np.isfinite(s)]
+        if len(s) == 0:
+            continue
+        #evaluate
         for eval_name, func in evals.iteritems():
-            value = func(sampled_stats[stat_name], data_stats[stat_name])
+            value = func(s, data_stats[stat_name])
             assert np.isscalar(value), "eval function %s is not returning scalar." % eval_name
             results.ix[stat_name][eval_name] = value
 
