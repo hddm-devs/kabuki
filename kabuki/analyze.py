@@ -12,57 +12,6 @@ try:
 except ImportError:
     from ordereddict import OrderedDict
 
-def print_stats(stats):
-    print gen_stats(stats)
-
-def gen_stats(stats):
-    """
-    print the model's stats in a pretty format
-    Input:
-        stats - the output of MCMC.stats()
-    """
-    names = sorted(stats.keys())
-    len_name = max([len(x) for x in names])
-    f_names  = ['mean', 'std', '2.5q', '25q', '50q', '75q', '97.5', 'mc_err']
-    len_f_names = 6
-
-    s = 'name'.center(len_name) + '  '
-    for name in f_names:
-        s += ' ' + name.center(len_f_names)
-    s += '\n'
-
-    for name in names:
-        i_stats = stats[name]
-        if i_stats is None:
-            continue
-        if not np.isscalar(i_stats['mean']):
-            continue
-        s += "%s: %6.3f %6.3f %6.3f %6.3f %6.3f %6.3f %6.3f %6.3f\n" % \
-        (name.ljust(len_name), i_stats['mean'], i_stats['standard deviation'],
-         i_stats['quantiles'][2.5], i_stats['quantiles'][25],\
-         i_stats['quantiles'][50], i_stats['quantiles'][75], \
-         i_stats['quantiles'][97.5], i_stats['mc error'])
-
-    return s
-
-def print_group_stats(stats):
-    print gen_group_stats(stats)
-
-def gen_group_stats(stats):
-    """
-    print the model's group stats in a pretty format
-    Input:
-        stats - the output of MCMC.stats()
-    """
-
-    g_stats = {}
-    keys = [z for z in stats.keys() if re.match('[0-9]',z[-1]) is None]
-    keys.sort()
-    for key in keys:
-        g_stats[key] = stats[key]
-    s = gen_stats(g_stats)
-
-    return s
 
 def plot_posterior_nodes(nodes, bins=50):
     """Plot interpolated posterior of a list of nodes.
@@ -473,7 +422,7 @@ def post_pred_check(model, samples=500, bins=100, stats=None, evals=None, plot=F
                 continue # Skip
             result = _post_pred_summary_bottom_node(bottom_node, samples=samples, bins=bins, evals=evals, stats=stats, plot=plot)
             results.append(result)
-        
+
         if progress_bar:
             bar.animate(n_iter)
 

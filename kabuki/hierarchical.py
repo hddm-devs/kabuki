@@ -57,9 +57,10 @@ class Knode(object):
 
     def init_nodes_db(self):
         data_col_names = list(self.data.columns)
-        #stats = ['mean', 'std'] # TODO: Add more stats
         node_descriptors = ['knode_name', 'stochastic', 'observed', 'subj', 'node']
-        columns = node_descriptors + data_col_names
+        stats = ['mean', 'std', '2.5q', '25q', '50q', '75q', '97.5q', 'mc err']
+
+        columns = node_descriptors + data_col_names + stats
 
         # create central dataframe
         self.nodes_db = pd.DataFrame(columns=columns)
@@ -105,7 +106,7 @@ class Knode(object):
                 kwargs[name] = parent.get_node(self.depends, uniq_elem)
 
             #get node name
-            node_name = self.create_node_name(uniq_elem)
+            node_name = self.create_node_name(self.depends, uniq_elem)
 
             #get value for observed node
             if self.observed:
@@ -133,9 +134,19 @@ class Knode(object):
             self.append_node_to_db(node, uniq_elem)
 
 
-    def create_node_name(self, uniq_elem):
-        # TODO
-        return self.name + str(uniq_elem)
+    def create_node_name(self, cols, uniq_elem):
+        cols = np.asarray(cols)
+        uniq_elem = np.asarray(uniq_elem)
+
+        if 'subj_idx' in cols:
+            uniq_elem_wo_subj = uniq_elem[cols != 'subj_idx']
+            elems_str = '.'.join([str(elem) for elem in uniq_elem_wo_subj])
+            subj_idx = uniq_elem[cols == 'subj_idx'][0]
+            return "{name}({elems}).{subj_idx}".format(name=self.name, elems=elems_str, subj_idx=subj_idx)
+        else:
+            elems_str = '.'.join([str(elem) for elem in uniq_elem])
+            return "{name}({elems})".format(name=self.name, elems=elems_str)
+
 
 
     def get_node(self, cols, elems):
@@ -170,11 +181,11 @@ def intersect(t1, t2):
     return tuple([i for i in t2 if i in t1])
 
 def test_subset_tuple():
-    assert get_overlapping_elements(('a', 'b' , 'c'), ('a',)) == ('a',)
-    assert get_overlapping_elements(('a', 'b' , 'c'), ('a', 'b')) == ('a', 'b')
-    assert get_overlapping_elements(('a', 'b' , 'c'), ('a', 'c')) == ('a', 'c')
-    assert get_overlapping_elements(('a', 'b' , 'c'), ('b', 'c')) == ('b', 'c')
-    assert get_overlapping_elements(('c', 'b', 'a'), ('b', 'c')) == ('b', 'c')
+    assert intersect(('a', 'b' , 'c'), ('a',)) == ('a',)
+    assert intersect(('a', 'b' , 'c'), ('a', 'b')) == ('a', 'b')
+    assert intersect(('a', 'b' , 'c'), ('a', 'c')) == ('a', 'c')
+    assert intersect(('a', 'b' , 'c'), ('b', 'c')) == ('b', 'c')
+    assert intersect(('c', 'b', 'a'), ('b', 'c')) == ('b', 'c')
 
 
 class Hierarchical(object):
@@ -290,7 +301,10 @@ class Hierarchical(object):
         self.num_subjs = self._num_subjs
 
         # create knodes (does not build according pymc nodes)
-        self.knodes = self.create_knodes()
+        if self.is_group_model:
+            self.knodes = self.create_knodes()
+        else:
+            self.knodes = self.create_knodes_single_subj()
 
         #add data to knodes
         for knode in self.knodes:
@@ -299,6 +313,13 @@ class Hierarchical(object):
         # constructs pymc nodes etc and connects them appropriately
         self.create_model()
 
+
+    def create_knodes(self):
+        raise NotImplementedError("create_knodes has to be overwritten")
+
+
+    def create_knodes_single_subj(self):
+        raise NotImplementedError("create_knodes_single_subj has to be overwritten")
 
     def create_model(self, max_retries=8):
         """Set group level distributions. One distribution for each
@@ -317,7 +338,7 @@ class Hierarchical(object):
         for tries in range(max_retries):
             try:
                 _create()
-            except (pm.ZeroProbability, ValueError) as e:
+            except (pm.ZeroProbability, ValueError):
                 continue
             break
         else:
@@ -369,7 +390,7 @@ class Hierarchical(object):
             if i != 0:
                 self.create_model()
 
-            m = pm.MAP(self.nodes_db.nodes.values)
+            m = pm.MAP(self.nodes_db.node.values)
             m.fit(method, **kwargs)
             print m.logp
             maps.append(m)
@@ -396,18 +417,6 @@ class Hierarchical(object):
 
         return max_map
 
-    def _assign_spx(self, param, loc, scale):
-        """assign spx step method to param"""
-        self.mc.use_step_method(kabuki.steps.SPXcentered,
-                                loc=loc,
-                                scale=scale,
-                                loc_step_method=param.group_knode.step_method,
-                                loc_step_method_args=param.group_knode.step_method_args,
-                                scale_step_method=param.var_knode.step_method,
-                                scale_step_method_args=param.var_knode.step_method_args,
-                                beta_step_method=param.subj_knode.step_method,
-                                beta_step_method_args=param.subj_knode.step_method_args)
-
 
     def mcmc(self, assign_step_methods=True, *args, **kwargs):
         """
@@ -421,45 +430,31 @@ class Hierarchical(object):
 
         self.mc = pm.MCMC(self.nodes_db.node.values, *args, **kwargs)
 
-        if assign_step_methods and self.is_group_model:
+        if assign_step_methods:
             self.mcmc_step_methods()
 
         return self.mc
 
 
     def mcmc_step_methods(self):
-        #assign step methods
-        for name, param in self.param_container.iter_params(include=True):
-            #assign SPX when share_var
-            if param.use_spx and param.share_var:
-                loc = param.group_nodes.values()
-                scale = param.var_nodes.values()[0]
-                self._assign_spx(param, loc, scale)
+        pass
+        # TODO Imri
 
-            #assign SPX when var is not shared
-            elif param.use_spx and not param.share_var:
-                for (tag, node) in param.group_nodes.iteritems():
-                    loc=param.group_nodes[tag]
-                    scale=param.var_nodes[tag]
-                    self._assign_spx(param, loc, scale)
 
-            #assign other step methods
-            else:
-                for knode in param.knodes.itervalues():
-                    #check if we need to assign step method
-                    if (knode is None) or knode.step_method is None:
-                        continue
-                    #assign it to all the nodes in knode
-                    for node in knode.nodes.itervalues():
-                        step = knode.step_method
-                        args = knode.step_method_args
-                        if node is None:
-                            continue
-                        #check if it is a single node, otherwise it's a node array
-                        elif isinstance(node, pm.Stochastic):
-                            self.mc.use_step_method(step, node, **args)
-                        else:
-                            [self.mc.use_step_method(step, t_node, **args) for t_node in node]
+    def _assign_spx(self, param, loc, scale):
+        """assign spx step method to param"""
+        # TODO Imri
+        # self.mc.use_step_method(kabuki.steps.SPXcentered,
+        #                         loc=loc,
+        #                         scale=scale,
+        #                         loc_step_method=param.group_knode.step_method,
+        #                         loc_step_method_args=param.group_knode.step_method_args,
+        #                         scale_step_method=param.var_knode.step_method,
+        #                         scale_step_method_args=param.var_knode.step_method_args,
+        #                         beta_step_method=param.subj_knode.step_method,
+        #                         beta_step_method_args=param.subj_knode.step_method_args)
+        pass
+
 
     def sample(self, *args, **kwargs):
         """Sample from posterior.
@@ -511,21 +506,27 @@ class Hierarchical(object):
                 fd.write("deviance: %f\n" % info['deviance'])
                 fd.write("pD: %f\n" % info['pD'])
 
-    def print_group_stats(self, fname=None):
-        """print statistics of group variables
-        Input (optional)
-            fname <string> - the output will be written to a file named fname
-        """
-        stats_str = kabuki.analyze.gen_group_stats(self.stats())
-        self._output_stats(stats_str, fname)
 
-    def print_stats(self, fname=None):
+    def print_stats(self, fname=None, **kwargs):
         """print statistics of all variables
         Input (optional)
             fname <string> - the output will be written to a file named fname
         """
-        stats_str = kabuki.analyze.gen_stats(self.stats())
-        self._output_stats(stats_str, fname)
+        self.append_stats_to_nodes_db()
+
+        sliced_db = self.nodes_db.copy()
+
+        # only print stats of stochastic, non-observed nodes
+        sliced_db = sliced_db[(sliced_db['stochastic'] == True) & (sliced_db['observed'] == False)]
+
+        stat_cols  = ['mean', 'std', '2.5q', '25q', '50q', '75q', '97.5q', 'mc err']
+
+        for node_property, value in kwargs.iteritems():
+            sliced_db = sliced_db[sliced_db[node_property] == value]
+
+        sliced_db = sliced_db[stat_cols]
+
+        self._output_stats(sliced_db.to_string(), fname)
 
 
     def get_node(self, node_name, params):
@@ -540,7 +541,7 @@ class Hierarchical(object):
             return self.param_container.params_dict[node_name].default
 
 
-    def stats(self, *args, **kwargs):
+    def append_stats_to_nodes_db(self, *args, **kwargs):
         """
         smart call of MCMC.stats() for the model
         """
@@ -555,16 +556,27 @@ class Hierarchical(object):
         else:
             i_chain = nchains
 
-        #compute stats
+        #see if stats have been cached for this chain
         try:
-            if self._stats_chain==i_chain:
-                return self._stats
+            if self._stats_chain == i_chain:
+                return
         except AttributeError:
             pass
+
+        #update self._stats
         self._stats = self.mc.stats(*args, **kwargs)
         self._stats_chain = i_chain
-        return self._stats
 
+        #add/overwrite stats to nodes_db
+        for name, i_stats in self._stats.iteritems():
+            self.nodes_db['mean'][name] = i_stats['mean']
+            self.nodes_db['std'][name] = i_stats['standard deviation']
+            self.nodes_db['2.5q'][name] = i_stats['quantiles'][2.5]
+            self.nodes_db['25q'][name] = i_stats['quantiles'][25]
+            self.nodes_db['50q'][name] = i_stats['quantiles'][50]
+            self.nodes_db['75q'][name] = i_stats['quantiles'][75]
+            self.nodes_db['97.5q'][name] = i_stats['quantiles'][97.5]
+            self.nodes_db['mc err'][name] = i_stats['mc error']
 
 
     def load_db(self, dbname, verbose=0, db='sqlite'):
@@ -633,6 +645,8 @@ class Hierarchical(object):
                 and pre_tag is a single tag or list of tags from the exisiting model that will be map
                 to the new_tag.
         """
+        # TODO Imri
+        raise NotImplementedError("TODO")
         if not self.mc:
             self.mcmc(assign_step_methods=False, **mcmc_kwargs)
 
@@ -645,7 +659,7 @@ class Hierarchical(object):
             if name not in pre_model.param_container.params:
                 continue
 
-            #if the key was found then match_nodes is the assign the old node value to the new node
+            #if the key was found then match_nodes assigns the old node value to the new node
             if pre_d.has_key(key):
                 matched_nodes = [pre_d[key]]
 
@@ -742,9 +756,6 @@ class Hierarchical(object):
         Note: This function should be run prior to the nodes creation, i.e.
         before running mcmc() or map()
         """
-
-        # check if nodes were created. if they were it cause problems for deepcopy
-        assert (not self.param_container.nodes), "function should be used before nodes are initialized."
 
         #init
         subjless = {}
