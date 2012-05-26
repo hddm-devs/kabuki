@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import sys, os
 from copy import copy
 import pymc.progressbar as pbar
+from utils import interpolate_trace
 try:
     from collections import OrderedDict
 except ImportError:
@@ -39,58 +40,45 @@ def plot_posterior_nodes(nodes, bins=50):
     leg.get_frame().set_alpha(0.5)
 
 
-def group_plot(model, params_to_plot=(), n_bins=50, save_to=None):
+def group_plot(model, params_to_plot=(), bins=50, save_to=None):
+    assert model.is_group_model, "group plot only works for group models."
 
-    if isinstance(model, pm.MCMC):
-        nodes = model.stochastics
-    else:
-        nodes = model
-    db = model.mc.db
+    # select non-observed subject nodes
+    subj_nodes = model.nodes_db[(model.nodes_db['observed'] == False) & (model.nodes_db['subj'] == True)]
 
-    for (param_name, param) in model.params_dict.iteritems():
-        #check if we need to plot this parameter
-        if (len(params_to_plot) > 0) and  (param_name not in params_to_plot):
-            continue
-        if not param.has_subj_nodes:
-            continue
+    knode_names = subj_nodes.groupby(['knode_name', 'tag'])
 
-        for (node_tag, group_node) in param.group_nodes.iteritems():
+    for (knode_name, tag), subj_block in knode_names:
+        # find global min and max for plotting
+        min = np.inf
+        max = -np.inf
+        for name, subj in subj_block.iterrows():
+            trace = subj['node'].trace()
+            min = np.min([min, np.min(trace)])
+            max = np.max([max, np.max(trace)])
 
-            #get subj nodes
-            g_node_trace = model.mc.db.trace(group_node.__name__)[:]
-            subj_nodes = param.subj_nodes[node_tag]
+        # plot interpolated subject histograms
+        #create figure
+        print "plotting %s: %s" % (knode_name, tag)
+        sys.stdout.flush()
 
-            #create figure
-            print "plotting %s" % group_node.__name__
-            sys.stdout.flush()
-            figure()
+        plt.figure()
+        plt.title("%s: %s" % (knode_name, tag))
+        x = np.linspace(min, max, 100)
+        for name, subj in subj_block.iterrows():
+            print name
+            trace = subj['node'].trace()
+            height = interpolate_trace(x, trace, range=(min, max), bins=bins)
+            plt.plot(x, height, label=str(subj['subj_idx']))
 
-            #get x axis
-            lb = min([min(db.trace(x.__name__)[:]) for x in subj_nodes])
-            lb = min(lb, min(g_node_trace))
-            ub = max([max(db.trace(x.__name__)[:]) for x in subj_nodes])
-            ub = max(ub, max(g_node_trace))
-            x_data = np.linspace(lb, ub, n_bins)
+        #legend and title
+        leg = plt.legend(loc='best', fancybox=True)
+        leg.get_frame().set_alpha(0.5)
+        plt.gcf().canvas.set_window_title(knode_name)
 
-            #group histogram
-            g_hist = np.histogram(g_node_trace,bins=n_bins, range=[lb, ub], normed=True)[0]
-            plt.plot(x_data, g_hist, '--', label='group')
-
-            #subj histogram
-            for i in subj_nodes:
-                g_hist = np.histogram(db.trace(i.__name__)[:],bins=n_bins, range=[lb, ub], normed=True)[0]
-                plt.plot(x_data, g_hist, label=re.search('[0-9]+$',i.__name__).group())
-
-            #legend and title
-            leg = plt.legend(loc='best', fancybox=True)
-            leg.get_frame().set_alpha(0.5)
-            name = group_node.__name__
-            plt.title(name)
-            plt.gcf().canvas.set_window_title(name)
-
-            if save_to is not None:
-                plt.savefig(os.path.join(save_to, "group_%s.png" % name))
-                plt.savefig(os.path.join(save_to, "group_%s.pdf" % name))
+        if save_to is not None:
+            plt.savefig(os.path.join(save_to, "group_%s.png" % knode_name))
+            plt.savefig(os.path.join(save_to, "group_%s.pdf" % knode_name))
 
 def compare_all_pairwise(model):
     """Perform all pairwise comparisons of dependent parameter
@@ -136,51 +124,6 @@ def plot_all_pairwise(model):
 
     plt.draw()
 
-def savage_dickey(pos, post_trace, range=(-.3,.3), bins=40, prior_trace=None, prior_y=None):
-    """Calculate Savage-Dickey density ratio test, see Wagenmakers et
-    al. 2010 at http://dx.doi.org/10.1016/j.cogpsych.2009.12.001
-
-    :Arguments:
-        pos : float
-            position at which to calculate the savage dickey ratio at (i.e. the spec hypothesis you want to test)
-        post_trace : numpy.array
-            trace of the posterior distribution
-
-    :Optional:
-         prior_trace : numpy.array
-             trace of the prior distribution
-         prior_y : numpy.array
-             prior density pos
-         range : (int,int)
-             Range over which to interpolate and plot
-         bins : int
-             Over how many bins to compute the histogram over
-
-    :Note: Supply either prior_trace or prior_y.
-
-    """
-
-    x = np.linspace(range[0], range[1], bins)
-
-    if prior_trace is not None:
-        # Prior is provided as a trace -> histogram + interpolate
-        prior_pos = interpolate_trace(pos, prior_trace, range=range, bins=bins)
-
-    elif prior_y is not None:
-        # Prior is provided as a density for each point -> interpolate to retrieve positional density
-        import scipy.interpolate
-        prior_pos = prior_y #scipy.interpolate.InterpolatedUnivariateSpline(x, prior_y)(pos)
-    else:
-        assert ValueError, "Supply either prior_trace or prior_y keyword arguments"
-
-    # Histogram and interpolate posterior trace at SD position
-    posterior_pos = interpolate_trace(pos, post_trace, range=range, bins=bins)
-
-    # Calculate Savage-Dickey density ratio at pos
-    sav_dick = prior_pos / posterior_pos
-
-    return sav_dick
-
 def gelman_rubin(models):
     """
     Calculate the gelman_rubin statistic (R_hat) for every stochastic in the model.
@@ -220,10 +163,10 @@ def check_geweke(model, assert_=True):
 
 def group_cond_diff(hm, node, cond1, cond2, threshold=0):
     """
-    compute the difference between different condition in a group analysis.
-    The function compute for each subject the difference between 'node' under
+    Compute the difference between different conditions in a group analysis.
+    For each subject the function computes the difference between 'node' under
     condition 'cond1' to 'node' under condition 'cond2'.
-    by assuming that each of the differences is normal distributed
+    By assuming that each of the differences is normal distributed
     we can easily compute the group mean and group variance of the difference.
     Then the difference is compared to 'threshold' to compute the mass of the
     group pdf which is smaller than 'threshold'
@@ -570,41 +513,4 @@ def plot_posterior_predictive(model, value_range=None, samples=10, columns=3, bi
                 fig.savefig(name + '.png', format='png')
 
 
-def _check_bottom_node(bottom_node):
-    if bottom_node is None:
-        print "Bottom node is None!!"
-        return False
-
-    # Check if node has name
-    if not hasattr(bottom_node, '__name__'):
-        print "bottom node has missing __name__ attribute."
-
-    name = bottom_node.__name__
-
-    # Check if parents exist
-    if not hasattr(bottom_node, 'parents'):
-        print "bottom node %s is missing parents attribute." % name
-
-    # Check if node has value
-    if not hasattr(bottom_node, 'value'):
-        print "bottom node %s is missing value." % name
-
-    # Check if data is empty
-    if len(bottom_node.value) == 0:
-        print "values of bottom node %s is emtpy!" % name
-
-    for i, parent in enumerate(bottom_node.parents.itervalues()):
-        if not hasattr(parent, '_logp'): # Skip non-stochastic nodes
-            continue
-
-
-def check_model(model):
-    for name, bottom_node in model.observed_nodes.iteritems():
-        if isinstance(bottom_node, np.ndarray):
-            # Group model
-            for i_subj, bottom_node_subj in enumerate(bottom_node):
-                _check_bottom_node(bottom_node_subj)
-        else:
-            # Flat mode
-            _check_bottom_node(bottom_node)
 

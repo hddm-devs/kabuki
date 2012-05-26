@@ -79,7 +79,7 @@ def interpolate_trace(x, trace, range=(-1,1), bins=100):
     import scipy.interpolate
 
     x_histo = np.linspace(range[0], range[1], bins)
-    histo = np.histogram(trace, bins=bins, range=range, normed=True)[0]
+    histo = np.histogram(trace, bins=bins, range=range, density=True)[0]
     interp = scipy.interpolate.InterpolatedUnivariateSpline(x_histo, histo)(x)
 
     return interp

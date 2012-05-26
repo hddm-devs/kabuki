@@ -57,7 +57,7 @@ class Knode(object):
 
     def init_nodes_db(self):
         data_col_names = list(self.data.columns)
-        node_descriptors = ['knode_name', 'stochastic', 'observed', 'subj', 'node']
+        node_descriptors = ['knode_name', 'stochastic', 'observed', 'subj', 'node', 'tag', 'depends']
         stats = ['mean', 'std', '2.5q', '25q', '50q', '75q', '97.5q', 'mc err']
 
         columns = node_descriptors + data_col_names + stats
@@ -73,6 +73,8 @@ class Knode(object):
         line['stochastic'] = isinstance(node, pm.Stochastic)
         line['subj'] = self.subj
         line['node'] = node
+        line['tag'] = self.create_tag_and_subj_idx(self.depends, uniq_elem)[0]
+        line['depends'] = self.depends
 
         line = pd.DataFrame(data=[line], columns=self.nodes_db.columns, index=[node.__name__])
 
@@ -106,7 +108,8 @@ class Knode(object):
                 kwargs[name] = parent.get_node(self.depends, uniq_elem)
 
             #get node name
-            node_name = self.create_node_name(self.depends, uniq_elem)
+            tag, subj_idx = self.create_tag_and_subj_idx(self.depends, uniq_elem)
+            node_name = self.create_node_name(tag, subj_idx=subj_idx)
 
             #get value for observed node
             if self.observed:
@@ -134,19 +137,27 @@ class Knode(object):
             self.append_node_to_db(node, uniq_elem)
 
 
-    def create_node_name(self, cols, uniq_elem):
+    def create_tag_and_subj_idx(self, cols, uniq_elem):
         cols = np.asarray(cols)
         uniq_elem = np.asarray(uniq_elem)
 
         if 'subj_idx' in cols:
-            uniq_elem_wo_subj = uniq_elem[cols != 'subj_idx']
-            elems_str = '.'.join([str(elem) for elem in uniq_elem_wo_subj])
+            tag = uniq_elem[cols != 'subj_idx']
             subj_idx = uniq_elem[cols == 'subj_idx'][0]
+        else:
+            tag = uniq_elem
+            subj_idx = None
+
+        return tuple(tag), subj_idx
+
+
+    def create_node_name(self, tag, subj_idx=None):
+        elems_str = '.'.join([str(elem) for elem in tag])
+
+        if subj_idx is not None:
             return "{name}({elems}).{subj_idx}".format(name=self.name, elems=elems_str, subj_idx=subj_idx)
         else:
-            elems_str = '.'.join([str(elem) for elem in uniq_elem])
             return "{name}({elems})".format(name=self.name, elems=elems_str)
-
 
 
     def get_node(self, cols, elems):
