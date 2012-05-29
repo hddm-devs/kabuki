@@ -40,7 +40,17 @@ def plot_posterior_nodes(nodes, bins=50):
     leg.get_frame().set_alpha(0.5)
 
 
-def group_plot(model, params_to_plot=(), bins=50, save_to=None):
+def group_plot(model, params_to_plot=(), bins=50, samples=5000, save_to=None):
+    def find_min_max(subj_block):
+        # find global min and max for plotting
+        min = np.inf
+        max = -np.inf
+        for name, subj in subj_block.iterrows():
+            trace = subj['node'].trace()
+            min = np.min([min, np.min(trace)])
+            max = np.max([max, np.max(trace)])
+        return min, max
+
     assert model.is_group_model, "group plot only works for group models."
 
     # select non-observed subject nodes
@@ -49,13 +59,7 @@ def group_plot(model, params_to_plot=(), bins=50, save_to=None):
     knode_names = subj_nodes.groupby(['knode_name', 'tag'])
 
     for (knode_name, tag), subj_block in knode_names:
-        # find global min and max for plotting
-        min = np.inf
-        max = -np.inf
-        for name, subj in subj_block.iterrows():
-            trace = subj['node'].trace()
-            min = np.min([min, np.min(trace)])
-            max = np.max([max, np.max(trace)])
+        min, max = find_min_max(subj_block)
 
         # plot interpolated subject histograms
         #create figure
@@ -65,12 +69,29 @@ def group_plot(model, params_to_plot=(), bins=50, save_to=None):
         plt.figure()
         plt.title("%s: %s" % (knode_name, tag))
         x = np.linspace(min, max, 100)
+
+        ############################################
+        # plot subjects
         for name, subj in subj_block.iterrows():
-            print name
             trace = subj['node'].trace()
             height = interpolate_trace(x, trace, range=(min, max), bins=bins)
-            plt.plot(x, height, label=str(subj['subj_idx']))
+            plt.plot(x, height, lw=1., label=str(subj['subj_idx']))
 
+        ###########################################
+        # plot group distribution
+        node = subj['node']
+        group_trace = np.empty(samples, dtype=np.float32)
+        for sample in xrange(samples):
+            # set parents to random value from their trace
+            trace_pos = np.random.randint(0, len(node.trace()))
+            for parent in node.extended_parents:
+                parent.value = parent.trace()[trace_pos]
+            group_trace[sample] = node.random()
+
+        height = interpolate_trace(x, group_trace, range=(min, max), bins=bins)
+        plt.plot(x, height, '--', lw=2., label='group')
+
+        ##########################################
         #legend and title
         leg = plt.legend(loc='best', fancybox=True)
         leg.get_frame().set_alpha(0.5)

@@ -43,7 +43,7 @@ class HNodeSimpleVar(kabuki.Hierarchical):
         return [v_subj, like]
 
 def create_test_models():
-    n_subj = 3
+    n_subj = 5
     data = kabuki.generate.gen_rand_data(normal_like, {'A':{'loc':0, 'scale':1}, 'B': {'loc':0, 'scale':1}}, subjs=n_subj)[0]
     data = pd.DataFrame(data)
     data['condition2'] = np.random.randint(2, size=len(data))

@@ -6,7 +6,7 @@ import scipy.stats
 import kabuki.analyze as ka
 from matplotlib.pyplot import close
 import test_utils
-
+from utils import create_test_models, sample_from_models
 
 class TestAnalyzeBreakdown(unittest.TestCase):
     """
@@ -19,18 +19,13 @@ class TestAnalyzeBreakdown(unittest.TestCase):
     def setUpClass(self):
 
         #load models
-        self.models = test_utils.load_models()
+        self.models = create_test_models()
 
         #run models
-        test_utils.sample_from_models(self.models, n_iter=200)
+        sample_from_models(self.models, n_iter=200)
 
     def runTest(self):
         pass
-
-    def test_print_stats(self):
-        for model in self.models:
-            ka.print_stats(model.stats())
-            ka.print_group_stats(model.stats())
 
     def test_group_plot(self):
         for model in self.models:
