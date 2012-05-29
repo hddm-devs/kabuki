@@ -75,7 +75,7 @@ def group_plot(model, params_to_plot=(), bins=50, samples=5000, save_to=None):
         for name, subj in subj_block.iterrows():
             trace = subj['node'].trace()
             height = interpolate_trace(x, trace, range=(min, max), bins=bins)
-            plt.plot(x, height, lw=1., label=str(subj['subj_idx']))
+            plt.plot(x, height, lw=1., label=str(np.int32(subj['subj_idx'])))
 
         ###########################################
         # plot group distribution
