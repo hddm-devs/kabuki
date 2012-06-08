@@ -815,6 +815,8 @@ class Hierarchical(object):
         # to integrate over the subj nodes. Since this is difficult we
         # optimize the generations iteratively on the generation below.
 
+        # only need this to get at the generations
+        # TODO: Find out how to get this from pymc.utils.find_generations()
         m = pm.MCMC(self.nodes_db.node)
         generations = m.generations
         generations.append(self.get_observeds().node)
