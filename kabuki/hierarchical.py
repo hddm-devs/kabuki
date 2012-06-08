@@ -4,6 +4,7 @@ from copy import copy
 
 import numpy as np
 import numpy.lib.recfunctions as rec
+from scipy.optimize import fmin_powell
 
 from collections import OrderedDict, defaultdict
 
@@ -13,12 +14,6 @@ import warnings
 
 import kabuki
 from copy import copy, deepcopy
-
-
-# (defaultdict) param_name -> (defaultdict) column_names -> elems
-#self.create_model(depends={'v':('col1')})
-
-# defaultdict(lambda: defaultdict(lambda: ()))
 
 class Knode(object):
     def __init__(self, pymc_node, name, depends=(), col_name='', subj=False, **kwargs):
@@ -757,61 +752,74 @@ class Hierarchical(object):
                 pm.Matplot.plot(node, **kwargs)
                 node.plot = plot_value
 
-    def subj_by_subj_map_init(self, runs=2, verbose=1, **map_kwargs):
+
+    def get_observeds(self):
+        return self.nodes_db[self.nodes_db.observed == True]
+
+    def iter_observeds(self):
+        nodes = self.get_observeds()
+        for observed in nodes.iterrows:
+            yield observed
+
+    def get_subj_nodes(self, observed=False, stochastic=True):
+        select = (self.nodes_db['subj'] == True) & \
+                 (self.nodes_db['observed'] == observed) & \
+                 (self.nodes_db['stochastic'] == stochastic)
+
+        return self.nodes_db[select]
+
+    def iter_subj_nodes(self, **kwargs):
+        nodes = self.get_subj_nodes(**kwargs)
+        for node in nodes.iterrows():
+            yield node
+
+    def get_group_nodes(self, observed=False, stochastic=True):
+        select = (self.nodes_db['subj'] == False) & \
+                 (self.nodes_db['observed'] == observed) & \
+                 (self.nodes_db['stochastic'] == stochastic)
+
+        return self.nodes_db[select]
+
+    def iter_group_nodes(self, **kwargs):
+        nodes = self.get_group_nodes(**kwargs)
+        for node in nodes.iterrows():
+            yield node
+
+    def _partial_optimize(self, stochastics, logp_nodes):
+        """Optimize part of the model.
+
+        :Arguments:
+            stochastics : iterable
+                list of stochastic nodes to optimize.
+            logp_nodes : iterable
+                list of nodes for evaluating objective function.
+
         """
-        initializing nodes by finding the MAP for each subject separately
-        Input:
-            runs - number of MAP runs for each subject
-            map_kwargs - other arguments that will be passes on to the map function
+        init_vals = [node.value for node in stochastics]
 
-        Note: This function should be run prior to the nodes creation, i.e.
-        before running mcmc() or map()
+        # define function to be optimized
+        def opt(values, nodes=stochastics):
+            for value, node in zip(values, nodes):
+                node.value = value
+
+            logp = [logp_node.logp for logp_node in logp_nodes]
+            return -np.sum(logp)
+
+        fmin_powell(opt, init_vals)
+
+    def approximate_map(self):
+        """Set model to its approximate MAP.
         """
+        ###############################
+        # In order to find the MAP of a hierarchical model one needs
+        # to integrate over the subj nodes. Since this is difficult we
+        # optimize the generations iteratively on the generation below.
 
-        #init
-        subjless = {}
-        subjs = self._subjs
-        n_subjs = len(subjs)
-        empty_s_model = deepcopy(self)
-        empty_s_model.is_group_model = False
-        del empty_s_model.num_subjs, empty_s_model._subjs, empty_s_model.data
+        m = pm.MCMC(self.nodes_db.node)
+        generations = m.generations
+        generations.append(self.get_observeds().node)
 
-        self.create_nodes()
+        for i in range(len(generations)-1, 0, -1):
+            # Optimize the generation at i-1 evaluated over the generation at i
+            self._partial_optimize(generations[i-1], generations[i])
 
-        # loop over subjects
-        for i_subj in range(n_subjs):
-            # create and fit single subject
-            if verbose > 0: print "*!*!* fitting subject %d *!*!*" % subjs[i_subj]
-            t_data = self.data[self.data['subj_idx'] == subjs[i_subj]]
-            s_model = deepcopy(empty_s_model)
-            s_model.data = t_data
-            s_model.map(method='fmin_powell', runs=runs, **map_kwargs)
-
-            # copy to original model
-            for (name, node) in s_model.param_container.iter_group_nodes():
-                #try to assign the value of the node to the original model
-                try:
-                    self.param_container.subj_nodes[name][i_subj].value = node.value
-                #if it fails it mean the param has no subj nodes
-                except KeyError:
-                    if subjless.has_key(name):
-                        subjless[name].append(node.value)
-                    else:
-                        subjless[name] = [node.value]
-
-        #set group and var nodes for params with subjs
-        for (param_name, param) in self.param_container.iter_params():
-            #if param has subj nodes than compute group and var nodes from them
-            if param.has_subj_nodes:
-                for (tag, nodes) in param.subj_nodes.iteritems():
-                    subj_values = [x.value for x in nodes]
-                    #set group node
-                    if param.has_group_nodes:
-                        param.group_nodes[tag].value = np.mean(subj_values)
-                    #set var node
-                    if param.has_var_nodes:
-                        param.var_nodes[tag].value = param.var_func(subj_values)
-
-        #set group nodes of subjless nodes
-        for (name, values) in subjless.iteritems():
-            self.param_container.group_nodes[name].value = np.mean(subjless[name])
