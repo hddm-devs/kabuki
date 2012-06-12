@@ -178,10 +178,6 @@ class Knode(object):
 
         return self.nodes[deps_on_elems]
 
-
-
-# in Hierarchical: self.create_model(): for... knode.set_data(self.data); knode.create()
-
 def intersect(t1, t2):
     # Preserves order, unlike set.
     return tuple([i for i in t2 if i in t1])
@@ -575,13 +571,13 @@ class Hierarchical(object):
 
         #add/overwrite stats to nodes_db
         for name, i_stats in self._stats.iteritems():
-            self.nodes_db['mean'][name] = i_stats['mean']
-            self.nodes_db['std'][name] = i_stats['standard deviation']
-            self.nodes_db['2.5q'][name] = i_stats['quantiles'][2.5]
-            self.nodes_db['25q'][name] = i_stats['quantiles'][25]
-            self.nodes_db['50q'][name] = i_stats['quantiles'][50]
-            self.nodes_db['75q'][name] = i_stats['quantiles'][75]
-            self.nodes_db['97.5q'][name] = i_stats['quantiles'][97.5]
+            self.nodes_db['mean'][name]   = i_stats['mean']
+            self.nodes_db['std'][name]    = i_stats['standard deviation']
+            self.nodes_db['2.5q'][name]   = i_stats['quantiles'][2.5]
+            self.nodes_db['25q'][name]    = i_stats['quantiles'][25]
+            self.nodes_db['50q'][name]    = i_stats['quantiles'][50]
+            self.nodes_db['75q'][name]    = i_stats['quantiles'][75]
+            self.nodes_db['97.5q'][name]  = i_stats['quantiles'][97.5]
             self.nodes_db['mc err'][name] = i_stats['mc error']
 
 
@@ -629,7 +625,6 @@ class Hierarchical(object):
         # distribution variables (needed for _gen_stats())
 
         return self
-
 
 
     def init_from_existing_model(self, pre_model, assign_values=True, assign_step_methods=True,
@@ -758,8 +753,16 @@ class Hierarchical(object):
 
     def iter_observeds(self):
         nodes = self.get_observeds()
-        for observed in nodes.iterrows:
-            yield observed
+        for node in nodes.iterrows():
+            yield node
+
+    def get_non_observeds(self):
+        return self.nodes_db[self.nodes_db.observed == False]
+
+    def iter_non_observeds(self):
+        nodes = self.get_non_observeds()
+        for node in nodes.iterrows():
+            yield node
 
     def get_subj_nodes(self, observed=False, stochastic=True):
         select = (self.nodes_db['subj'] == True) & \
@@ -785,6 +788,10 @@ class Hierarchical(object):
         for node in nodes.iterrows():
             yield node
 
+    @property
+    def values(self):
+        return {name: node['node'].value for (name, node) in self.iter_non_observeds()}
+
     def _partial_optimize(self, stochastics, logp_nodes):
         """Optimize part of the model.
 
@@ -802,8 +809,13 @@ class Hierarchical(object):
             for value, node in zip(values, nodes):
                 node.value = value
 
+            try:
+                logp_prior = [stochastic.logp for stochastic in stochastics]
+            except pm.ZeroProbability:
+                logp_prior = [-np.inf]
             logp = [logp_node.logp for logp_node in logp_nodes]
-            return -np.sum(logp)
+
+            return -np.sum(logp) - np.sum(logp_prior)
 
         fmin_powell(opt, init_vals)
 
@@ -824,4 +836,9 @@ class Hierarchical(object):
         for i in range(len(generations)-1, 0, -1):
             # Optimize the generation at i-1 evaluated over the generation at i
             self._partial_optimize(generations[i-1], generations[i])
+
+        #update map in nodes_db
+        self.nodes_db['map'] = np.NaN
+        for name, value in self.values.iteritems():
+            self.nodes_db['map'].ix[name] = value
 
