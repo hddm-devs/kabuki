@@ -1,10 +1,10 @@
 from __future__ import division
 import numpy as np
-import matplotlib.pyplot as plt
 import pymc as pm
-from copy import copy, deepcopy
 import sys
-import kabuki
+
+def flatten(l):
+    return reduce(lambda x, y: list(x)+list(y), l)
 
 def get_traces(model):
     """Returns recarray of all traces in the model.

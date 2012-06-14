@@ -1,6 +1,7 @@
 import kabuki
 import numpy as np
 import unittest
+from nose.tools import raises
 import pymc as pm
 from utils import HNodeSimple, HNodeSimpleVar, normal_like, sample_from_models, create_test_models
 import pandas as pd
@@ -27,7 +28,7 @@ class TestHierarchicalBreakDown(unittest.TestCase):
     def test_map(self):
         for model in self.models:
             if model.is_group_model:
-                model.approx_map()
+                model.approximate_map()
             else:
                 model.map(runs=2)
 
@@ -77,34 +78,42 @@ class TestModelCreation(unittest.TestCase):
 
     def test_simple_no_deps(self):
         m = HNodeSimple(self.data)
-        n_nodes = 1 + self.n_subj*2 #v_g + n_subj * (v_subj + like)
+        n_nodes = 1 + self.n_subj*2 #loc_g + n_subj * (loc_subj + like)
         self.assertEqual(len(m.nodes_db), n_nodes)
 
     def test_simple_deps(self):
-        m = HNodeSimple(self.data, depends_on={'v': 'condition'})
-        n_nodes = 2 * (1 + self.n_subj*2) #n_conds * (v_g + n_subj * (v_subj + like))
+        m = HNodeSimple(self.data, depends_on={'loc': 'condition'})
+        n_nodes = 2 * (1 + self.n_subj*2) #n_conds * (loc_g + n_subj * (loc_subj + like))
         self.assertEqual(len(m.nodes_db), n_nodes)
 
+    @raises(AssertionError)
+    def test_assertion_on_wrong_param_name(self):
+        HNodeSimple(self.data, depends_on={'non_existant': 'condition'})
+
+    def test_assertion_on_wrong_param_name(self):
+        # does not catch if correct argument
+        HNodeSimple(self.data, depends_on={'non_existant': 'condition', 'loc': 'condition'})
+
     def test_simplevar_partly_deps(self):
-        m = HNodeSimpleVar(self.data, depends_on={'v': 'condition'})
-        n_nodes = 1 + 1 + 2 * (1 + self.n_subj*2) #v_std + v_tau + n_conds * (v_g + n_subj * (v_subj + like))
+        m = HNodeSimpleVar(self.data, depends_on={'loc': 'condition'})
+        n_nodes = 1 + 1 + 2 * (1 + self.n_subj*2) #loc_std + loc_tau + n_conds * (loc_g + n_subj * (loc_subj + like))
         self.assertEqual(len(m.nodes_db), n_nodes)
 
     def test_simplevar_deps(self):
-        m = HNodeSimpleVar(self.data, depends_on={'v': 'condition', 'v_std':'condition'})
-        #n_nodes = n_conds * (v_std + v_tau + v_g + n_subj * (v_subj + like))
+        m = HNodeSimpleVar(self.data, depends_on={'loc': 'condition', 'loc_std':'condition'})
+        #n_nodes = n_conds * (loc_std + loc_tau + loc_g + n_subj * (loc_subj + like))
         n_nodes = 2 * (1 + 1 + 1 + self.n_subj*2)
         self.assertEqual(len(m.nodes_db), n_nodes)
 
     def test_simplevar_double_deps_A(self):
-        m = HNodeSimpleVar(self.data, depends_on={'v': 'condition', 'v_std':'condition2'})
+        m = HNodeSimpleVar(self.data, depends_on={'loc': 'condition', 'loc_std':'condition2'})
         #n_nodes = 2*v_tau + 2*v_std + 2*v_g + 4*n_subj*(v_subj + like))
         n_nodes = 2 + 2 + 2 + 4 * self.n_subj * 2
         self.assertEqual(len(m.nodes_db), n_nodes)
 
     def test_simplevar_double_deps_B(self):
-        m = HNodeSimpleVar(self.data, depends_on={'v': ['condition', 'condition2'], 'v_std':'condition2'})
-        #n_nodes = 2*v_tau + 2*v_std + 4*v_g + 4*n_subj*(v_subj + like))
+        m = HNodeSimpleVar(self.data, depends_on={'loc': ['condition', 'condition2'], 'loc_std':'condition2'})
+        #n_nodes = 2*loc_tau + 2*loc_std + 4*loc_g + 4*n_subj*(loc_subj + like))
         n_nodes = 2 + 2 + 4 + 4 * self.n_subj * 2
         self.assertEqual(len(m.nodes_db), n_nodes)
 
@@ -115,15 +124,28 @@ class TestEstimation(unittest.TestCase):
     """
 
     def test_map_approx(self):
-        data, params = kabuki.generate.gen_rand_data(normal_like, {'A':{'loc':0, 'scale':1}, 'B': {'loc':2, 'scale':1}}, samples=100, subjs=100)
-        model = HNodeSimple(data, depends_on={'v_g': 'condition'})
+        subjs = 40
+        data, params_true = kabuki.generate.gen_rand_data(normal_like,
+                                                          {'A':{'loc':0, 'scale':1}, 'B': {'loc':2, 'scale':1}},
+                                                          subj_noise={'loc':.1}, samples=200, subjs=subjs)
+
+        model = HNodeSimple(data, depends_on={'loc': 'condition'})
+
         model.approximate_map()
 
-        for condition, subj_params in params.iteritems():
+        counter = 0;
+        for condition, subj_params in params_true.iteritems():
             nodes = model.nodes_db[model.nodes_db['condition'] == condition]
             for idx, params in enumerate(subj_params):
                 nodes_subj = nodes[nodes['subj_idx'] == idx]
                 for param_name, value in params.iteritems():
-                    node = nodes_subj[nodes_subj.name == param_name]
+                    if param_name != 'loc':
+                        continue
+                    node = nodes_subj[nodes_subj.knode_name == param_name + '_subj']
                     assert len(node) == 1, "Only one node should have been left after slicing."
-                    np.testing.assert_approx_equal(node.node.value, value, 1)
+                    abs_error = np.abs(node.map[0] - value)
+                    self.assertTrue(abs_error < .2)
+                    counter += 1
+
+        # looping for each condition (i.e. twice)
+        self.assertEqual(counter, subjs*2)

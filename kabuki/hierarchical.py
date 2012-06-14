@@ -13,6 +13,8 @@ import pymc as pm
 import warnings
 
 import kabuki
+from kabuki.utils import flatten
+
 from copy import copy, deepcopy
 
 class Knode(object):
@@ -133,27 +135,28 @@ class Knode(object):
 
 
     def create_tag_and_subj_idx(self, cols, uniq_elem):
-        cols = np.asarray(cols)
-        uniq_elem = np.asarray(uniq_elem)
+        uniq_elem = pd.Series(uniq_elem, index=cols)
 
         if 'subj_idx' in cols:
-            tag = uniq_elem[cols != 'subj_idx']
-            subj_idx = uniq_elem[cols == 'subj_idx'][0]
+            subj_idx = uniq_elem['subj_idx']
+            tag = uniq_elem.drop(['subj_idx']).values
         else:
-            tag = uniq_elem
+            tag = uniq_elem.values
             subj_idx = None
 
         return tuple(tag), subj_idx
 
 
     def create_node_name(self, tag, subj_idx=None):
-        elems_str = '.'.join([str(elem) for elem in tag])
-
+        # construct string that will become the node name
+        s = self.name
+        if len(tag) > 0:
+            elems_str = '.'.join([str(elem) for elem in tag])
+            s += "({elems})".format(elems=elems_str)
         if subj_idx is not None:
-            return "{name}({elems}).{subj_idx}".format(name=self.name, elems=elems_str, subj_idx=subj_idx)
-        else:
-            return "{name}({elems})".format(name=self.name, elems=elems_str)
+            s += ".{subj_idx}".format(subj_idx=subj_idx)
 
+        return s
 
     def get_node(self, cols, elems):
         """Return the node that depends on the same elements.
@@ -350,6 +353,8 @@ class Hierarchical(object):
         # create node container
         self.create_nodes_db()
 
+        # Check whether all user specified column names (via depends_on) where used by the depends_on.
+        assert set(flatten(self.depends.values())).issubset(set(flatten(self.nodes_db.depends))), "One of the column names specified via depends_on was not picked up. Check whether you specified the correct parameter value."
 
     def create_nodes_db(self):
         self.nodes_db = pd.concat([knode.nodes_db for knode in self.knodes])
