@@ -813,11 +813,10 @@ class Hierarchical(object):
 
             try:
                 logp_prior = [stochastic.logp for stochastic in stochastics]
+                logp = [logp_node.logp for logp_node in logp_nodes]
+                return -np.sum(logp) - np.sum(logp_prior)
             except pm.ZeroProbability:
-                logp_prior = [-np.inf]
-            logp = [logp_node.logp for logp_node in logp_nodes]
-
-            return -np.sum(logp) - np.sum(logp_prior)
+                return np.inf
 
         fmin_powell(opt, init_vals)
 
