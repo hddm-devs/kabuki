@@ -42,6 +42,9 @@ class Knode(object):
 
         self.observed = 'observed' in kwargs
 
+    def __repr__(self):
+        return self.name
+
     def set_data(self, data):
         self.data = data
 
@@ -306,10 +309,7 @@ class Hierarchical(object):
         self.num_subjs = self._num_subjs
 
         # create knodes (does not build according pymc nodes)
-        if self.is_group_model:
-            self.knodes = self.create_knodes()
-        else:
-            self.knodes = self.create_knodes_single_subj()
+        self.knodes = self.create_knodes()
 
         #add data to knodes
         for knode in self.knodes:
@@ -322,9 +322,6 @@ class Hierarchical(object):
     def create_knodes(self):
         raise NotImplementedError("create_knodes has to be overwritten")
 
-
-    def create_knodes_single_subj(self):
-        raise NotImplementedError("create_knodes_single_subj has to be overwritten")
 
     def create_model(self, max_retries=8):
         """Set group level distributions. One distribution for each

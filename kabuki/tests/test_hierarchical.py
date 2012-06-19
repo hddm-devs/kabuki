@@ -17,7 +17,7 @@ class TestHierarchicalBreakDown(unittest.TestCase):
     def setUp(self):
 
         #load models
-        self.models = create_test_models()
+        self.models, self.params = create_test_models()
 
         #run models
         sample_from_models(self.models, n_iter=200)
