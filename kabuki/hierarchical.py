@@ -3,7 +3,6 @@ from __future__ import division
 from copy import copy
 
 import numpy as np
-import numpy.lib.recfunctions as rec
 from scipy.optimize import fmin_powell
 
 from collections import OrderedDict, defaultdict
@@ -12,10 +11,7 @@ import pandas as pd
 import pymc as pm
 import warnings
 
-import kabuki
 from kabuki.utils import flatten
-
-from copy import copy, deepcopy
 
 class Knode(object):
     def __init__(self, pymc_node, name, depends=(), col_name='', subj=False, **kwargs):
