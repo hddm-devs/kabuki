@@ -430,15 +430,12 @@ class Hierarchical(object):
 
         self.mc = pm.MCMC(self.nodes_db.node.values, *args, **kwargs)
 
-        if assign_step_methods:
-            self.mcmc_step_methods()
+        self.pre_sample()
 
         return self.mc
 
-
-    def mcmc_step_methods(self):
+    def pre_sample(self):
         pass
-        # TODO Imri
 
 
     def _assign_spx(self, param, loc, scale):
@@ -686,7 +683,6 @@ class Hierarchical(object):
 
         print "assigned %d values (out of %d)." % (assigned_v, len(self.mc.stochastics))
         print "assigned %d step methods (out of %d)." % (assigned_s, len(self.mc.stochastics))
-
 
     def _assign_step_methods_from_existing(self, node, pre_model, matched_nodes):
         """
