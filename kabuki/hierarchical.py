@@ -786,33 +786,46 @@ class Hierarchical(object):
     def values(self):
         return {name: node['node'].value for (name, node) in self.iter_non_observeds()}
 
-    def _partial_optimize(self, stochastics, logp_nodes):
+    def _partial_optimize(self, nodes, objective=False):
         """Optimize part of the model.
 
         :Arguments:
-            stochastics : iterable
-                list of stochastic nodes to optimize.
-            logp_nodes : iterable
-                list of nodes for evaluating objective function.
-
+            nodes : iterable
+                list nodes to optimize.
+            objective : bool (default=False)
+                use .objective() method (if it exists)
+                instead of logp to optimize nodes
         """
-        init_vals = [node.value for node in stochastics]
+        non_observeds = [node for node in nodes if not node.observed]
+
+        init_vals = [node.value for node in non_observeds]
 
         # define function to be optimized
-        def opt(values, nodes=stochastics):
-            for value, node in zip(values, nodes):
+        def opt(values):
+            print values
+            for value, node in zip(values, non_observeds):
+                if node.observed:
+                    continue
                 node.value = value
 
             try:
-                logp_prior = [stochastic.logp for stochastic in stochastics]
-                logp = [logp_node.logp for logp_node in logp_nodes]
-                return -np.sum(logp) - np.sum(logp_prior)
+                obj = 0
+
+                for node in nodes:
+                    if objective and hasattr(node, 'objective'):
+                        obj += node.objective()
+                    elif 'logp' in dir(node):
+                        obj -= node.logp
+                    else: # determinstic node
+                        continue
             except pm.ZeroProbability:
                 return np.inf
+            print obj
+            return obj
 
         fmin_powell(opt, init_vals)
 
-    def approximate_map(self):
+    def approximate_map(self, objective=False):
         """Set model to its approximate MAP.
         """
         ###############################
@@ -823,12 +836,13 @@ class Hierarchical(object):
         # only need this to get at the generations
         # TODO: Find out how to get this from pymc.utils.find_generations()
         m = pm.MCMC(self.nodes_db.node)
-        generations = m.generations
-        generations.append(self.get_observeds().node)
+        generations = [gen for gen in m.generations if len(gen) != 0]
+        generations.append(self.get_observeds().node.values)
 
         for i in range(len(generations)-1, 0, -1):
             # Optimize the generation at i-1 evaluated over the generation at i
-            self._partial_optimize(generations[i-1], generations[i])
+            stochastics = set.union(generations[i-1], generations[i])
+            self._partial_optimize(stochastics, objective=objective)
 
         #update map in nodes_db
         self.nodes_db['map'] = np.NaN
