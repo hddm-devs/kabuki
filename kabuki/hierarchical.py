@@ -254,6 +254,8 @@ class Hierarchical(object):
         # Init
         self.include = set(include)
 
+        self.plot_subjs = plot_subjs
+
         self.mc = None
 
         self.data = pd.DataFrame(data)
@@ -418,7 +420,7 @@ class Hierarchical(object):
         return max_map
 
 
-    def mcmc(self, assign_step_methods=True, *args, **kwargs):
+    def mcmc(self, *args, **kwargs):
         """
         Returns pymc.MCMC object of model.
 
@@ -436,7 +438,6 @@ class Hierarchical(object):
 
     def pre_sample(self):
         pass
-
 
     def _assign_spx(self, param, loc, scale):
         """assign spx step method to param"""
@@ -786,7 +787,7 @@ class Hierarchical(object):
     def values(self):
         return {name: node['node'].value for (name, node) in self.iter_non_observeds()}
 
-    def _partial_optimize(self, nodes, objective=False):
+    def _partial_optimize(self, nodes):
         """Optimize part of the model.
 
         :Arguments:
@@ -802,7 +803,6 @@ class Hierarchical(object):
 
         # define function to be optimized
         def opt(values):
-            print values
             for value, node in zip(values, non_observeds):
                 if node.observed:
                     continue
@@ -812,20 +812,18 @@ class Hierarchical(object):
                 obj = 0
 
                 for node in nodes:
-                    if objective and hasattr(node, 'objective'):
-                        obj += node.objective()
-                    elif 'logp' in dir(node):
+                    if 'logp' in dir(node):
                         obj -= node.logp
                     else: # determinstic node
                         continue
             except pm.ZeroProbability:
                 return np.inf
-            print obj
+
             return obj
 
         fmin_powell(opt, init_vals)
 
-    def approximate_map(self, objective=False):
+    def approximate_map(self):
         """Set model to its approximate MAP.
         """
         ###############################
@@ -842,7 +840,7 @@ class Hierarchical(object):
         for i in range(len(generations)-1, 0, -1):
             # Optimize the generation at i-1 evaluated over the generation at i
             stochastics = set.union(generations[i-1], generations[i])
-            self._partial_optimize(stochastics, objective=objective)
+            self._partial_optimize(stochastics)
 
         #update map in nodes_db
         self.nodes_db['map'] = np.NaN

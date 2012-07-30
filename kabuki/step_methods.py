@@ -20,6 +20,8 @@ class kNormalNormal(pm.Gibbs):
 
         pm.Gibbs.__init__(self, stochastic, *args, **kwargs)
         assert (self.stochastic != ()), "stochastic should not be a vector"
+        assert isinstance(self.stochastic, pm.Normal)
+
         self.stochastic = stochastic
         self.mu_0 = stochastic.parents['mu']
         self.tau_0 = stochastic.parents['tau']
@@ -76,12 +78,12 @@ class kNormalNormal(pm.Gibbs):
 
 class PriorNormalstd(pm.Gibbs):
     """
-    Step method for Uniform Prior over standard devision of Normal distribution
+    Step method for Uniform Prior over standard deviation of Normal distribution
     using reject sampling
     f(sigma) = f(var)*|2*sigma| = InverseGamma(alpha, beta) = 1./ Gamma(alpha, beta)
     alpha=(n-1)/2,   beta=sum(x_i-mu)**2/2
-    so we sample the an r.v. from Gamma and take its inverse, whichgives us var,
-    and then we tak the square root of it
+    so we sample the an r.v. from Gamma and take its inverse, which gives us var,
+    and then we take the square root of it.
     """
 
     child_class = pm.Normal
@@ -192,7 +194,7 @@ class MetropolisAlpha(pm.Metropolis):
         try:
             logp_p = self.logp_plus_loglike
 
-        except ZeroProbability:
+        except pm.ZeroProbability:
 
             # Reject proposal
             self.reject()

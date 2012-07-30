@@ -496,7 +496,7 @@ def plot_posterior_predictive(model, value_range=None, samples=10, columns=3, bi
         raise NotImplementedError, "value_range keyword argument must be supplied."
         #value_range = np.linspace(model.data)
 
-    for name, bottom_node in model.observed_nodes.iteritems():
+    for name, bottom_node in model.iter_observed_nodes():
         if isinstance(bottom_node, np.ndarray):
             if not hasattr(bottom_node[0], 'pdf'):
                 continue # skip nodes that do not define pdf function
