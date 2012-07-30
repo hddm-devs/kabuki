@@ -420,7 +420,7 @@ class Hierarchical(object):
         return max_map
 
 
-    def mcmc(self, *args, **kwargs):
+    def mcmc(self, assign_step_methods=True, *args, **kwargs):
         """
         Returns pymc.MCMC object of model.
 
@@ -438,6 +438,7 @@ class Hierarchical(object):
 
     def pre_sample(self):
         pass
+
 
     def _assign_spx(self, param, loc, scale):
         """assign spx step method to param"""
@@ -787,39 +788,27 @@ class Hierarchical(object):
     def values(self):
         return {name: node['node'].value for (name, node) in self.iter_non_observeds()}
 
-    def _partial_optimize(self, nodes):
+    def _partial_optimize(self, optimize_nodes, evaluate_nodes):
         """Optimize part of the model.
 
         :Arguments:
             nodes : iterable
                 list nodes to optimize.
-            objective : bool (default=False)
-                use .objective() method (if it exists)
-                instead of logp to optimize nodes
         """
-        non_observeds = [node for node in nodes if not node.observed]
+        non_observeds = [node for node in optimize_nodes if not node.observed]
 
         init_vals = [node.value for node in non_observeds]
 
         # define function to be optimized
         def opt(values):
-            for value, node in zip(values, non_observeds):
-                if node.observed:
-                    continue
+            for value, node in zip(values, optimize_nodes):
                 node.value = value
-
             try:
-                obj = 0
-
-                for node in nodes:
-                    if 'logp' in dir(node):
-                        obj -= node.logp
-                    else: # determinstic node
-                        continue
+                logp_optimize = [node.logp for node in optimize_nodes]
+                logp_evaluate = [node.logp for node in evaluate_nodes]
+                return -np.sum(logp_optimize) - np.sum(logp_evaluate)
             except pm.ZeroProbability:
                 return np.inf
-
-            return obj
 
         fmin_powell(opt, init_vals)
 
@@ -834,13 +823,12 @@ class Hierarchical(object):
         # only need this to get at the generations
         # TODO: Find out how to get this from pymc.utils.find_generations()
         m = pm.MCMC(self.nodes_db.node)
-        generations = [gen for gen in m.generations if len(gen) != 0]
-        generations.append(self.get_observeds().node.values)
+        generations = m.generations
+        generations.append(self.get_observeds().node)
 
         for i in range(len(generations)-1, 0, -1):
             # Optimize the generation at i-1 evaluated over the generation at i
-            stochastics = set.union(generations[i-1], generations[i])
-            self._partial_optimize(stochastics)
+            self._partial_optimize(generations[i-1], generations[i])
 
         #update map in nodes_db
         self.nodes_db['map'] = np.NaN

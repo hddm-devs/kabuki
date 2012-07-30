@@ -365,11 +365,6 @@ reporting the bug.
             """The first few moments of self's distribution conditional on parents"""
             return self.rv.stats(moments=moments, *self._pymc_dists_to_value(self.args), **self.kwds)
 
-        def objective(self, value=None):
-            if value is None:
-                value = self.value
-            return self.rv.objective(value, *self._pymc_dists_to_value(self.args), **self.kwds)
-
         def _entropy(self):
             """The entropy of self's distribution conditional on its parents"""
             return self.rv.entropy(*self._pymc_dists_to_value(self.args), **self.kwds)
