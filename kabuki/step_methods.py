@@ -98,7 +98,6 @@ class PriorNormalstd(pm.Gibbs):
         self.fail = 0
 
     def step(self):
-
         if isinstance(self.mu_node, pm.Node):
             mu_val = self.mu_node.value
         else:
@@ -416,3 +415,4 @@ class SliceStep(pm.Gibbs):
             return self.logp_plus_loglike
         except pm.ZeroProbability:
             return -np.inf
+

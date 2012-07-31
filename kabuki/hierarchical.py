@@ -249,11 +249,9 @@ class Hierarchical(object):
     """
 
     def __init__(self, data, is_group_model=None, depends_on=None, trace_subjs=True,
-                 plot_subjs=False, plot_var=False, include=()):
+                 plot_subjs=False, plot_var=False):
 
         # Init
-        self.include = set(include)
-
         self.plot_subjs = plot_subjs
 
         self.mc = None
