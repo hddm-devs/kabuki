@@ -32,16 +32,14 @@ def _add_noise(params, noise=.1, exclude_params=()):
             else:
                 if noise.has_key(param):
                     params[param] = np.random.normal(loc=value, scale=noise[param])
-
     return params
 
-def gen_rand_data(dist, params, samples=50, subjs=1, subj_noise=.1, exclude_params=(), column_name='data'):
+def gen_rand_data(Stochastic, params, samples=50, subjs=1, subj_noise=.1, exclude_params=(),
+                  column_name='data', seed = None):
     """Generate a random dataset using a user-defined random distribution.
 
     :Arguments:
-        dist : kabuki.utils.scipy_stochastic
-            Probability distribution to sample from (has to have
-            random function defined).
+        Stochastic : a pymc stochastic class of the target distribution (e.g., pymc.Normal)
         params : dict
             Parameters to use for data generation. Two options possible:
                 * {'param1': value, 'param2': value2}
@@ -82,9 +80,11 @@ def gen_rand_data(dist, params, samples=50, subjs=1, subj_noise=.1, exclude_para
     if not isinstance(params[params.keys()[0]], dict):
         params = {'none': params}
 
-    subj_params = {}
 
-    dtype = np.dtype(dist.dtype)
+    subj_params = {}
+    dtype = Stochastic('temp', size=2, **(params.values()[0])).dtype
+    if seed is not None:
+        np.random.seed(seed)
 
     idx = list(product(range(subjs), params.keys(), range(samples)))
     data = np.array(idx, dtype=[('subj_idx', np.int32), ('condition', 'S20'), (column_name, dtype)])
@@ -98,7 +98,7 @@ def gen_rand_data(dist, params, samples=50, subjs=1, subj_noise=.1, exclude_para
             else:
                 subj_param = param
             subj_params[condition].append(subj_param)
-            samples_from_dist = dist.rv.random(size=samples, **subj_param)
+            samples_from_dist = Stochastic('temp', size=samples, **subj_param).value
             idx = (data['subj_idx'] == subj_idx) & (data['condition'] == condition)
             data[column_name][idx] = np.array(samples_from_dist, dtype=dtype)
 
