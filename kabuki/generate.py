@@ -34,7 +34,7 @@ def _add_noise(params, noise=.1, exclude_params=()):
                     params[param] = np.random.normal(loc=value, scale=noise[param])
     return params
 
-def gen_rand_data(Stochastic, params, samples=50, subjs=1, subj_noise=.1, exclude_params=(),
+def gen_rand_data(Stochastic, params, size=50, subjs=1, subj_noise=.1, exclude_params=(),
                   column_name='data', seed = None):
     """Generate a random dataset using a user-defined random distribution.
 
@@ -49,7 +49,7 @@ def gen_rand_data(Stochastic, params, samples=50, subjs=1, subj_noise=.1, exclud
             named after the key and will be sampled using the corresponding parameters.
 
     :Optional:
-        samples : int <default: 50>
+        size : int <default: 50>
             How many values to sample for each condition for each subject.
         subjs : int <default: 1>
             How many subjects to generate data from. Individual subject parameters
@@ -86,7 +86,7 @@ def gen_rand_data(Stochastic, params, samples=50, subjs=1, subj_noise=.1, exclud
     if seed is not None:
         np.random.seed(seed)
 
-    idx = list(product(range(subjs), params.keys(), range(samples)))
+    idx = list(product(range(subjs), params.keys(), range(size)))
     data = np.array(idx, dtype=[('subj_idx', np.int32), ('condition', 'S20'), (column_name, dtype)])
 
     for condition, param in params.iteritems():
@@ -98,7 +98,7 @@ def gen_rand_data(Stochastic, params, samples=50, subjs=1, subj_noise=.1, exclud
             else:
                 subj_param = param
             subj_params[condition].append(subj_param)
-            samples_from_dist = Stochastic('temp', size=samples, **subj_param).value
+            samples_from_dist = Stochastic('temp', size=size, **subj_param).value
             idx = (data['subj_idx'] == subj_idx) & (data['condition'] == condition)
             data[column_name][idx] = np.array(samples_from_dist, dtype=dtype)
 
