@@ -249,10 +249,10 @@ class Hierarchical(object):
     """
 
     def __init__(self, data, is_group_model=None, depends_on=None, trace_subjs=True,
-                 plot_subjs=False, plot_var=False, include=()):
+                 plot_subjs=False, plot_var=False):
 
         # Init
-        self.include = set(include)
+        self.plot_subjs = plot_subjs
 
         self.mc = None
 
@@ -786,27 +786,25 @@ class Hierarchical(object):
     def values(self):
         return {name: node['node'].value[()] for (name, node) in self.iter_non_observeds()}
 
-    def _partial_optimize(self, stochastics, logp_nodes):
+    def _partial_optimize(self, optimize_nodes, evaluate_nodes):
         """Optimize part of the model.
 
         :Arguments:
-            stochastics : iterable
-                list of stochastic nodes to optimize.
-            logp_nodes : iterable
-                list of nodes for evaluating objective function.
-
+            nodes : iterable
+                list nodes to optimize.
         """
-        init_vals = [node.value for node in stochastics]
+        non_observeds = [node for node in optimize_nodes if not node.observed]
+
+        init_vals = [node.value for node in non_observeds]
 
         # define function to be optimized
-        def opt(values, nodes=stochastics):
-            for value, node in zip(values, nodes):
+        def opt(values):
+            for value, node in zip(values, optimize_nodes):
                 node.value = value
-
             try:
-                logp_prior = [stochastic.logp for stochastic in stochastics]
-                logp = [logp_node.logp for logp_node in logp_nodes]
-                return -np.sum(logp) - np.sum(logp_prior)
+                logp_optimize = [node.logp for node in optimize_nodes]
+                logp_evaluate = [node.logp for node in evaluate_nodes]
+                return -np.sum(logp_optimize) - np.sum(logp_evaluate)
             except pm.ZeroProbability:
                 return np.inf
 

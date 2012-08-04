@@ -495,43 +495,30 @@ def plot_posterior_predictive(model, value_range=None, samples=10, columns=3, bi
         # Infer from data by finding the min and max from the nodes
         raise NotImplementedError, "value_range keyword argument must be supplied."
         #value_range = np.linspace(model.data)
+    observeds = model.get_observeds()
 
-    for name, bottom_node in model.observed_nodes.iteritems():
-        if isinstance(bottom_node, np.ndarray):
-            if not hasattr(bottom_node[0], 'pdf'):
-                continue # skip nodes that do not define pdf function
-        else:
-            if not hasattr(bottom_node, 'pdf'):
-                continue # skip nodes that do not define pdf function
 
+    for tag, nodes in observeds.groupby('tag'):
         fig = plt.figure(figsize=figsize)
-
-        fig.suptitle(name, fontsize=12)
+        fig.suptitle(tag, fontsize=12)
         fig.subplots_adjust(top=0.9, hspace=.4, wspace=.3)
-        if isinstance(bottom_node, np.ndarray):
-            # Group model
-            for i_subj, bottom_node_subj in enumerate(bottom_node):
-                if bottom_node_subj is None:
-                    continue # Skip non-existant nodes
-                ax = fig.add_subplot(np.ceil(len(bottom_node)/columns), columns, i_subj+1)
-                ax.set_title(str(i_subj))
-                _post_pred_bottom_node(bottom_node_subj, value_range,
-                                       axis=ax,
-                                       bins=bins)
-        else:
-            # Flat model
-            _post_pred_bottom_node(bottom_node, value_range,
-                                   axis=fig.add_subplot(111),
-                                   bins=bins)
-            plt.legend()
+
+        for subj_i, (node_name, bottom_node) in enumerate(nodes.iterrows()):
+            if not hasattr(bottom_node['node'], 'pdf'):
+                continue # skip nodes that do not define pdf function
+
+            ax = fig.add_subplot(np.ceil(len(nodes)/columns), columns, subj_i+1)
+            ax.set_title(str(bottom_node['subj_idx']))
+            _post_pred_bottom_node(bottom_node['node'], value_range,
+                                   axis=ax, bins=bins)
 
         if savefig:
             if path is not None:
-                fig.savefig(os.path.join(path, name) + '.svg', format='svg')
-                fig.savefig(os.path.join(path, name) + '.png', format='png')
+                fig.savefig(os.path.join(path, tag) + '.svg', format='svg')
+                fig.savefig(os.path.join(path, tag) + '.png', format='png')
             else:
-                fig.savefig(name + '.svg', format='svg')
-                fig.savefig(name + '.png', format='png')
+                fig.savefig(tag + '.svg', format='svg')
+                fig.savefig(tag + '.png', format='png')
 
 
 

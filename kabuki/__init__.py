@@ -7,6 +7,8 @@ import generate
 import distributions
 import tests
 
+__version__ = '0.5dev'
+
 try:
     from IPython.core.debugger import Tracer; debug_here = Tracer()
 except:
