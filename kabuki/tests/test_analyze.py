@@ -2,7 +2,7 @@ import numpy as np
 import unittest
 import kabuki.analyze as ka
 from matplotlib.pyplot import close
-import test_utils
+import utils
 
 class TestAnalyzeBreakdown(unittest.TestCase):
     """
@@ -15,10 +15,10 @@ class TestAnalyzeBreakdown(unittest.TestCase):
     def setUpClass(self):
 
         #load models
-        self.models = test_utils.load_models()
+        self.models, _ = utils.create_test_models()
 
         #run models
-        test_utils.sample_from_models(self.models, n_iter=200)
+        utils.sample_from_models(self.models, n_iter=200)
 
     def runTest(self):
         pass
