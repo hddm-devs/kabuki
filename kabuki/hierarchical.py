@@ -125,6 +125,11 @@ class Knode(object):
                 kwargs['parents'] = parents_dict
 
 
+            # Deterministic nodes require a doc kwarg, we don't really
+            # need that so if its not supplied, just use the name
+            if self.pymc_node is pm.Deterministic and 'doc' not in kwargs:
+                kwargs['doc'] = node_name
+
             #actually create the node
             node = self.pymc_node(name=node_name, **kwargs)
 
