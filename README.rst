@@ -2,10 +2,10 @@
 Introduction
 ************
 
-:Date: March 8 19, 2012
+:Date: August 8, 2012
 :Author: Thomas Wiecki, Imri Sofer
 :Contact: thomas_wiecki@brown.edu, imri_sofer@brown.edu
-:Web site: http://github.com/hddm-devs/kabuki
+:Web site: http://github.com/hddm-dev/kabuki
 :Copyright: This document has been placed in the public domain.
 :License: Kabuki is released under the GPLv3.
 :Version: 0.2
@@ -13,7 +13,66 @@ Introduction
 Purpose
 =======
 
-Kabuki is a Python toolbox that aids creation of hierarchical Bayesian models for cognitive science using PyMC. In many psychological and cognitive experiments multiple subjects are tested on the same task. Traditional non-hierarchical model estimation methods (such as maximum likelihood) either fit a model to each individual subject (ignoring any similarities they have) or to the group as a whole (ignoring individual differences). Due to common scarcety of data the first approach is not feasible in many circumstances. A better model would capture that subjects are different but still similar. 
+Kabuki is a Python library intended to make hierarchical PyMC models
+reusable, portable and more flexible. Once a model has been formualted
+in kabuki it is trivial to apply to apply it to new datasets in
+various ways.
+
+Warning
+=======
+
+Kabuki is still in early development, documentation is poor to
+non-existant. At the moment it is still mostly restricted to the
+models we build (e.g. it is the engine for HDDM). If you want to use
+kabuki for your own model, We recommend you check back from time to
+time to see whether we release something that's actually useful.
+
+Features
+========
+
+Kabuki offers the following features for any model you
+created in kabuki:
+
+* Easy interface: New model variations can be constructed and
+  estimated automatically either via a configuration file and command
+  line interface, or from within Python.
+* Statistical analysis: Automatically create summary output
+  statistics, posterior plots and run poster predictive checks.
+* Data generation: By providing a function to generate data from your
+  model given paramters you can create new, simulated data sets with
+  multiple groups and multiple conditions.
+* Model validation: Kabuki will provide automatic tests such as
+  parameter recovery from simulated data to validate your model.
+* Batteries included: Kabuki will come pre-equipped with some example
+  models that are widely used such as a Bayesian ANOVA model for
+  hypothesis testing or regression analysis.
+
+Motivation
+==========
+
+Hierarchical Bayesian models are gaining popularity in many scientific
+disciplines such as cognitive and health sciences, but also
+economics. While quite a few useful models have been developed
+(e.g. hierarchical Bayesian regression, hierarchical estimation of
+drift-diffusion parameters) in the literature, often with reference
+implementations in WinBUGS (and sometimes PyMC), applying them to new
+data sets requires changing the model code to your specific needs.
+
+If you build your model in kabuki, using it on a new data set with
+different conditions and different structure will come for free. All a
+user has to do is create a new model object and kabuki will
+automatically create a new model tailored to the data in a
+user-specified way.
+
+Who is this for?
+================
+
+If you are building models in PyMC that you think can be applied to
+new data sets with maybe different structure, kabuki will allow you
+
+In psychology, cognitive science but also other fields, a certain hierarchical model structure
+
+that aids creation of hierarchical Bayesian models for cognitive science using PyMC. In many psychological and cognitive experiments multiple subjects are tested on the same task. Traditional non-hierarchical model estimation methods (such as maximum likelihood) either fit a model to each individual subject (ignoring any similarities they have) or to the group as a whole (ignoring individual differences). Due to common scarcety of data the first approach is not feasible in many circumstances. A better model would capture that subjects are different but still similar.
 
 Hierarchical Bayesian modeling allows us to construct models that map the nature of the experiment -- individual subject parameters are themselves distributed according to a group parameter distribution. Kabuki makes it extremely easy to create various models of this structure.
 
@@ -30,7 +89,6 @@ Features
 
 * Built-in Bayesian hypothesis testing and several convergence and goodness-of-fit diagnostics.
 
-* Kabuki comes pre-equipped with some example models that are widely usable such as a Bayesian ANOVA model for hypothesis testing.
 
 The Problem
 ===========
@@ -45,14 +103,10 @@ Kabuki
 
 Kabuki is a Python library that builds on top of PyMC, a general purpose library to do Bayesian inference using MCMC. What kabuki provides is a flexible implementation that allows users to easily construct their own hierarchical models. It features a common design where individual subject parameter distributions are themselves draws from a group parameter distribution.
 
-Moreover, kabuki comes equipped with some models of ubiquitous use such as a Bayesian ANOVA model that allows estimation and hypothesis testing of different treatment groups and makes traditional statistical tests such as t and F-tests obsolete. 
+Moreover, kabuki comes equipped with some models of ubiquitous use such as a Bayesian ANOVA model that allows estimation and hypothesis testing of different treatment groups and makes traditional statistical tests such as t and F-tests obsolete.
 
 Usage
 =====
 
-To come...
-
 Getting started
 ===============
-
-To come...
