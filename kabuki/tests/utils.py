@@ -47,10 +47,10 @@ class HNodeSimpleVar(kabuki.Hierarchical):
 class HNodeTransform(kabuki.Hierarchical):
     def create_knodes(self):
         if self.is_group_model:
-            loc_g = Knode(pm.Uniform, 'loc_g', lower=-5, upper=5, depends=self.depends['loc'])
+            loc_g = Knode(pm.Uniform, 'loc_g', lower=-5, upper=5, depends=self.depends['loc'], hidden=True)
             loc_std = Knode(pm.Uniform, 'loc_std', lower=1e-8, upper=100, depends=self.depends['loc_std'])
             loc_tau = Knode(pm.Deterministic, 'loc_tau', doc='loc_tau', eval=lambda x: x**-2, x=loc_std, plot=False, trace=False)
-            loc_subj = Knode(pm.Normal, 'loc_subj', mu=loc_g, tau=loc_tau, subj=True, plot=False)
+            loc_subj = Knode(pm.Normal, 'loc_subj', mu=loc_g, tau=loc_tau, subj=True, plot=False, hidden=True)
             loc_subj_trans = Knode(pm.Deterministic, 'loc_subj_trans', eval=lambda x: x, x=loc_subj, plot=True, trace=True)
             like = Knode(pm.Normal, 'like', mu=loc_subj_trans, tau=1, col_name='data', observed=True)
 

@@ -14,13 +14,14 @@ import warnings
 from kabuki.utils import flatten
 
 class Knode(object):
-    def __init__(self, pymc_node, name, depends=(), col_name='', subj=False, **kwargs):
+    def __init__(self, pymc_node, name, depends=(), col_name='', subj=False, hidden=False, **kwargs):
         self.pymc_node = pymc_node
         self.name = name
         self.kwargs = kwargs
         self.subj = subj
         self.col_name = col_name
         self.nodes = OrderedDict()
+        self.hidden = hidden
 
         #create self.parents
         self.parents = {}
@@ -53,7 +54,7 @@ class Knode(object):
 
     def init_nodes_db(self):
         data_col_names = list(self.data.columns)
-        node_descriptors = ['knode_name', 'stochastic', 'observed', 'subj', 'node', 'tag', 'depends']
+        node_descriptors = ['knode_name', 'stochastic', 'observed', 'subj', 'node', 'tag', 'depends', 'hidden']
         stats = ['mean', 'std', '2.5q', '25q', '50q', '75q', '97.5q', 'mc err']
 
         columns = node_descriptors + data_col_names + stats
@@ -63,21 +64,22 @@ class Knode(object):
 
     def append_node_to_db(self, node, uniq_elem):
         #create db entry for knode
-        line = {}
-        line['knode_name'] = self.name
-        line['observed'] = self.observed
-        line['stochastic'] = isinstance(node, pm.Stochastic)
-        line['subj'] = self.subj
-        line['node'] = node
-        line['tag'] = self.create_tag_and_subj_idx(self.depends, uniq_elem)[0]
-        line['depends'] = self.depends
+        row = {}
+        row['knode_name'] = self.name
+        row['observed'] = self.observed
+        row['stochastic'] = isinstance(node, pm.Stochastic)
+        row['subj'] = self.subj
+        row['node'] = node
+        row['tag'] = self.create_tag_and_subj_idx(self.depends, uniq_elem)[0]
+        row['depends'] = self.depends
+        row['hidden'] = self.hidden
 
-        line = pd.DataFrame(data=[line], columns=self.nodes_db.columns, index=[node.__name__])
+        row = pd.DataFrame(data=[row], columns=self.nodes_db.columns, index=[node.__name__])
 
         for dep, elem in zip(self.depends, uniq_elem):
-            line[dep] = elem
+            row[dep] = elem
 
-        self.nodes_db = self.nodes_db.append(line)
+        self.nodes_db = self.nodes_db.append(row)
 
     def create(self):
         """create the pymc nodes"""
@@ -519,7 +521,7 @@ class Hierarchical(object):
         sliced_db = self.nodes_db.copy()
 
         # only print stats of stochastic, non-observed nodes
-        sliced_db = sliced_db[(sliced_db['stochastic'] == True) & (sliced_db['observed'] == False)]
+        sliced_db = sliced_db[(sliced_db['observed'] == False) & (sliced_db['hidden'] == False)]
 
         stat_cols  = ['mean', 'std', '2.5q', '25q', '50q', '75q', '97.5q', 'mc err']
 
