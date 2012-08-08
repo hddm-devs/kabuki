@@ -478,7 +478,7 @@ def plot_posterior_predictive(model, value_range=None, samples=10, columns=3, bi
     if value_range is None:
         # Infer from data by finding the min and max from the nodes
         raise NotImplementedError, "value_range keyword argument must be supplied."
-        #value_range = np.linspace(model.data)
+
     observeds = model.get_observeds()
 
 
