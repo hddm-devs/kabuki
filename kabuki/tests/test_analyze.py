@@ -1,12 +1,8 @@
-import kabuki
-from kabuki.hierarchical import Knode
 import numpy as np
 import unittest
-import scipy.stats
 import kabuki.analyze as ka
 from matplotlib.pyplot import close
 import test_utils
-from utils import create_test_models, sample_from_models
 
 class TestAnalyzeBreakdown(unittest.TestCase):
     """
@@ -19,10 +15,10 @@ class TestAnalyzeBreakdown(unittest.TestCase):
     def setUpClass(self):
 
         #load models
-        self.models = create_test_models()
+        self.models = test_utils.load_models()
 
         #run models
-        sample_from_models(self.models, n_iter=200)
+        test_utils.sample_from_models(self.models, n_iter=200)
 
     def runTest(self):
         pass
@@ -61,8 +57,8 @@ class TestAnalyzeBreakdown(unittest.TestCase):
     def test_group_cond_diff(self):
         for model in self.models:
             if model.is_group_model:
-                if model.depends_on:
-                    (name, cond) = model.depends_on.items()[0]
+                if model.depends:
+                    (name, cond) = model.depends.items()[0]
                     tags = model.params_dict[name].group_nodes.keys()[:2]
                 ka.group_cond_diff(model,name, *tags)
 

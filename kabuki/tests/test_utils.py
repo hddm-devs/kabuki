@@ -23,7 +23,7 @@ def load_models():
     models.append(m)
 
     #model 2
-    m = hddm.HDDM(data, depends_on = {'v':['cond1', 'cond2'], 'a':'cond1'}, include =['z','V'])
+    m = hddm.HDDM(data, depends_on = {'v':['cond1', 'cond2'], 'a':'cond1'}, include =['z','sv'])
     models.append(m)
 
     data['subj_idx'] = np.random.randint(5, size=n)
@@ -31,17 +31,7 @@ def load_models():
     m = hddm.HDDM(data, depends_on = {'v':'cond1'})
     models.append(m)
 
-    #model 4
-    v_g = Knode(pm.Normal, mu=0, tau=20**-2, value=0, step_method=kabuki.steps.kNormalNormal)
-    v_dict = {'share_var': True, 'group_knode': v_g}
-
-    #sv has no subj nodes, and it is switched to half-cauchy
-    V_g = Knode(kabuki.utils.HalfCauchy, S=10, value=1)
-    V = kabuki.Parameter('V', group_knode=V_g,
-                         optional=True, default=0)
-
-    m = hddm.HDDM(data, depends_on = {'v':['cond1', 'cond2'], 'a':'cond1'}, include =['V'],
-                  update_params = {'v' : v_dict}, replace_params = [V])
+    m = hddm.HDDM(data, depends_on = {'v':['cond1', 'cond2'], 'a':'cond1'}, include=['sv'], group_only_nodes=['sv'])
     models.append(m)
 
     return models

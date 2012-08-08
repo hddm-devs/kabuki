@@ -1,13 +1,17 @@
 from __future__ import division
+import sys, os
+
 import numpy as np
-import pymc as pm
-import re
 from matplotlib.pylab import figure
 import matplotlib.pyplot as plt
-import sys, os
-from copy import copy
+
+import pandas as pd
+import pymc as pm
 import pymc.progressbar as pbar
+
 from utils import interpolate_trace
+from itertools import combinations
+
 try:
     from collections import OrderedDict
 except ImportError:
@@ -24,7 +28,6 @@ def plot_posterior_nodes(nodes, bins=50):
             How many bins to use for computing the histogram.
 
     """
-    from kabuki.utils import interpolate_trace
     figure()
     lb = min([min(node.trace()[:]) for node in nodes])
     ub = max([max(node.trace()[:]) for node in nodes])
@@ -72,14 +75,14 @@ def group_plot(model, params_to_plot=(), bins=50, samples=5000, save_to=None):
 
         ############################################
         # plot subjects
-        for name, subj in subj_block.iterrows():
-            trace = subj['node'].trace()
+        for name, subj_descr in subj_block.iterrows():
+            trace = subj_descr['node'].trace()
             height = interpolate_trace(x, trace, range=(min, max), bins=bins)
-            plt.plot(x, height, lw=1., label=str(np.int32(subj['subj_idx'])))
+            plt.plot(x, height, lw=1., label=str(np.int32(subj_descr['subj_idx'])))
 
         ###########################################
         # plot group distribution
-        node = subj['node']
+        node = subj_descr['node']
         group_trace = np.empty(samples, dtype=np.float32)
         for sample in xrange(samples):
             # set parents to random value from their trace
@@ -87,6 +90,9 @@ def group_plot(model, params_to_plot=(), bins=50, samples=5000, save_to=None):
             for parent in node.extended_parents:
                 parent.value = parent.trace()[trace_pos]
             group_trace[sample] = node.random()
+            # TODO: What to do in case of deterministic (e.g. transform) node
+            #except AttributeError:
+            #    group_trace[sample] = node.parents.items()[0].random()
 
         height = interpolate_trace(x, group_trace, range=(min, max), bins=bins)
         plt.plot(x, height, '--', lw=2., label='group')
@@ -108,12 +114,13 @@ def compare_all_pairwise(model):
         * Mean difference
         * 5th and 95th percentile
     """
+    raise NotImplementedError, "compare_all_pairwise is currently not functional."
     from scipy.stats import scoreatpercentile
-    from itertools import combinations
+
     print "Parameters\tMean difference\t5%\t95%"
 
     # Loop through dependent parameters and generate stats
-    for param in model.params_dict.itervalues():
+    for param in model.nodes_db.itervalues():
         if len(param.group_nodes) < 2:
             continue
         # Loop through all pairwise combinations
@@ -126,15 +133,13 @@ def compare_all_pairwise(model):
 
 def plot_all_pairwise(model):
     """Plot all pairwise posteriors to find correlations."""
-    import matplotlib.pyplot as plt
     import scipy as sp
-    import scipy.stats
     from itertools import combinations
     #size = int(np.ceil(np.sqrt(len(data_deps))))
     fig = plt.figure()
     fig.subplots_adjust(wspace=0.4, hspace=0.4)
     # Loop through all pairwise combinations
-    for i, (p0, p1) in enumerate(combinations(model.group_nodes.values(), 2)):
+    for i, (p0, p1) in enumerate(combinations(model.get_group_nodes(), 2)):
         fig.add_subplot(6,6,i+1)
         plt.plot(p0.trace(), p1.trace(), '.')
         (a_s, b_s, r, tt, stderr) = sp.stats.linregress(p0.trace(), p1.trace())
@@ -209,12 +214,12 @@ def group_cond_diff(hm, node, cond1, cond2, threshold=0):
     name = node
     node_dict = hm.params_include[name].subj_nodes
     n_subjs = hm._num_subjs
-    subj_diff = [None]*n_subjs
+
     #loop over subjs
     subj_diff_mean = np.zeros(n_subjs)
     subj_diff_std = np.zeros(n_subjs)
     for i_subj in range(n_subjs):
-        #compute diffrence of traces
+        #compute difference of traces
         name1 = node_dict[cond1][i_subj].__name__
         name2 = node_dict[cond2][i_subj].__name__
         trace1 = hm.mc.db.trace(name1)[:]
@@ -245,10 +250,7 @@ def _evaluate_post_pred(sampled_stats, data_stats, evals=None):
         pandas.DataFrame containing the eval results as columns.
     """
 
-    import pandas as pd
-
     from scipy.stats import scoreatpercentile, percentileofscore
-    from itertools import product
 
     if evals is None:
         # Generate some default evals
@@ -348,7 +350,7 @@ def post_pred_check(model, samples=500, bins=100, stats=None, evals=None, plot=F
         Hierarchical pandas.DataFrame with the different statistics.
     """
     import pandas as pd
-    results = []
+    results = {}
 
     # Progress bar
     if progress_bar:
@@ -358,39 +360,21 @@ def post_pred_check(model, samples=500, bins=100, stats=None, evals=None, plot=F
     else:
         print "Sampling..."
 
-    for name, bottom_node in model.observed_nodes.iteritems():
-        if isinstance(bottom_node, np.ndarray):
-            # Group model
-            results_subj = []
-            subjs = []
+    for name, obs_descr in model.iter_observeds():
+        node = obs_descr['node']
 
-            for i_subj, bottom_node_subj in enumerate(bottom_node):
-                if progress_bar:
-                    bar_iter +=1
-                    bar.animate(bar_iter)
-                if bottom_node_subj is None or not hasattr(bottom_node_subj, 'random'):
-                    continue # Skip non-existant nodes
-                subjs.append(i_subj)
-                result_subj = _post_pred_summary_bottom_node(bottom_node_subj, samples=samples, bins=bins, evals=evals, stats=stats, plot=plot)
-                results_subj.append(result_subj)
+        if progress_bar:
+            bar_iter += 1
+            bar.animate(bar_iter)
 
-            if len(results_subj) != 0:
-                result = pd.concat(results_subj, keys=subjs, names=['subj'])
-                results.append(result)
-        else:
-            # Flat model
-            if progress_bar:
-                bar_iter +=1
-                bar.animate(bar_iter)
-            if bottom_node is None or not hasattr(bottom_node, 'random'):
-                continue # Skip
-            result = _post_pred_summary_bottom_node(bottom_node, samples=samples, bins=bins, evals=evals, stats=stats, plot=plot)
-            results.append(result)
+        if node is None or not hasattr(node, 'random'):
+            continue # Skip
 
+        results[name] = _post_pred_summary_bottom_node(node, samples=samples, bins=bins, evals=evals, stats=stats, plot=plot)
         if progress_bar:
             bar.animate(n_iter)
 
-    return pd.concat(results, keys=model.observed_nodes.keys(), names=['node'])
+    return pd.concat(results, names=['node'])
 
 def _parents_to_random_posterior_sample(bottom_node, pos=None):
     """Walks through parents and sets them to pos sample."""
