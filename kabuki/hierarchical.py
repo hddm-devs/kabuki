@@ -511,17 +511,21 @@ class Hierarchical(object):
                 fd.write("pD: %f\n" % info['pD'])
 
 
-    def print_stats(self, fname=None, **kwargs):
+    def print_stats(self, fname=None, print_hidden=False, **kwargs):
         """print statistics of all variables
         Input (optional)
             fname <string> - the output will be written to a file named fname
+            print_hidden <bool>  - print statistics of hidden nodes
         """
         self.append_stats_to_nodes_db()
 
         sliced_db = self.nodes_db.copy()
 
         # only print stats of stochastic, non-observed nodes
-        sliced_db = sliced_db[(sliced_db['observed'] == False) & (sliced_db['hidden'] == False)]
+        if not print_hidden:
+            sliced_db = sliced_db[(sliced_db['observed'] == False) & (sliced_db['hidden'] == False)]
+        else:
+            sliced_db = sliced_db[(sliced_db['observed'] == False)]
 
         stat_cols  = ['mean', 'std', '2.5q', '25q', '50q', '75q', '97.5q', 'mc err']
 
