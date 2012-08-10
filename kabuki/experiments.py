@@ -277,7 +277,7 @@ if __name__=='__main__':
     params_single = hddm.generate.gen_rand_params()
     params = {'cond1': copy(params_single), 'cond2': copy(params_single)}
     params['cond2']['v'] = 0
-    data = kabuki.generate.gen_rand_data(hddm.likelihoods.wfpt_like,
+    data, subj_params = kabuki.generate.gen_rand_data(hddm.likelihoods.Wfpt,
                                          params=params, samples=100, subjs=10, column_name='rt')[0]
 
     # Create different models to test our various hypotheses.

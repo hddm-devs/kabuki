@@ -791,7 +791,7 @@ class Hierarchical(object):
 
     @property
     def values(self):
-        return {name: node['node'].value for (name, node) in self.iter_non_observeds()}
+        return {name: node['node'].value[()] for (name, node) in self.iter_non_observeds()}
 
     def _partial_optimize(self, optimize_nodes, evaluate_nodes):
         """Optimize part of the model.
