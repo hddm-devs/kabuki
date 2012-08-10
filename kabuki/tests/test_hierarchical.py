@@ -3,7 +3,7 @@ import numpy as np
 import unittest
 from nose.tools import raises
 import pymc as pm
-from utils import HNodeSimple, HNodeSimpleVar, normal_like, sample_from_models, create_test_models
+from utils import HNodeSimple, HNodeSimpleVar, sample_from_models, create_test_models
 import pandas as pd
 from pandas import Series, DataFrame
 
@@ -12,9 +12,9 @@ class TestHierarchicalBreakDown(unittest.TestCase):
     simple tests to see if hierarchical merthods do not raise and error
     """
 
-    #@classmethod
-    #def setUpClass(self):
-    def setUp(self):
+    @classmethod
+    def setUpClass(self):
+    #def setUp(self):
 
         #load models
         self.models, self.params = create_test_models()
@@ -65,10 +65,13 @@ class TestHierarchicalBreakDown(unittest.TestCase):
 
 
 class TestModelCreation(unittest.TestCase):
-    #@classmethod
-    def setUp(self):
+
+    @classmethod
+    def setUpClass(self):
+#    def setUp(self):
         self.n_subj = 3
-        data = kabuki.generate.gen_rand_data(normal_like, {'A':{'loc':0, 'scale':1}, 'B': {'loc':0, 'scale':1}}, subjs=self.n_subj)[0]
+        data, _ = kabuki.generate.gen_rand_data(pm.Normal, {'A':{'mu':0, 'tau':1}, 'B': {'mu':0, 'tau':1}},
+                                                subjs=self.n_subj)
         data = pd.DataFrame(data)
         data['condition2'] = np.random.randint(2, size=len(data))
         self.data = data
@@ -78,12 +81,12 @@ class TestModelCreation(unittest.TestCase):
 
     def test_simple_no_deps(self):
         m = HNodeSimple(self.data)
-        n_nodes = 1 + self.n_subj*2 #loc_g + n_subj * (loc_subj + like)
+        n_nodes = 1 + self.n_subj*2 #mu_g + n_subj * (mu_subj + like)
         self.assertEqual(len(m.nodes_db), n_nodes)
 
     def test_simple_deps(self):
-        m = HNodeSimple(self.data, depends_on={'loc': 'condition'})
-        n_nodes = 2 * (1 + self.n_subj*2) #n_conds * (loc_g + n_subj * (loc_subj + like))
+        m = HNodeSimple(self.data, depends_on={'mu': 'condition'})
+        n_nodes = 2 * (1 + self.n_subj*2) #n_conds * (mu_g + n_subj * (mu_subj + like))
         self.assertEqual(len(m.nodes_db), n_nodes)
 
     @raises(AssertionError)
@@ -92,44 +95,44 @@ class TestModelCreation(unittest.TestCase):
 
     def test_assertion_on_wrong_param_name(self):
         # does not catch if correct argument
-        HNodeSimple(self.data, depends_on={'non_existant': 'condition', 'loc': 'condition'})
+        HNodeSimple(self.data, depends_on={'non_existant': 'condition', 'mu': 'condition'})
 
     def test_simplevar_partly_deps(self):
-        m = HNodeSimpleVar(self.data, depends_on={'loc': 'condition'})
-        n_nodes = 1 + 1 + 2 * (1 + self.n_subj*2) #loc_std + loc_tau + n_conds * (loc_g + n_subj * (loc_subj + like))
+        m = HNodeSimpleVar(self.data, depends_on={'mu': 'condition'})
+        n_nodes = 1 + 1 + 2 * (1 + self.n_subj*2) #mu_std + mu_tau + n_conds * (mu_g + n_subj * (mu_subj + like))
         self.assertEqual(len(m.nodes_db), n_nodes)
 
     def test_simplevar_deps(self):
-        m = HNodeSimpleVar(self.data, depends_on={'loc': 'condition', 'loc_std':'condition'})
-        #n_nodes = n_conds * (loc_std + loc_tau + loc_g + n_subj * (loc_subj + like))
+        m = HNodeSimpleVar(self.data, depends_on={'mu': 'condition', 'mu_std':'condition'})
+        #n_nodes = n_conds * (mu_std + mu_tau + mu_g + n_subj * (mu_subj + like))
         n_nodes = 2 * (1 + 1 + 1 + self.n_subj*2)
         self.assertEqual(len(m.nodes_db), n_nodes)
 
     def test_simplevar_double_deps_A(self):
-        m = HNodeSimpleVar(self.data, depends_on={'loc': 'condition', 'loc_std':'condition2'})
+        m = HNodeSimpleVar(self.data, depends_on={'mu': 'condition', 'mu_std':'condition2'})
         #n_nodes = 2*v_tau + 2*v_std + 2*v_g + 4*n_subj*(v_subj + like))
         n_nodes = 2 + 2 + 2 + 4 * self.n_subj * 2
         self.assertEqual(len(m.nodes_db), n_nodes)
 
     def test_simplevar_double_deps_B(self):
-        m = HNodeSimpleVar(self.data, depends_on={'loc': ['condition', 'condition2'], 'loc_std':'condition2'})
-        #n_nodes = 2*loc_tau + 2*loc_std + 4*loc_g + 4*n_subj*(loc_subj + like))
+        m = HNodeSimpleVar(self.data, depends_on={'mu': ['condition', 'condition2'], 'mu_std':'condition2'})
+        #n_nodes = 2*mu_tau + 2*mu_std + 4*mu_g + 4*n_subj*(mu_subj + like))
         n_nodes = 2 + 2 + 4 + 4 * self.n_subj * 2
         self.assertEqual(len(m.nodes_db), n_nodes)
 
 
 class TestEstimation(unittest.TestCase):
     """
-    simple tests to see if hierarchical merthods do not raise and error
+    simple tests to see if hierarchical methods do not raise and error
     """
 
     def test_map_approx(self):
         subjs = 40
-        data, params_true = kabuki.generate.gen_rand_data(normal_like,
-                                                          {'A':{'loc':0, 'scale':1}, 'B': {'loc':2, 'scale':1}},
-                                                          subj_noise={'loc':.1}, samples=200, subjs=subjs)
+        data, params_true = kabuki.generate.gen_rand_data(pm.Normal,
+                                                          {'A':{'mu':0, 'tau':1}, 'B': {'mu':2, 'tau':1}},
+                                                          subj_noise={'mu':.1}, samples=1000, subjs=subjs)
 
-        model = HNodeSimple(data, depends_on={'loc': 'condition'})
+        model = HNodeSimple(data, depends_on={'mu': 'condition'})
 
         model.approximate_map()
 
@@ -139,7 +142,7 @@ class TestEstimation(unittest.TestCase):
             for idx, params in enumerate(subj_params):
                 nodes_subj = nodes[nodes['subj_idx'] == idx]
                 for param_name, value in params.iteritems():
-                    if param_name != 'loc':
+                    if param_name != 'mu':
                         continue
                     node = nodes_subj[nodes_subj.knode_name == param_name + '_subj']
                     assert len(node) == 1, "Only one node should have been left after slicing."
