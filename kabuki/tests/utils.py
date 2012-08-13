@@ -2,7 +2,6 @@ import kabuki
 from kabuki.hierarchical import Knode
 import numpy as np
 import pymc as pm
-import scipy
 import pandas as pd
 
 class HNodeSimple(kabuki.Hierarchical):
@@ -74,6 +73,7 @@ def create_test_models():
     models.append(HNodeSimple(data))
     models.append(HNodeSimple(data, depends_on={'mu': 'condition'}))
     models.append(HNodeSimpleVar(data, depends_on={'mu': 'condition'}))
+    models.append(HNodeSimpleVar(data, depends_on={'mu': 'condition'}, is_group_model=False))
     models.append(HNodeSimpleVar(data, depends_on={'mu': 'condition', 'mu_std':'condition'}))
     models.append(HNodeSimpleVar(data, depends_on={'mu': 'condition', 'mu_std':'condition2'}))
     models.append(HNodeSimpleVar(data, depends_on={'mu': ['condition', 'condition2'], 'mu_std':'condition2'}))

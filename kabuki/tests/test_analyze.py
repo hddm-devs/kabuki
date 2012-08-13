@@ -34,6 +34,7 @@ class TestAnalyzeBreakdown(unittest.TestCase):
             ka.plot_posterior_nodes(model.mc.stochastics, bins=50)
             close('all')
 
+    @unittest.skip("Not implemented")
     def test_compare_all_pairwise(self):
         for model in self.models:
             ka.compare_all_pairwise(model)
@@ -54,12 +55,13 @@ class TestAnalyzeBreakdown(unittest.TestCase):
     def test_check_geweke(self):
         raise NotImplementedError
 
+    @unittest.skip("Not implemented")
     def test_group_cond_diff(self):
         for model in self.models:
             if model.is_group_model:
                 if model.depends:
                     (name, cond) = model.depends.items()[0]
-                    tags = model.params_dict[name].group_nodes.keys()[:2]
+                    tags = model.nodes_db[name].group_nodes.keys()[:2]
                 ka.group_cond_diff(model,name, *tags)
 
     def test_post_pred_check(self):
