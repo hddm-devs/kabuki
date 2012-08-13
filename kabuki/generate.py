@@ -3,7 +3,7 @@ from __future__ import division
 import numpy as np
 from copy import copy
 
-def _add_noise(params, noise=.1, exclude_params=()):
+def _add_noise(params, check_valid_func=None, bounds=None, noise=.1, exclude_params=()):
     """Add individual noise to each parameter.
 
         :Arguments:
@@ -11,6 +11,13 @@ def _add_noise(params, noise=.1, exclude_params=()):
                 Parameter names and values
 
         :Optional:
+            check_valid_func : function <default lambda x: True>
+                Function that takes as input the parameters as kwds
+                and returns True if param values are admissable.
+            bounds : dict <default={}>
+                Dict containing parameter names and
+                (lower, upper) value for valid parameter
+                range.
             noise : float <default=.1>
                 Standard deviation of random gaussian
                 variable to add to each parameter.
@@ -23,19 +30,39 @@ def _add_noise(params, noise=.1, exclude_params=()):
 
     """
 
-    params = copy(params)
+    def sample_value(param, value):
+        if np.isscalar(noise):
+            param_noise = noise
+        else:
+            param_noise = noise[param]
 
-    for param, value in params.iteritems():
-        if param not in exclude_params:
-            if np.isscalar(noise):
-                params[param] = np.random.normal(loc=value, scale=noise)
-            else:
-                if noise.has_key(param):
-                    params[param] = np.random.normal(loc=value, scale=noise[param])
-    return params
+        if param in bounds:
+            while True:
+                sampled_value = np.random.normal(loc=value, scale=param_noise)
+                if sampled_value >= bounds[param][0] and sampled_value <= bounds[param][1]:
+                    return sampled_value
+        else:
+            return np.random.normal(loc=value, scale=noise)
+
+    if bounds is None:
+        bounds = {}
+
+    if check_valid_func is None:
+        check_valid_func = lambda **params: True
+
+    # Sample parameters until accepted
+    while True:
+        params_cur = copy(params)
+
+        for param, value in params_cur.iteritems():
+            if param not in exclude_params:
+                params_cur[param] = sample_value(param, value)
+
+        if check_valid_func(**params_cur):
+            return params_cur
 
 def gen_rand_data(Stochastic, params, size=50, subjs=1, subj_noise=.1, exclude_params=(),
-                  column_name='data', seed = None):
+                  column_name='data', check_valid_func=None, bounds=None, seed=None):
     """Generate a random dataset using a user-defined random distribution.
 
     :Arguments:
@@ -62,6 +89,13 @@ def gen_rand_data(Stochastic, params, size=50, subjs=1, subj_noise=.1, exclude_p
             distribution will be the value associated with them.
         exclude_params : tuple <default ()>
             Do not add noise to these parameters.
+        check_valid_func : function <default lambda x: True>
+            Function that takes as input the parameters as kwds
+            and returns True if param values are admissable.
+        bounds : dict <default={}>
+            Dict containing parameter names and
+            (lower, upper) value for valid parameter
+            range.
         column_name : str <default='data'>
             What to name the data column.
 
@@ -94,7 +128,10 @@ def gen_rand_data(Stochastic, params, size=50, subjs=1, subj_noise=.1, exclude_p
         for subj_idx in range(subjs):
             if subjs > 1:
                 # Sample subject parameters from a normal around the specified parameters
-                subj_param = _add_noise(param, noise=subj_noise, exclude_params=exclude_params)
+                subj_param = _add_noise(param, noise=subj_noise,
+                                        check_valid_func=check_valid_func,
+                                        bounds=bounds,
+                                        exclude_params=exclude_params)
             else:
                 subj_param = param
             subj_params[condition].append(subj_param)
