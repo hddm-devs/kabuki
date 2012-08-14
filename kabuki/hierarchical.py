@@ -67,7 +67,7 @@ class Knode(object):
         row = {}
         row['knode_name'] = self.name
         row['observed'] = self.observed
-        row['stochastic'] = isinstance(node, pm.Stochastic)
+        row['stochastic'] = isinstance(node, pm.Stochastic) and not self.observed
         row['subj'] = self.subj
         row['node'] = node
         row['tag'] = self.create_tag_and_subj_idx(self.depends, uniq_elem)[0]
@@ -769,9 +769,16 @@ class Hierarchical(object):
         for node in nodes.iterrows():
             yield node
 
-    def get_subj_nodes(self, observed=False, stochastic=True):
+    def iter_stochastics(self):
+        nodes = self.get_stochastics()
+        for node in nodes.iterrows():
+            yield node
+
+    def get_stochastics(self):
+        return self.nodes_db[self.nodes_db.stochastic == True]
+
+    def get_subj_nodes(self, stochastic=True):
         select = (self.nodes_db['subj'] == True) & \
-                 (self.nodes_db['observed'] == observed) & \
                  (self.nodes_db['stochastic'] == stochastic)
 
         return self.nodes_db[select]
@@ -781,9 +788,8 @@ class Hierarchical(object):
         for node in nodes.iterrows():
             yield node
 
-    def get_group_nodes(self, observed=False, stochastic=True):
+    def get_group_nodes(self, stochastic=True):
         select = (self.nodes_db['subj'] == False) & \
-                 (self.nodes_db['observed'] == observed) & \
                  (self.nodes_db['stochastic'] == stochastic)
 
         return self.nodes_db[select]
