@@ -175,15 +175,15 @@ R_hat = gelman_rubin
 
 def check_geweke(model, assert_=True):
     # Test for convergence using geweke method
-    for param in model.group_params.itervalues():
-        geweke = np.array(pm.geweke(param))
-        if assert_:
-            assert (np.any(np.abs(geweke[:,1]) < 2)), 'Chain of %s not properly converged'%param
+    for name, param in model.iter_stochastics():
+        geweke = np.array(pm.geweke(param['node']))
+        if np.any(np.abs(geweke[:,1]) > 2):
+            msg = "Chain of %s not properly converged" % param
+            if assert_:
+                raise AssertionError(msg)
+            else:
+                print msg
             return False
-        else:
-            if np.any(np.abs(geweke[:,1]) > 2):
-                print "Chain of %s not properly converged" % param
-                return False
 
     return True
 
