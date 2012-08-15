@@ -157,15 +157,15 @@ def gelman_rubin(models):
     Input:
         models - list of models
     """
-    names = models[0].get_stochastics()
+    stochastics = models[0].get_stochastics()
     R_hat_dict = {}
-    num_samples = models[0].stoch_by_name.values()[0].trace().shape[0] # samples
+    num_samples = stochastics.node[0].trace().shape[0]
     num_chains = len(models)
-    for name  in models[0].iterstochastics():
+    for name, stochastic in stochastics.iterrows():
         # Calculate mean for each chain
         samples = np.empty((num_chains, num_samples))
         for i,model in enumerate(models):
-            samples[i,:] = model.stoch_by_name[name].trace()
+            samples[i,:] = model.nodes_db.ix[name, 'node'].trace()
 
         R_hat_dict[name] = pm.diagnostics.gelman_rubin(samples)
 
