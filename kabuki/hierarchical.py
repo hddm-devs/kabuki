@@ -3,134 +3,200 @@ from __future__ import division
 from copy import copy
 
 import numpy as np
-import numpy.lib.recfunctions as rec
+from scipy.optimize import fmin_powell
 
-try:
-    from collections import OrderedDict
-except ImportError:
-    from ordereddict import OrderedDict
+from collections import OrderedDict, defaultdict
 
+import pandas as pd
 import pymc as pm
 import warnings
 
-import kabuki
-from copy import copy, deepcopy
-
+from kabuki.utils import flatten
 
 class Knode(object):
-    def __init__(self, stoch, step_method=None, step_method_args=None, **kwargs):
-        self.stoch = stoch
-        self.step_method = step_method
-        self.args = kwargs
-        if step_method_args is None:
-            self.step_method_args = {}
+    def __init__(self, pymc_node, name, depends=(), col_name='', subj=False, hidden=False, **kwargs):
+        self.pymc_node = pymc_node
+        self.name = name
+        self.kwargs = kwargs
+        self.subj = subj
+        self.col_name = col_name
+        self.nodes = OrderedDict()
+        self.hidden = hidden
 
+        #create self.parents
+        self.parents = {}
+        for (name, value) in self.kwargs.iteritems():
+            if isinstance(value, Knode):
+                self.parents[name] = value
 
-class Parameter(object):
-    """Specify a parameter of a model.
+        # Create depends set and update based on parents' depends
+        depends = set(depends)
+        if self.subj:
+            depends.add('subj_idx')
+        depends.update(self.get_parent_depends())
 
-    :Arguments:
-        name <str>: Name of parameter.
+        self.depends = sorted(list(depends))
 
-    :Optional:
-        is_bottom_node <bool=False>: Is node at the bottom of the hierarchy (e.g. likelihoods)
-
-        subj_knode <Knode>: the Knode of the subject
-
-        group_knode <Knode>: the Knode of the group
-
-        var_knode <Knode>: the Knode of the var
-
-
-        group_label <string>: the label that the subj node gives to the group parameter
-
-        var_label <string>: the label that the subj node gives to the var parameter
-
-        transform <function> : a function which take the group and var nodes and return
-            new group and var nodes. for instance if the var node is define as a prior
-            over the standard devision and one would like to get a prior on the precision
-            then one will define lambda mu,var:(mu, var**-2).
-
-        bottom_stoch
-
-        vars <dict>: User-defined variables, can be anything you later
-            want to access.
-
-        optional <bool=False>: Only create distribution when included.
-            Otherwise, set to default value (see below).
-
-        default <float>: Default value if optional=True.
-
-        verbose <int=0>: Verbosity.
-
-        var_type <string>: type of the var node, can be one of ['std', 'precision', 'sample_size']
-    """
-
-    def __init__(self, name, is_bottom_node=False, vars=None, default=None, optional=False,
-                 subj_knode=None, group_knode=None, var_knode=None,
-                 group_label=None, var_label=None, var_type=None,
-                 transform=None, share_var=False, use_spx=False, verbose=0):
-
-        for (attr, value) in locals().iteritems():
-            setattr(self, attr, value)
-
-        self.knodes = {'group': group_knode, 'var': var_knode, 'subj': subj_knode}
-
-        if self.optional and self.default is None:
-            raise ValueError("Optional parameters have to have a default value.")
-
-        self.group_nodes = OrderedDict()
-        self.var_nodes = OrderedDict()
-        self.subj_nodes = OrderedDict()
-
-        # Pointers that get overwritten
-        self.group = None
-        self.tag = None
-        self.data = None
-        self.idx = None
-
-    def reset(self):
-        self.group = None
-        self.tag = None
-        self.data = None
-        self.idx = None
-
-    def get_full_name(self):
-        if self.idx is not None:
-            if self.tag is not None:
-                return '%s%s%i'%(self.name, self.tag, self.idx)
-            else:
-                return '%s%i'%(self.name, self.idx)
-        else:
-            if self.tag is not None:
-                return '%s%s'%(self.name, self.tag)
-            else:
-                return self.name
-
-    full_name = property(get_full_name)
+        self.observed = 'observed' in kwargs
 
     def __repr__(self):
-        return object.__repr__(self).replace(' object ', " '%s' "%self.name)
+        return self.name
 
+    def set_data(self, data):
+        self.data = data
 
-    def var_func(self, values):
-        """ applay the varinace node func (according to var type) on values"""
-        if self.var_type == 'std':
-            return np.std(values)
+    def get_parent_depends(self):
+        """returns the depends of the parents"""
+        union_parent_depends = set()
+        for name, parent in self.parents.iteritems():
+            union_parent_depends.update(set(parent.depends))
+        return union_parent_depends
 
-        elif self.var_type == 'var':
-            return np.std(values) ** 2
+    def init_nodes_db(self):
+        data_col_names = list(self.data.columns)
+        node_descriptors = ['knode_name', 'stochastic', 'observed', 'subj', 'node', 'tag', 'depends', 'hidden']
+        stats = ['mean', 'std', '2.5q', '25q', '50q', '75q', '97.5q', 'mc err']
 
-        elif self.var_type == 'precision':
-            return np.std(values) ** -2
+        columns = node_descriptors + data_col_names + stats
 
-        elif self.var_type == 'sample_size':
-            v = np.var(values)
-            m = np.mean(values)
-            return (m * (1 - m)) / v - 1
+        # create central dataframe
+        self.nodes_db = pd.DataFrame(columns=columns)
 
+    def append_node_to_db(self, node, uniq_elem):
+        #create db entry for knode
+        row = {}
+        row['knode_name'] = self.name
+        row['observed'] = self.observed
+        row['stochastic'] = isinstance(node, pm.Stochastic) and not self.observed
+        row['subj'] = self.subj
+        row['node'] = node
+        row['tag'] = self.create_tag_and_subj_idx(self.depends, uniq_elem)[0]
+        row['depends'] = self.depends
+        row['hidden'] = self.hidden
+
+        row = pd.DataFrame(data=[row], columns=self.nodes_db.columns, index=[node.__name__])
+
+        for dep, elem in zip(self.depends, uniq_elem):
+            row[dep] = elem
+
+        self.nodes_db = self.nodes_db.append(row)
+
+    def create(self):
+        """create the pymc nodes"""
+
+        self.init_nodes_db()
+
+        #group data
+        if len(self.depends) == 0:
+            grouped = [((), self.data)]
         else:
-            raise ValueError, "unknown var_type"
+            grouped = self.data.groupby(self.depends)
+
+        #create all the knodes
+        for uniq_elem, grouped_data in grouped:
+
+            if not isinstance(uniq_elem, tuple):
+                uniq_elem = (uniq_elem,)
+
+            # create new kwargs to pass to the new pymc node
+            kwargs = self.kwargs.copy()
+
+            # update kwarg with the right parent
+            for name, parent in self.parents.iteritems():
+                kwargs[name] = parent.get_node(self.depends, uniq_elem)
+
+            #get node name
+            tag, subj_idx = self.create_tag_and_subj_idx(self.depends, uniq_elem)
+            node_name = self.create_node_name(tag, subj_idx=subj_idx)
+
+            #get value for observed node
+            if self.observed:
+                kwargs['value'] = grouped_data[self.col_name].values
+
+            # Deterministic nodes require a parent argument that is a
+            # dict mapping parent names to parent nodes. Knode wraps
+            # this; so here we have to fish out the parent nodes from
+            # kwargs, put them into a parent dict and put that back
+            # into kwargs, which will make pm.Determinstic() get a
+            # parent dict as an argument.
+            if self.pymc_node is pm.Deterministic:
+                parents_dict = {}
+                for name, parent in self.parents.iteritems():
+                    parents_dict[name] = parent.get_node(self.depends, uniq_elem)
+                    kwargs.pop(name)
+                kwargs['parents'] = parents_dict
+
+
+            # Deterministic nodes require a doc kwarg, we don't really
+            # need that so if its not supplied, just use the name
+            if self.pymc_node is pm.Deterministic and 'doc' not in kwargs:
+                kwargs['doc'] = node_name
+
+            #actually create the node
+            node = self.pymc_node(name=node_name, **kwargs)
+
+            self.nodes[uniq_elem] = node
+
+            self.append_node_to_db(node, uniq_elem)
+
+
+    def create_tag_and_subj_idx(self, cols, uniq_elem):
+        uniq_elem = pd.Series(uniq_elem, index=cols)
+
+        if 'subj_idx' in cols:
+            subj_idx = uniq_elem['subj_idx']
+            tag = uniq_elem.drop(['subj_idx']).values
+        else:
+            tag = uniq_elem.values
+            subj_idx = None
+
+        return tuple(tag), subj_idx
+
+
+    def create_node_name(self, tag, subj_idx=None):
+        # construct string that will become the node name
+        s = self.name
+        if len(tag) > 0:
+            elems_str = '.'.join([str(elem) for elem in tag])
+            s += "({elems})".format(elems=elems_str)
+        if subj_idx is not None:
+            s += ".{subj_idx}".format(subj_idx=subj_idx)
+
+        return s
+
+    def get_node(self, cols, elems):
+        """Return the node that depends on the same elements.
+
+        Called by the child to receive specific parent node.
+
+        :Arguments:
+            col_to_elem : dict
+                Maps column names to elements.
+                e.g. {'col1': 'elem1', 'col2': 'elem2', 'col3': 'elem3'}
+        """
+
+        col_to_elem = {}
+        for col, elem in zip(cols, elems):
+            col_to_elem[col] = elem
+
+        # Find the column names that overlap with the ones we have
+        overlapping_cols = intersect(cols, self.depends)
+
+        # Create new tag for the specific elements we are looking for (that overlap)
+        deps_on_elems = tuple([col_to_elem[col] for col in overlapping_cols])
+
+        return self.nodes[deps_on_elems]
+
+def intersect(t1, t2):
+    # Preserves order, unlike set.
+    return tuple([i for i in t2 if i in t1])
+
+def test_subset_tuple():
+    assert intersect(('a', 'b' , 'c'), ('a',)) == ('a',)
+    assert intersect(('a', 'b' , 'c'), ('a', 'b')) == ('a', 'b')
+    assert intersect(('a', 'b' , 'c'), ('a', 'c')) == ('a', 'c')
+    assert intersect(('a', 'b' , 'c'), ('b', 'c')) == ('b', 'c')
+    assert intersect(('c', 'b', 'a'), ('b', 'c')) == ('b', 'c')
 
 
 class Hierarchical(object):
@@ -183,28 +249,6 @@ class Hierarchical(object):
 
         plot_var : bool
              Plot group variability parameters
-             (i.e. variance of Normal distribution.)
-
-        replace_params : list of Parameters
-            User defined parameters to replace the default ones.
-
-        update_params : dictionary that holds dictionaries
-            User defined parameters that to update files in the default ones.
-            the keys of the dictionary should be the names of the parameters that
-            one wants to update. The values are another dictionary with keys for the
-            attributes the will be updated to the associated values.
-            e.g., to change parameter x's group_step_method to Metropolis
-            one should pass the following
-            {'x' : {'group_step_method': Metropolis}}
-
-
-    :Note:
-        This class must be inherited. The child class must provide
-        the following functions:
-            * get_bottom_node(param, params): Return distribution
-                  for nodes at the bottom of the hierarchy param (e.g. the model
-                  likelihood). params contains the associated model
-                  parameters.
 
         In addition, the variable self.params must be defined as a
         list of Paramater().
@@ -212,58 +256,38 @@ class Hierarchical(object):
     """
 
     def __init__(self, data, is_group_model=None, depends_on=None, trace_subjs=True,
-                 plot_subjs=False, plot_var=False, include=(), replace_params=None,
-                 update_params=None, overwrite_data_idx=False):
-        # Init
-        self.include = set(include)
+                 plot_subjs=False, plot_var=False):
 
-        self.nodes = {}
+        # Init
+        self.plot_subjs = plot_subjs
+
         self.mc = None
 
-        # Add data_idx field to data. Since we are restructuring the
-        # data, this provides a means of getting the data out of
-        # kabuki and sorting to according to data_idx to get the
-        # original order.
-        #create data_idx field if needed
-        if ('data_idx' in data.dtype.names) and not overwrite_data_idx:
-            data_idx_msg = """
-            A field named data_idx was found in the data file, please change it.
-            Alternatively, you can overwrite this field by setting the overwrite_data_idx
-            argument to True"""
-            raise ValueError, data_idx_msg
-
-        elif ('data_idx' not in data.dtype.names):
-            new_dtype = data.dtype.descr + [('data_idx', '<i8')]
-
-        else:
-            new_dtype = data.dtype.descr
-
-        #copy data
-        new_data = np.empty(data.shape, dtype=new_dtype)
-        for field in data.dtype.fields:
-            new_data[field] = data[field]
-        new_data['data_idx'] = np.arange(len(data))
-        data = new_data
-        self.data = data
+        self.data = pd.DataFrame(data)
 
         if not depends_on:
-            self.depends_on = {}
+            depends_on = {}
         else:
             # Support for supplying columns as a single string
             # -> transform to list
             for key in depends_on:
-                if type(depends_on[key]) is str:
+                if isinstance(depends_on[key], str):
                     depends_on[key] = [depends_on[key]]
             # Check if column names exist in data
             for depend_on in depends_on.itervalues():
                 for elem in depend_on:
-                    if elem not in self.data.dtype.names:
+                    if elem not in self.data.columns:
                         raise KeyError, "Column named %s not found in data." % elem
-            self.depends_on = depends_on
-        self.depends_dict = OrderedDict()
 
+
+        self.depends = defaultdict(lambda: ())
+        for key, value in depends_on.iteritems():
+            self.depends[key] = value
+
+
+        # Determine if group model
         if is_group_model is None:
-            if 'subj_idx' in data.dtype.names:
+            if 'subj_idx' in self.data.columns:
                 if len(np.unique(data['subj_idx'])) != 1:
                     self.is_group_model = True
                 else:
@@ -284,163 +308,25 @@ class Hierarchical(object):
             self._num_subjs = self._subjs.shape[0]
         else:
             self._num_subjs = 1
+
         self.num_subjs = self._num_subjs
 
-        self._init_params(replace_params, update_params, trace_subjs, plot_subjs, plot_var)
+        # create knodes (does not build according pymc nodes)
+        self.knodes = self.create_knodes()
+
+        #add data to knodes
+        for knode in self.knodes:
+            knode.set_data(self.data)
+
+        # constructs pymc nodes etc and connects them appropriately
+        self.create_model()
 
 
-
-    def _init_params(self, replace_params, update_params, trace_subjs, plot_subjs, plot_var):
-        """initialize self.params"""
-
-       #set Parameters
-        self.params = self.create_params()
-        if replace_params == None:
-            replace_params = ()
-
-        #change the default parametrs
-        self._change_default_params(replace_params, update_params)
-
-        for param in self.params:
-            #set has_x_node
-            param.has_group_nodes = (param.group_knode is not None)
-            param.has_var_nodes = (param.var_knode is not None)
-            param.has_subj_nodes = (param.subj_knode is not None)
-
-            #set other attributes
-            if param.is_bottom_node:
-                param.has_subj_nodes = True
-                continue
-            if not trace_subjs and param.has_subj_nodes:
-                param.subj_knode.args['trace'] = False
-            if not plot_subjs and param.has_subj_nodes:
-                param.subj_knode.args['plot'] = False
-            if not plot_var and param.has_var_nodes:
-                param.var_knode.args['plot'] = False
-
-        #set params_dict
-        self.params_dict = {}
-        for param in self.params:
-            self.params_dict[param.name] = param
+    def create_knodes(self):
+        raise NotImplementedError("create_knodes has to be overwritten")
 
 
-
-    def _change_default_params(self, replace_params, update_params):
-        """replace/update parameters with user defined parameters"""
-        #replace params
-        if type(replace_params)==Parameter:
-            replace_params = [replace_params]
-        for new_param in replace_params:
-            for i in range(len(self.params)):
-                if self.params[i].name == new_param.name:
-                    self.params[i] = new_param
-
-        #update params
-        if update_params == None:
-            return
-
-        for (param_name, dict) in update_params.iteritems():
-            found_param = False
-            for i in range(len(self.params)):
-                if self.params[i].name == param_name:
-                    for (key, new_value) in dict.iteritems():
-                        if hasattr(self.params[i], key):
-                            setattr(self.params[i], key, new_value)
-                        else:
-                            raise ValueError, "An invalid key (%s) was found in update_params for Parameter %s" % (key, param_name)
-                    found_param = True
-                    break
-            if not found_param:
-                raise ValueError, "An invalid parameter (%s) was found in update_params" % (param_name)
-
-
-    def _get_data_depend(self):
-        """Partition data according to self.depends_on.
-
-        :Returns:
-            List of tuples with the data, the corresponding parameter
-            distribution and the parameter name.
-
-        """
-
-        params = {} # use subj parameters to feed into model
-        # Create new params dict and copy over nodes
-        for name, param in self.params_include.iteritems():
-            # Bottom nodes are created later
-            if name in self.depends_on or param.is_bottom_node:
-                continue
-            if self.is_group_model and (param.has_subj_nodes):
-                params[name] = param.subj_nodes['']
-            else:
-                params[name] = param.group_nodes['']
-
-        depends_on = copy(self.depends_on)
-
-        # Make call to recursive function that does the partitioning
-        data_dep = self._get_data_depend_rec(self.data, depends_on, params, [])
-
-        return data_dep
-
-    def _get_data_depend_rec(self, data, depends_on, params, dep_name, param=None):
-        """Recursive function to partition data and params according
-        to depends_on.
-
-        """
-
-        # Unfortunately, this function is quite complex as it
-        # recursively parcels the data.
-
-        if len(depends_on) != 0: # If depends are present
-            data_params = []
-            # Get first param from depends_on
-            param_name = depends_on.keys()[0]
-            col_name = depends_on.pop(param_name) # Take out param
-            depend_elements = np.unique(data[col_name])
-            # Loop through unique elements
-            for depend_element in depend_elements:
-                # Append dependent element name.
-                dep_name.append(depend_element)
-                # Extract rows containing unique element
-                data_dep = data[data[col_name] == depend_element]
-
-                # Add a key that is only the col_name that links to
-                # the correct dependent nodes. This is the central
-                # trick so that later on the get_bottom_node can use
-                # params[col_name] and the bottm node will get linked to
-                # the correct nodes automatically.
-                param = self.params_include[param_name]
-
-                # Add the node
-                if self.is_group_model and param.has_subj_nodes:
-                    params[param_name] = param.subj_nodes[str(depend_element)]
-                else:
-                    params[param_name] = param.group_nodes[str(depend_element)]
-                # Recursive call with one less dependency and the selected data.
-                data_param = self._get_data_depend_rec(data_dep,
-                                                       depends_on=copy(depends_on),
-                                                       params=copy(params),
-                                                       dep_name=copy(dep_name),
-                                                       param=param)
-                data_params += data_param
-                # Remove last item (otherwise we would always keep
-                # adding the dep elems of in one column)
-                dep_name.pop()
-            return data_params
-
-        else: # Data does not depend on anything (anymore)
-
-            #create_
-            if len(dep_name) != 0:
-                if len(dep_name) == 1:
-                    dep_name_str = str(dep_name[0])
-                else:
-                    dep_name_str = str(dep_name)
-            else:
-                dep_name_str = ''
-
-            return [(data, params, dep_name, dep_name_str)]
-
-    def create_nodes(self, max_retries=8):
+    def create_model(self, max_retries=8):
         """Set group level distributions. One distribution for each
         parameter.
 
@@ -449,113 +335,30 @@ class Hierarchical(object):
                 How often to retry when model creation
                 failed (due to bad starting values).
         """
-        # TODO: max_retries is causing bugs, so it was commented out.
-        #     we need to delete the nodes that are created using _create before the next retry.
-        #     I would like to check if we actually need this option
-        # TW: We definitely need it, model creation fails all the time. Wouldn't it be enough
-        #     to just delete all the nodes then?
 
         def _create():
-            # Initialize parameter dicts.
-            self.group_nodes = OrderedDict()
-            self.var_nodes = OrderedDict()
-            self.subj_nodes = OrderedDict()
-
-            for name, param in self.params_include.iteritems():
-                # Bottom nodes are created elsewhere
-                if param.is_bottom_node:
-                    continue
-                # Check if parameter depends on data
-                if name in self.depends_on.keys():
-                    self._set_dependent_param(param)
-                else:
-                    self._set_independet_param(param)
-
-            # Init bottom nodes
-            for param in self.params_include.itervalues():
-                if not param.is_bottom_node:
-                    continue
-                self._set_bottom_nodes(param, init=True)
-
-            # Create bottom nodes
-            for param in self.params_include.itervalues():
-                if not param.is_bottom_node:
-                    continue
-                self._set_bottom_nodes(param, init=False)
-
-        # Include all defined parameters by default.
-        self.non_optional_params = [param.name for param in self.params if not param.optional]
-
-        # Create params dictionary
-        self.params_dict = OrderedDict()
-        for param in self.params:
-            self.params_dict[param.name] = param
-
-        self.params_include = OrderedDict()
-        for param in self.params:
-            if param.name in self.include or not param.optional:
-                self.params_include[param.name] = param
+            for knode in self.knodes:
+                knode.create()
 
         for tries in range(max_retries):
             try:
                 _create()
-            except (pm.ZeroProbability, ValueError) as e:
+            except (pm.ZeroProbability, ValueError):
                 continue
             break
         else:
             print "After %f retries, still no good fit found." %(tries)
             _create()
-        #_create()
 
+        # create node container
+        self.create_nodes_db()
 
-        # Create model dictionaries
-        self.nodes = {}
-        self.group_nodes = {}
-        self.var_nodes = {}
-        self.subj_nodes = {}
-        self.observed_nodes = {}
+        # Check whether all user specified column names (via depends_on) where used by the depends_on.
+        assert set(flatten(self.depends.values())).issubset(set(flatten(self.nodes_db.depends))), "One of the column names specified via depends_on was not picked up. Check whether you specified the correct parameter value."
 
-        #dictionary of stochastics. the keys are names of single nodes
-        self.stoch_by_name = {}
-        #dictionary of stochastics. the keys are (param_name, h_type, tag, idx)
-        #htype (string)= 'g':group, 'v':var, 's':subject
-        #idx (int) - for subject nodes it's the subject idx, for other nodes its -1
-        self.stoch_by_tuple = {}
+    def create_nodes_db(self):
+        self.nodes_db = pd.concat([knode.nodes_db for knode in self.knodes])
 
-        for name, param in self.params_include.iteritems():
-            for tag, node in param.group_nodes.iteritems():
-                self.nodes[name+tag+'_group'] = node
-                self.group_nodes[name+tag] = node
-                self.stoch_by_tuple[(name,'g',tag,-1)] = node
-                self.stoch_by_name[node.__name__] = node
-            for tag, node in param.var_nodes.iteritems():
-                self.nodes[name+tag+'_var'] = node
-                self.var_nodes[name+tag] = node
-                self.stoch_by_tuple[(name,'v',tag,-1)] = node
-                self.stoch_by_name[node.__name__] = node
-            for tag, nodes in param.subj_nodes.iteritems():
-                self.nodes[name+tag+'_subj'] = nodes
-                if param.is_bottom_node:
-                    self.observed_nodes[name+tag] = nodes
-                else:
-                    self.subj_nodes[name+tag] = nodes
-                    for (idx, node) in enumerate(nodes):
-                        self.stoch_by_tuple[(name,'s',tag,idx)] = node
-                        self.stoch_by_name[node.__name__] = node
-
-        #update knodes
-        for name, param in self.params_include.iteritems():
-            if param.is_bottom_node:
-                continue
-            param.knodes['group'].nodes = param.group_nodes
-            #try to update var knodes and subj knodes if they exist
-            try:
-                param.knodes['var'].nodes = param.var_nodes
-                param.knodes['subj'].nodes = param.subj_nodes
-            except AttributeError:
-                pass
-
-        return self.nodes
 
     def map(self, runs=2, warn_crit=5, method='fmin_powell', **kwargs):
         """
@@ -575,21 +378,26 @@ class Hierarchical(object):
 
         """
 
+        from operator import attrgetter
+
+        # I.S: when using MAP with Hierarchical model the subjects nodes should be
+        # integrated out before the computation of the MAP (see Pinheiro JC, Bates DM., 1995, 2000).
+        # since we are not integrating we get a point estimation for each
+        # subject which is not what we want.
         if self.is_group_model:
             raise NotImplementedError("""Sorry, This method is not yet implemented for group models.
             you might consider using the subj_by_subj_map_init method""")
 
-        from operator import attrgetter
 
         maps = []
 
         for i in range(runs):
             # (re)create nodes to get new initival values.
             #nodes are not created for the first iteration if they already exist
-            if (i > 0) or (not self.nodes):
-                self.create_nodes()
+            if i != 0:
+                self.create_model()
 
-            m = pm.MAP(self.nodes)
+            m = pm.MAP(self.nodes_db.node.values)
             m.fit(method, **kwargs)
             print m.logp
             maps.append(m)
@@ -610,23 +418,11 @@ class Hierarchical(object):
             if isinstance(node, pm.ArrayContainer):
                 for i,subj_node in enumerate(node):
                     if isinstance(node, pm.Node) and not subj_node.observed:
-                        self.nodes[name][i].value = subj_node.value
+                        self.param_container.nodes[name][i].value = subj_node.value
             elif isinstance(node, pm.Node) and not node.observed:
-                self.nodes[name].value = node.value
+                self.param_container.nodes[name].value = node.value
 
         return max_map
-
-    def _assign_spx(self, param, loc, scale):
-        """assign spx step method to param"""
-        self.mc.use_step_method(kabuki.steps.SPXcentered,
-                                loc=loc,
-                                scale=scale,
-                                loc_step_method=param.group_knode.step_method,
-                                loc_step_method_args=param.group_knode.step_method_args,
-                                scale_step_method=param.var_knode.step_method,
-                                scale_step_method_args=param.var_knode.step_method_args,
-                                beta_step_method=param.subj_knode.step_method,
-                                beta_step_method_args=param.subj_knode.step_method_args)
 
 
     def mcmc(self, assign_step_methods=True, *args, **kwargs):
@@ -639,56 +435,30 @@ class Hierarchical(object):
             The rest of the arguments are forwards to pymc.MCMC
         """
 
-        if not self.nodes:
-            self.create_nodes()
+        self.mc = pm.MCMC(self.nodes_db.node.values, *args, **kwargs)
 
-        nodes ={}
-        for (name, value) in self.nodes.iteritems():
-            if value != None:
-                nodes[name] = value
-
-        self.mc = pm.MCMC(nodes, *args, **kwargs)
-
-        if assign_step_methods and self.is_group_model:
-            self.mcmc_step_methods()
+        self.pre_sample()
 
         return self.mc
 
+    def pre_sample(self):
+        pass
 
-    def mcmc_step_methods(self):
 
-        #assign step methods
-        for param in self.params_include.itervalues():
-            #assign SPX when share_var
-            if param.use_spx and param.share_var:
-                loc = param.group_nodes.values()
-                scale = param.var_nodes.values()[0]
-                self._assign_spx(param, loc, scale)
+    def _assign_spx(self, param, loc, scale):
+        """assign spx step method to param"""
+        # TODO Imri
+        # self.mc.use_step_method(kabuki.steps.SPXcentered,
+        #                         loc=loc,
+        #                         scale=scale,
+        #                         loc_step_method=param.group_knode.step_method,
+        #                         loc_step_method_args=param.group_knode.step_method_args,
+        #                         scale_step_method=param.var_knode.step_method,
+        #                         scale_step_method_args=param.var_knode.step_method_args,
+        #                         beta_step_method=param.subj_knode.step_method,
+        #                         beta_step_method_args=param.subj_knode.step_method_args)
+        pass
 
-            #assign SPX when var is not shared
-            elif param.use_spx and not param.share_var:
-                for (tag, node) in param.group_nodes.iteritems():
-                    loc=param.group_nodes[tag]
-                    scale=param.var_nodes[tag]
-                    self._assign_spx(param, loc, scale)
-
-            #assign other step methods
-            else:
-                for knode in param.knodes.itervalues():
-                    #check if we need to assign step method
-                    if (knode is None) or knode.step_method is None:
-                        continue
-                    #assign it to all the nodes in knode
-                    for node in knode.nodes.itervalues():
-                        step = knode.step_method
-                        args = knode.step_method_args
-                        if node is None:
-                            continue
-                        #check if it is a single node, otherwise it's a node array
-                        elif isinstance(node, pm.Stochastic):
-                            self.mc.use_step_method(step, node, **args)
-                        else:
-                            [self.mc.use_step_method(step, t_node, **args) for t_node in node]
 
     def sample(self, *args, **kwargs):
         """Sample from posterior.
@@ -710,14 +480,15 @@ class Hierarchical(object):
         # sample
         self.mc.sample(*args, **kwargs)
 
+        return self.mc
+
     def dic_info(self):
         """returns information about the model DIC"""
 
         info = {}
         info['DIC'] = self.mc.dic
-        info['avg deviance'] = np.mean(self.mc.db.trace('deviance')(), axis=0)
-        info['deviance avg'] = 2 * info['avg deviance'] - info['DIC']
-        info['pD'] = info['DIC'] - info['avg deviance']
+        info['deviance']  = np.mean(self.mc.db.trace('deviance')(), axis=0)
+        info['pD'] = info['DIC'] - info['deviance']
 
         return info
 
@@ -730,8 +501,7 @@ class Hierarchical(object):
         if fname is None:
             print stats_str
             print "DIC: %f" % self.mc.dic
-            print "D(avg theta): %f" % info['deviance avg']
-            print "avg D(theta): %f" % info['avg deviance']
+            print "deviance: %f" % info['deviance']
             print "pD: %f" % info['pD']
         else:
             with open(fname, 'w') as fd:
@@ -740,259 +510,31 @@ class Hierarchical(object):
                 fd.write("deviance: %f\n" % info['deviance'])
                 fd.write("pD: %f\n" % info['pD'])
 
-    def print_group_stats(self, fname=None):
-        """print statistics of group variables
-        Input (optional)
-            fname <string> - the output will be written to a file named fname
-        """
-        stats_str = kabuki.analyze.gen_group_stats(self.stats())
-        self._output_stats(stats_str, fname)
 
-    def print_stats(self, fname=None):
+    def print_stats(self, fname=None, print_hidden=False, **kwargs):
         """print statistics of all variables
         Input (optional)
             fname <string> - the output will be written to a file named fname
+            print_hidden <bool>  - print statistics of hidden nodes
         """
-        stats_str = kabuki.analyze.gen_stats(self.stats())
-        self._output_stats(stats_str, fname)
+        self.append_stats_to_nodes_db()
 
-    def _set_dependent_param(self, param):
-        """Set parameter that depends on data.
+        sliced_db = self.nodes_db.copy()
 
-        :Arguments:
-            param_name : string
-                Name of parameter that depends on data for
-                which to set distributions.
-
-        """
-
-        # Get column names for provided param_name
-        depends_on = self.depends_on[param.name]
-
-        # Get unique elements from the columns
-        data_dep = self.data[depends_on]
-        uniq_data_dep = np.unique(data_dep)
-
-        #update depends_dict
-        self.depends_dict[param.name] = uniq_data_dep
-
-        # Loop through unique elements
-        for uniq_date in uniq_data_dep:
-            # Select data
-            data_dep_select = self.data[(data_dep == uniq_date)]
-
-            # Create name for parameter
-            tag = str(uniq_date)
-
-            # Create parameter distribution from factory
-            param.tag = tag
-            param.data = data_dep_select
-            param.group_nodes[tag] = self.create_pymc_node(param.group_knode, param.full_name)
-            param.reset()
-
-            if self.is_group_model and param.has_subj_nodes:
-                # Create appropriate subj parameter
-                self._set_subj_nodes(param, tag, data_dep_select)
-
-        return self
-
-    def _set_independet_param(self, param):
-        """Set parameter that does _not_ depend on data.
-
-        :Arguments:
-            param_name : string
-                Name of parameter.
-
-        """
-
-        # Parameter does not depend on data
-        # Set group parameter
-        param.tag = ''
-        param.group_nodes[''] = self.create_pymc_node(param.group_knode, param.full_name)
-        param.reset()
-
-        if self.is_group_model and param.has_subj_nodes:
-            self._set_subj_nodes(param, '', self.data)
-
-        return self
-
-    def _set_subj_nodes(self, param, tag, data):
-        """Set nodes with a parent.
-
-        :Arguments:
-            param_name : string
-                Name of parameter.
-            tag : string
-                Element name.
-            data : numpy.recarray
-                Part of the data the parameter
-                depends on.
-
-        """
-        # Generate subj variability parameter var
-
-        #Gen variance parameter
-        param.data = data
-        if param.share_var:
-            param.tag = 'var'
+        # only print stats of stochastic, non-observed nodes
+        if not print_hidden:
+            sliced_db = sliced_db[(sliced_db['observed'] == False) & (sliced_db['hidden'] == False)]
         else:
-            param.tag = 'var' + tag
+            sliced_db = sliced_db[(sliced_db['observed'] == False)]
 
-        #if param does not share variance or this is the first node created
-        # then we create the node
-        if (len(param.var_nodes) == 0) or (not param.share_var):
-            param.var_nodes[tag] = self.create_pymc_node(param.var_knode, param.full_name)
-        else: #we copy the first node
-            param.var_nodes[tag] = param.var_nodes.values()[0]
+        stat_cols  = ['mean', 'std', '2.5q', '25q', '50q', '75q', '97.5q', 'mc err']
 
-        #Create subj parameters
-        param.reset()
-        param.tag = tag
+        for node_property, value in kwargs.iteritems():
+            sliced_db = sliced_db[sliced_db[node_property] == value]
 
-        #first set parents
-        param.group = param.group_nodes[tag]
-        param.var = param.var_nodes[tag]
+        sliced_db = sliced_db[stat_cols]
 
-        if param.transform == None:
-            group_node = param.group
-            var_node = param.var
-        else:
-            group_node, var_node = param.transform(param.group, param.var)
-
-        #set subj_stoch_args according to parnets labels
-        if param.group_label != None:
-            param.subj_knode.args[param.group_label] = group_node
-        if param.var_label != None:
-            param.subj_knode.args[param.var_label] = var_node
-
-        # Init nodes
-        param.subj_nodes[tag] = np.empty(self._num_subjs, dtype=object)
-        # now create subj parameter distribution for each subject
-        for subj_idx,subj in enumerate(self._subjs):
-            data_subj = data[data['subj_idx']==subj]
-            param.data = data_subj
-            param.idx = subj_idx
-            param.subj_nodes[tag][subj_idx] = self.create_pymc_node(param.subj_knode, param.full_name)
-
-        param.reset()
-        return self
-
-    def _set_bottom_nodes(self, param, init=False):
-        """Set parameter node that has no parent.
-
-        :Arguments:
-            param_name : string
-                Name of parameter.
-
-        :Optional:
-            init : bool
-                Initialize parameter.
-
-        """
-        # Divide data and parameter distributions according to self.depends_on
-        data_dep = self._get_data_depend()
-
-        # Loop through parceled data and params and create an observed stochastic
-        for i, (data, params_dep, dep_name_list, dep_name_str) in enumerate(data_dep):
-            dep_name = dep_name_str
-            if init:
-                if self.is_group_model and param.has_subj_nodes:
-                    param.subj_nodes[dep_name] = np.empty(self._num_subjs, dtype=object)
-                else:
-                    param.subj_nodes[dep_name] = None
-            else:
-                self._create_bottom_node(param, data, params_dep, dep_name, i)
-
-        return self
-
-    def _create_bottom_node(self, param, data, params, dep_name, idx):
-        """Create parameter node object which has no parent.
-
-        :Note:
-            Called by self._set_bottom_node().
-
-        :Arguments:
-            param_name : string
-                Name of parameter.
-            data : numpy.recarray
-                Data on which parameter depends on.
-            params : list
-                List of parameters the node depends on.
-            dep_name : str
-                Element name the node depends on.
-            idx : int
-                Subject index.
-
-        """
-
-        if self.is_group_model:
-            for i, subj in enumerate(self._subjs):
-                # Select data belonging to subj
-                data_subj = data[data['subj_idx'] == subj]
-                # Skip if subject was not tested on this condition
-                if len(data_subj) == 0:
-                    continue
-
-                ########################################
-                # Unfortunately, this is a little hairy since we have
-                # to find the nodes of the right subject and the right
-                # condition.
-
-                # Here we'll store all nodes belonging to the subject
-                selected_subj_nodes = {}
-                # Create new params dict and copy over nodes
-                for selected_param in self.params_include.itervalues():
-                    # Since groupless nodes are not created in this function we
-                    # have to search for the correct node and include it in
-                    # the params.
-                    if not selected_param.has_subj_nodes:
-                        if selected_param.subj_nodes.has_key(dep_name):
-                            selected_subj_nodes[selected_param.name] = selected_param.group_nodes[dep_name]
-                        else:
-                            selected_subj_nodes[selected_param.name] = params[selected_param.name]
-                    else:
-                        if selected_param.subj_nodes.has_key(dep_name):
-                            selected_subj_nodes[selected_param.name] = selected_param.subj_nodes[dep_name][i]
-                        else:
-                            selected_subj_nodes[selected_param.name] = params[selected_param.name][i]
-
-                # Set up param
-                param.tag = dep_name
-                param.idx = i
-                param.data = data_subj
-                # Call to the user-defined function!
-                bottom_node = self.get_bottom_node(param, selected_subj_nodes)
-                if bottom_node is not None and len(bottom_node.value) == 0:
-                    print "Warning! Bottom node %s is not linked to data. Replacing with None." % param.full_name
-                    param.subj_nodes[dep_name][i] = None
-                else:
-                    param.subj_nodes[dep_name][i] = bottom_node
-                param.reset()
-        else: # Do not use subj params, but group ones
-            # Since group nodes are not created in this function we
-            # have to search for the correct node and include it in
-            # the params
-            for selected_param in self.params_include.itervalues():
-                if selected_param.subj_nodes.has_key(dep_name):
-                    params[selected_param.name] = selected_param.subj_nodes[dep_name]
-
-            if len(data) == 0:
-                # If no data is present, do not create node.
-                param.subj_nodes[dep_name][i] = None
-            else:
-                param.tag = dep_name
-                param.data = data
-                # Call to user-defined function
-                bottom_node = self.get_bottom_node(param, params)
-                if bottom_node is not None and len(bottom_node.value) == 0:
-                    print "Warning! Bottom node %s is not linked to data. Replacing with None." % param.full_name
-                    param.subj_nodes[dep_name] = None
-                else:
-                    param.subj_nodes[dep_name] = bottom_node
-
-            param.reset()
-
-        return self
+        self._output_stats(sliced_db.to_string(), fname)
 
 
     def get_node(self, node_name, params):
@@ -1003,11 +545,11 @@ class Hierarchical(object):
         if node_name in self.include:
             return params[node_name]
         else:
-            assert self.params_dict[node_name].default is not None, "Default value of not-included parameter not set."
-            return self.params_dict[node_name].default
+            assert self.param_container.params_dict[node_name].default is not None, "Default value of not-included parameter not set."
+            return self.param_container.params_dict[node_name].default
 
 
-    def stats(self, *args, **kwargs):
+    def append_stats_to_nodes_db(self, *args, **kwargs):
         """
         smart call of MCMC.stats() for the model
         """
@@ -1022,16 +564,27 @@ class Hierarchical(object):
         else:
             i_chain = nchains
 
-        #compute stats
+        #see if stats have been cached for this chain
         try:
-            if self._stats_chain==i_chain:
-                return self._stats
+            if self._stats_chain == i_chain:
+                return
         except AttributeError:
             pass
+
+        #update self._stats
         self._stats = self.mc.stats(*args, **kwargs)
         self._stats_chain = i_chain
-        return self._stats
 
+        #add/overwrite stats to nodes_db
+        for name, i_stats in self._stats.iteritems():
+            self.nodes_db['mean'][name]   = i_stats['mean']
+            self.nodes_db['std'][name]    = i_stats['standard deviation']
+            self.nodes_db['2.5q'][name]   = i_stats['quantiles'][2.5]
+            self.nodes_db['25q'][name]    = i_stats['quantiles'][25]
+            self.nodes_db['50q'][name]    = i_stats['quantiles'][50]
+            self.nodes_db['75q'][name]    = i_stats['quantiles'][75]
+            self.nodes_db['97.5q'][name]  = i_stats['quantiles'][97.5]
+            self.nodes_db['mc err'][name] = i_stats['mc error']
 
 
     def load_db(self, dbname, verbose=0, db='sqlite'):
@@ -1059,7 +612,7 @@ class Hierarchical(object):
             db_loader = pm.database.txt.load
 
         # Set up model
-        if not self.nodes:
+        if not self.param_container.nodes:
             self.create_nodes()
 
         # Ignore annoying sqlite warnings
@@ -1069,7 +622,7 @@ class Hierarchical(object):
         db = db_loader(dbname)
 
         # Create mcmc instance reading from the opened database
-        self.mc = pm.MCMC(self.nodes, db=db, verbose=verbose)
+        self.mc = pm.MCMC(self.param_container.nodes, db=db, verbose=verbose)
 
         # Not sure if this does anything useful, but calling for good luck
         self.mc.restore_sampler_state()
@@ -1080,20 +633,12 @@ class Hierarchical(object):
         return self
 
 
-    def create_pymc_node(self, knode, name):
-        """Create pymc node named 'name' out of knode """
-
-        if knode is None:
-            return None
-        else:
-            return knode.stoch(name, **knode.args)
-
-    def init_from_existing_model(self, existing_model, assign_values=True, assign_step_methods=True,
+    def init_from_existing_model(self, pre_model, assign_values=True, assign_step_methods=True,
                                  match=None, **mcmc_kwargs):
         """
         initialize the value and step methods of the model using an existing model
         Input:
-            existing_model - existing mode
+            pre_model - existing mode
 
             assign_values (boolean) - should values of nodes from the existing model
                 be assigned to the new model
@@ -1107,19 +652,21 @@ class Hierarchical(object):
                 and pre_tag is a single tag or list of tags from the exisiting model that will be map
                 to the new_tag.
         """
+        # TODO Imri
+        raise NotImplementedError("TODO")
         if not self.mc:
-            self.mcmc(assign_step_methods=True, **mcmc_kwargs)
+            self.mcmc(assign_step_methods=False, **mcmc_kwargs)
 
-        pre_d = existing_model.stoch_by_tuple
+        pre_d = pre_model.param_container.stoch_by_tuple
         assigned_s = 0; assigned_v = 0
 
         #set the new nodes
-        for (key, node) in self.stoch_by_tuple.iteritems():
+        for (key, node) in self.param_container.stoch_by_tuple.iteritems():
             name, h_type, tag, idx = key
-            if name not in existing_model.params_include.keys():
+            if name not in pre_model.param_container.params:
                 continue
 
-            #if the key was found then match_nodes is the assign the old node value to the new node
+            #if the key was found then match_nodes assigns the old node value to the new node
             if pre_d.has_key(key):
                 matched_nodes = [pre_d[key]]
 
@@ -1143,16 +690,15 @@ class Hierarchical(object):
 
             #assign step method
             if assign_step_methods:
-                assigned_s += self._assign_step_methods_from_existing(node, existing_model, matched_nodes)
+                assigned_s += self._assign_step_methods_from_existing(node, pre_model, matched_nodes)
 
         print "assigned %d values (out of %d)." % (assigned_v, len(self.mc.stochastics))
         print "assigned %d step methods (out of %d)." % (assigned_s, len(self.mc.stochastics))
 
-
-    def _assign_step_methods_from_existing(self, node, existing_model, matched_nodes):
+    def _assign_step_methods_from_existing(self, node, pre_model, matched_nodes):
         """
         private funciton used by init_from_existing_model to assign a node
-        using matched_nodes from existing_model
+        using matched_nodes from pre_model
         Output:
              assigned (boolean) - step method was assigned
 
@@ -1161,13 +707,8 @@ class Hierarchical(object):
         if isinstance(matched_nodes, pm.Node):
             matched_node = [matched_nodes]
 
-        #assign step methods to the existing_model if needed.
-        # usefull when the step methods were saved in a database
-        if not hasattr(existing_model.mc, "step_methods"):
-            existing_model.mc.assign_step_methods()
-
         #find the step methods
-        steps = [existing_model.mc.step_method_dict[x][0] for x in matched_nodes]
+        steps = [pre_model.mc.step_method_dict[x][0] for x in matched_nodes]
 
         #only assign it if it's a Metropolis
         if isinstance(steps[0], pm.Metropolis):
@@ -1175,7 +716,6 @@ class Hierarchical(object):
             self.mc.use_step_method(pm.Metropolis, node, proposal_sd = pre_sd)
             assigned = True
         else:
-            kabuki.debug_here()
             assigned = False
 
         return assigned
@@ -1201,10 +741,10 @@ class Hierarchical(object):
 
             #get the nodes which will be plotted
             for param in parameters:
-                nodes = np.unique(param.group_nodes.values() + param.var_nodes.values())
+                nodes = tuple(np.unique(param.group_nodes.values() + param.var_nodes.values()))
                 if plot_subjs:
                     for nodes_array in param.subj_nodes.values():
-                        nodes = np.concatenate((nodes, nodes_array))
+                        nodes += list(nodes_array)
             #this part does the ploting
             for node in nodes:
                 plot_value = node.plot
@@ -1212,65 +752,278 @@ class Hierarchical(object):
                 pm.Matplot.plot(node, **kwargs)
                 node.plot = plot_value
 
-    def subj_by_subj_map_init(self, runs=2, verbose=1, **map_kwargs):
+
+    def get_observeds(self):
+        return self.nodes_db[self.nodes_db.observed == True]
+
+    def iter_observeds(self):
+        nodes = self.get_observeds()
+        for node in nodes.iterrows():
+            yield node
+
+    def get_non_observeds(self):
+        return self.nodes_db[self.nodes_db.observed == False]
+
+    def iter_non_observeds(self):
+        nodes = self.get_non_observeds()
+        for node in nodes.iterrows():
+            yield node
+
+    def iter_stochastics(self):
+        nodes = self.get_stochastics()
+        for node in nodes.iterrows():
+            yield node
+
+    def get_stochastics(self):
+        return self.nodes_db[self.nodes_db.stochastic == True]
+
+    def get_subj_nodes(self, stochastic=True):
+        select = (self.nodes_db['subj'] == True) & \
+                 (self.nodes_db['stochastic'] == stochastic)
+
+        return self.nodes_db[select]
+
+    def iter_subj_nodes(self, **kwargs):
+        nodes = self.get_subj_nodes(**kwargs)
+        for node in nodes.iterrows():
+            yield node
+
+    def get_group_nodes(self, stochastic=True):
+        select = (self.nodes_db['subj'] == False) & \
+                 (self.nodes_db['stochastic'] == stochastic)
+
+        return self.nodes_db[select]
+
+    def iter_group_nodes(self, **kwargs):
+        nodes = self.get_group_nodes(**kwargs)
+        for node in nodes.iterrows():
+            yield node
+
+    @property
+    def values(self):
+        return {name: node['node'].value[()] for (name, node) in self.iter_non_observeds()}
+
+    def _partial_optimize(self, optimize_nodes, evaluate_nodes):
+        """Optimize part of the model.
+
+        :Arguments:
+            nodes : iterable
+                list nodes to optimize.
         """
-        initializing nodes by finding the MAP for each subject separately
-        Input:
-            runs - number of MAP runs for each subject
-            map_kwargs - other arguments that will be passes on to the map function
+        non_observeds = [node for node in optimize_nodes if not node.observed]
 
-        Note: This function should be run prior to the nodes creation, i.e.
-        before running mcmc() or map()
+        init_vals = [node.value for node in non_observeds]
+
+        # define function to be optimized
+        def opt(values):
+            for value, node in zip(values, optimize_nodes):
+                node.value = value
+            try:
+                logp_optimize = [node.logp for node in optimize_nodes]
+                logp_evaluate = [node.logp for node in evaluate_nodes]
+                return -np.sum(logp_optimize) - np.sum(logp_evaluate)
+            except pm.ZeroProbability:
+                return np.inf
+
+        fmin_powell(opt, init_vals)
+
+    def approximate_map(self):
+        """Set model to its approximate MAP.
         """
+        ###############################
+        # In order to find the MAP of a hierarchical model one needs
+        # to integrate over the subj nodes. Since this is difficult we
+        # optimize the generations iteratively on the generation below.
 
-        # check if nodes were created. if they were it cause problems for deepcopy
-        assert (not self.nodes), "function should be used before nodes are initialized."
+        # only need this to get at the generations
+        # TODO: Find out how to get this from pymc.utils.find_generations()
+        m = pm.MCMC(self.nodes_db.node)
+        generations = m.generations
+        generations.append(self.get_observeds().node)
 
-        #init
-        subjless = {}
-        subjs = self._subjs
-        n_subjs = len(subjs)
-        empty_s_model = deepcopy(self)
-        empty_s_model.is_group_model = False
-        del empty_s_model._num_subjs, empty_s_model._subjs, empty_s_model.data
+        for i in range(len(generations)-1, 0, -1):
+            # Optimize the generation at i-1 evaluated over the generation at i
+            self._partial_optimize(generations[i-1], generations[i])
 
-        self.create_nodes()
+        #update map in nodes_db
+        self.nodes_db['map'] = np.NaN
+        for name, value in self.values.iteritems():
+            self.nodes_db['map'].ix[name] = value
 
-        # loop over subjects
-        for i_subj in range(n_subjs):
-            # create and fit single subject
-            if verbose > 0: print "*!*!* fitting subject %d *!*!*" % subjs[i_subj]
-            t_data = self.data[self.data['subj_idx'] == subjs[i_subj]]
-            t_data = rec.drop_fields(t_data, ['data_idx'])
-            s_model = deepcopy(empty_s_model)
-            s_model.data = t_data
-            s_model.map(method='fmin_powell', runs=runs, **map_kwargs)
 
-            # copy to original model
-            for (name, node) in s_model.group_nodes.iteritems():
-                #try to assign the value of the node to the original model
-                try:
-                    self.subj_nodes[name][i_subj].value = node.value
-                #if it fails it mean the param has no subj nodes
-                except KeyError:
-                    if subjless.has_key(name):
-                        subjless[name].append(node.value)
-                    else:
-                        subjless[name] = [node.value]
+    def create_family_normal(self, name, value=0, g_mu=None,
+                             g_tau=15**-2, var_lower=1e-10,
+                             var_upper=100, var_value=.1):
+        if g_mu is None:
+            g_mu = value
 
-        #set group and var nodes for params with subjs
-        for (param_name, param) in self.params_dict.iteritems():
-            #if param has subj nodes than compute group and var nodes from them
-            if param.has_subj_nodes:
-                for (tag, nodes) in param.subj_nodes.iteritems():
-                    subj_values = [x.value for x in nodes]
-                    #set group node
-                    if param.has_group_nodes:
-                        param.group_nodes[tag].value = np.mean(subj_values)
-                    #set var node
-                    if param.has_var_nodes:
-                        param.var_nodes[tag].value = param.var_func(subj_values)
+        knodes = OrderedDict()
 
-        #set group nodes of subjless nodes
-        for (name, values) in subjless.iteritems():
-            self.group_nodes[name].value = np.mean(subjless[name])
+        if self.is_group_model and name not in self.group_only_nodes:
+            g = Knode(pm.Normal, '%s' % name, mu=g_mu, tau=g_tau,
+                      value=value, depends=self.depends[name])
+            var = Knode(pm.Uniform, '%s_var' % name, lower=var_lower,
+                        upper=var_upper, value=var_value)
+            tau = Knode(pm.Deterministic, '%s_tau' % name,
+                        doc='%s_tau' % name, eval=lambda x: x**-2, x=var,
+                        plot=False, trace=False, hidden=True)
+            subj = Knode(pm.Normal, '%s_subj' % name, mu=g, tau=tau,
+                         value=value, depends=('subj_idx',),
+                         subj=True, plot=self.plot_subjs)
+            knodes['%s'%name] = g
+            knodes['%s_var'%name] = var
+            knodes['%s_tau'%name] = tau
+            knodes['%s_bottom'%name] = subj
+
+        else:
+            subj = Knode(pm.Normal, name, mu=g_mu, tau=g_tau,
+                         value=value, depends=self.depends[name])
+
+            knodes['%s_bottom'%name] = subj
+
+        return knodes
+
+
+    def create_family_trunc_normal(self, name, value=0, lower=None,
+                                   upper=None, var_lower=1e-10,
+                                   var_upper=100, var_value=.1):
+        knodes = OrderedDict()
+
+        if self.is_group_model and name not in self.group_only_nodes:
+            g = Knode(pm.Uniform, '%s' % name, lower=lower,
+                      upper=upper, value=value, depends=self.depends[name])
+            var = Knode(pm.Uniform, '%s_var' % name, lower=var_lower,
+                        upper=var_upper, value=var_value)
+            tau = Knode(pm.Deterministic, '%s_tau' % name,
+                        doc='%s_tau' % name, eval=lambda x: x**-2, x=var,
+                        plot=False, trace=False, hidden=True)
+            subj = Knode(pm.TruncatedNormal, '%s_subj' % name, mu=g,
+                         tau=tau, a=lower, b=upper, value=value,
+                         depends=('subj_idx',), subj=True, plot=self.plot_subjs)
+
+            knodes['%s'%name] = g
+            knodes['%s_var'%name] = var
+            knodes['%s_tau'%name] = tau
+            knodes['%s_bottom'%name] = subj
+
+        else:
+            subj = Knode(pm.Uniform, name, lower=lower,
+                         upper=upper, value=value,
+                         depends=self.depends[name])
+            knodes['%s_bottom'%name] = subj
+
+        return knodes
+
+
+    def create_family_invlogit(self, name, value, g_mu=None, g_tau=15**-2,
+                               var_lower=1e-10, var_upper=100, var_value=.1):
+        if g_mu is None:
+            g_mu = value
+
+        # logit transform values
+        value_trans = np.log(value) - np.log(1-value)
+        g_mu_trans = np.log(g_mu) - np.log(1-g_mu)
+
+        knodes = OrderedDict()
+
+        if self.is_group_model and name not in self.group_only_nodes:
+            g_trans = Knode(pm.Normal,
+                            '%s_trans'%name,
+                            mu=g_mu_trans,
+                            tau=g_tau,
+                            value=value_trans,
+                            depends=self.depends[name],
+                            plot=False,
+                            hidden=True
+            )
+
+            g = Knode(pm.InvLogit, name, ltheta=g_trans, plot=True,
+                      trace=True)
+
+            var = Knode(pm.Uniform, '%s_var'%name, lower=var_lower,
+                        upper=var_upper, value=var_value)
+
+            tau = Knode(pm.Deterministic, '%s_tau'%name, doc='%s_tau'
+                        % name, eval=lambda x: x**-2, x=var,
+                        plot=False, trace=False, hidden=True)
+
+            subj_trans = Knode(pm.Normal, '%s_subj_trans'%name,
+                               mu=g_trans, tau=tau, value=value_trans,
+                               depends=('subj_idx',), subj=True,
+                               plot=False, hidden=True)
+
+            subj = Knode(pm.InvLogit, '%s_subj'%name,
+                         ltheta=subj_trans, depends=('subj_idx',),
+                         plot=self.plot_subjs, trace=True, subj=True)
+
+            knodes['%s_trans'%name]      = g_trans
+            knodes['%s'%name]            = g
+            knodes['%s_var'%name]        = var
+            knodes['%s_tau'%name]        = tau
+
+            knodes['%s_subj_trans'%name] = subj_trans
+            knodes['%s_bottom'%name]     = subj
+
+        else:
+            g_trans = Knode(pm.Normal, '%s_trans'%name, mu=g_mu,
+                            tau=g_tau, value=value_trans,
+                            depends=self.depends[name], plot=False, hidden=True)
+
+            g = Knode(pm.InvLogit, '%s'%name, ltheta=g_trans, plot=True,
+                      trace=True )
+
+            knodes['%s_trans'%name] = g_trans
+            knodes['%s_bottom'%name] = g
+
+        return knodes
+
+    def create_family_exp(self, name, value=0, g_mu=None,
+                          g_tau=15**-2, var_lower=1e-10, var_upper=100, var_value=.1):
+        if g_mu is None:
+            g_mu = value
+
+        value_trans = np.log(value)
+        g_mu_trans = np.log(g_mu)
+
+        knodes = OrderedDict()
+        if self.is_group_model and name not in self.group_only_nodes:
+            g_trans = Knode(pm.Normal, '%s_trans' % name, mu=g_mu_trans,
+                            tau=g_tau, value=value_trans,
+                            depends=self.depends[name], plot=False, hidden=True)
+
+            g = Knode(pm.Deterministic, '%s'%name, eval=lambda x: np.exp(x),
+                      x=g_trans, plot=True)
+
+            var = Knode(pm.Uniform, '%s_var' % name,
+                        lower=var_lower, upper=var_upper, value=var_value)
+
+            tau = Knode(pm.Deterministic, '%s_tau' % name, eval=lambda x: x**-2,
+                        x=var, plot=False, trace=False, hidden=True)
+
+            subj_trans = Knode(pm.Normal, '%s_subj_trans'%name, mu=g_trans,
+                         tau=tau, value=value_trans, depends=('subj_idx',),
+                         subj=True, plot=False, hidden=True)
+
+            subj = Knode(pm.Deterministic, '%s_subj'%name, eval=lambda x: np.exp(x),
+                         x=subj_trans,
+                         depends=('subj_idx',), plot=self.plot_subjs,
+                         trace=True, subj=True)
+
+            knodes['%s_trans'%name]      = g_trans
+            knodes['%s'%name]            = g
+            knodes['%s_var'%name]        = var
+            knodes['%s_tau'%name]        = tau
+            knodes['%s_subj_trans'%name] = subj_trans
+            knodes['%s_bottom'%name]     = subj
+
+        else:
+            g_trans = Knode(pm.Normal, '%s_trans' % name, mu=g_mu_trans,
+                            tau=g_tau, value=value_trans,
+                            depends=self.depends[name], plot=False, hidden=True)
+
+            g = Knode(pm.Deterministic, '%s'%name, doc='%s'%name, eval=lambda x: np.exp(x), x=g_trans, plot=True)
+            knodes['%s_trans'%name] = g_trans
+            knodes['%s_bottom'%name] = g
+
+        return knodes
+

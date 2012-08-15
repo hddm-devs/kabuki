@@ -1,12 +1,8 @@
-import kabuki
-from kabuki.hierarchical import Knode
 import numpy as np
 import unittest
-import scipy.stats
 import kabuki.analyze as ka
 from matplotlib.pyplot import close
-import test_utils
-
+import utils
 
 class TestAnalyzeBreakdown(unittest.TestCase):
     """
@@ -19,18 +15,13 @@ class TestAnalyzeBreakdown(unittest.TestCase):
     def setUpClass(self):
 
         #load models
-        self.models = test_utils.load_models()
+        self.models, _ = utils.create_test_models()
 
         #run models
-        test_utils.sample_from_models(self.models, n_iter=200)
+        utils.sample_from_models(self.models, n_iter=200)
 
     def runTest(self):
         pass
-
-    def test_print_stats(self):
-        for model in self.models:
-            ka.print_stats(model.stats())
-            ka.print_group_stats(model.stats())
 
     def test_group_plot(self):
         for model in self.models:
@@ -43,6 +34,7 @@ class TestAnalyzeBreakdown(unittest.TestCase):
             ka.plot_posterior_nodes(model.mc.stochastics, bins=50)
             close('all')
 
+    @unittest.skip("Not implemented")
     def test_compare_all_pairwise(self):
         for model in self.models:
             ka.compare_all_pairwise(model)
@@ -63,12 +55,13 @@ class TestAnalyzeBreakdown(unittest.TestCase):
     def test_check_geweke(self):
         raise NotImplementedError
 
+    @unittest.skip("Not implemented")
     def test_group_cond_diff(self):
         for model in self.models:
             if model.is_group_model:
-                if model.depends_on:
-                    (name, cond) = model.depends_on.items()[0]
-                    tags = model.params_dict[name].group_nodes.keys()[:2]
+                if model.depends:
+                    (name, cond) = model.depends.items()[0]
+                    tags = model.nodes_db[name].group_nodes.keys()[:2]
                 ka.group_cond_diff(model,name, *tags)
 
     def test_post_pred_check(self):
