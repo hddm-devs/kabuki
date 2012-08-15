@@ -119,8 +119,7 @@ The first line of create_knodes() creates the group mean knode.
 
 * The first argument is the pymc distribution of the parameter.
 
-* The second argument is the name you want to give to this knode 'lower' and 'upper' in this case are keyword arguments
-that get passed to PyMC during node creation.
+* The second argument is the name you want to give to this knode 'lower' and 'upper' in this case are keyword arguments that get passed to PyMC during node creation.
 
 * The `depends` keyword argument means that seperate PyMC nodes can be created for user-supplied conditions (this will become clear later).
 
