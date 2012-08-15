@@ -25,7 +25,8 @@ specifiying the model structure, models tailored to new data sets and
 new configurations can be instantiated easily.
 
 To see it in action, check out HDDM_ which uses kabuki for the heavy
-lifting.
+lifting. Especially the How-to_ should give a comprehensive overview
+of kabuki's features.
 
 Features
 ========
@@ -208,3 +209,4 @@ diagnostics (like posterior predictive checks).
 
 .. _PyMC documentation: http://pymc-devs.github.com/pymc/
 .. _HDDM: https://github.com/hddm-devs/hddm/
+.. _How-to: http://ski.clps.brown.edu/hddm_docs/howto.html
