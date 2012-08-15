@@ -101,11 +101,6 @@ want to estimate the mean and variance:
 
             mu_subj = Knode(pymc.Normal, 'mu_subj', mu=mu_g, tau=1, depends=('subj_idx',), subj=True)
 
-	    ######################################################################################
-	    # Finally, we have to create the likelihood or observed node.
-	    # The only difference to before is the observed=True keyword and col_name which
-	    # specifies on which data column the likelihood depends on.
-
             like = Knode(pymc.Normal, 'like', mu=mu_subj, tau=1, col_name='data', observed=True)
 
             return [mu_g, mu_subj, like]
@@ -141,6 +136,16 @@ parent (mu_group) depends on a user-defined column name, the child
 
 The subj keyword specifies that this is a subject knode (this is
 required for internal purposes).
+
+Creation of observed node
+"""""""""""""""""""""""""
+
+Finally, we have to create the likelihood or observed node.  The only
+difference to before is the observed=True keyword and col_name which
+specifies on which data column the likelihood depends on. As we will
+see later, kabuki will parcel the data column appropriately so that
+each subject observed node is linked to the data belonging to that
+subject (and that condition).
 
 Running the example model
 -------------------------
