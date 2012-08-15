@@ -355,13 +355,14 @@ def post_pred_check(model, samples=500, bins=100, stats=None, evals=None, plot=F
 
     :Returns:
         Hierarchical pandas.DataFrame with the different statistics.
+
     """
     import pandas as pd
     results = {}
 
     # Progress bar
     if progress_bar:
-        n_iter = len(model.observed_nodes) * model.num_subjs
+        n_iter = len(model.get_observeds()) * model.num_subjs
         bar = pbar.ProgressBar(n_iter)
         bar_iter = 0
     else:
@@ -372,7 +373,7 @@ def post_pred_check(model, samples=500, bins=100, stats=None, evals=None, plot=F
 
         if progress_bar:
             bar_iter += 1
-            bar.animate(bar_iter)
+            bar.update(bar_iter)
 
         if node is None or not hasattr(node, 'random'):
             continue # Skip
