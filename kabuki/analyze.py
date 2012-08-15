@@ -157,7 +157,7 @@ def gelman_rubin(models):
     Input:
         models - list of models
     """
-    names = models[0].stoch_by_name.keys()
+    names = models[0].get_stochastics()
     R_hat_dict = {}
     num_samples = models[0].stoch_by_name.values()[0].trace().shape[0] # samples
     num_chains = len(models)
