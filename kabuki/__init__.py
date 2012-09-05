@@ -15,3 +15,8 @@ except:
         from IPython.Debugger import Tracer; debug_here = Tracer()
     except:
         def debug_here(): pass
+
+try:
+    from collections import OrderedDict
+except:
+    from OrderedDict import OrderedDict

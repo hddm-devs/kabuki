@@ -505,12 +505,11 @@ def plot_posterior_predictive(model, value_range=None, samples=10, columns=3, bi
                                    axis=ax, bins=bins)
 
         if savefig:
+            tag_str = '.'.join(tag)
             if path is not None:
-                fig.savefig(os.path.join(path, tag) + '.svg', format='svg')
-                fig.savefig(os.path.join(path, tag) + '.png', format='png')
+                fig.savefig(os.path.join(path, tag_str) + '.svg', format='svg')
+                fig.savefig(os.path.join(path, tag_str) + '.png', format='png')
             else:
-                fig.savefig(tag + '.svg', format='svg')
-                fig.savefig(tag + '.png', format='png')
-
-
+                fig.savefig(tag_str + '.svg', format='svg')
+                fig.savefig(tag_str + '.png', format='png')
 

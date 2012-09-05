@@ -506,9 +506,9 @@ class Hierarchical(object):
         else:
             with open(fname, 'w') as fd:
                 fd.write(stats_str)
-                fd.write("DIC: %f\n" % self.mc.dic)
+                fd.write("\nDIC: %f\n" % self.mc.dic)
                 fd.write("deviance: %f\n" % info['deviance'])
-                fd.write("pD: %f\n" % info['pD'])
+                fd.write("pD: %f" % info['pD'])
 
 
     def print_stats(self, fname=None, print_hidden=False, **kwargs):
