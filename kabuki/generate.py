@@ -3,12 +3,6 @@ from __future__ import division
 import numpy as np
 from copy import copy
 
-def normal_rand(mu, sigma):
-    if sigma == 0:
-        return mu
-    else:
-        return np.random.normal(loc=mu, scale=sigma)
-
 def _add_noise(params, check_valid_func=None, bounds=None, noise=.1, exclude_params=()):
     """Add individual noise to each parameter.
 
@@ -35,6 +29,12 @@ def _add_noise(params, check_valid_func=None, bounds=None, noise=.1, exclude_par
                 parameters with noise added.
 
     """
+
+    def normal_rand(mu, sigma):
+        if sigma == 0:
+            return mu
+        else:
+            return np.random.normal(loc=mu, scale=sigma)
 
     def sample_value(param, value):
         if np.isscalar(noise):
