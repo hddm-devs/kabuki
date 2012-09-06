@@ -1,10 +1,64 @@
 from __future__ import division
 import numpy as np
-import matplotlib.pyplot as plt
 import pymc as pm
-from copy import copy, deepcopy
 import sys
-import kabuki
+
+def flatten(l):
+    return reduce(lambda x, y: list(x)+list(y), l)
+
+def get_traces(model):
+    """Returns recarray of all traces in the model.
+
+    :Arguments:
+        model : kabuki.Hierarchical submodel or pymc.MCMC model
+
+    :Returns:
+        trace_array : recarray
+
+    """
+    if isinstance(model, pm.MCMC):
+        m = model
+    else:
+        m = model.mc
+
+    nodes = list(m.stochastics)
+
+    names = [node.__name__ for node in nodes]
+    dtype = [(name, np.float) for name in names]
+    traces = np.empty(nodes[0].trace().shape[0], dtype=dtype)
+
+    # Store traces in one array
+    for name, node in zip(names, nodes):
+        traces[name] = node.trace()[:]
+
+    return traces
+
+def logp_trace(model):
+    """
+    return a trace of logp for model
+    """
+
+    #init
+    db = model.mc.db
+    n_samples = db.trace('deviance').length()
+    logp = np.empty(n_samples, np.double)
+
+    #loop over all samples
+    for i_sample in xrange(n_samples):
+        #set the value of all stochastic to their 'i_sample' value
+        for stochastic in model.mc.stochastics:
+            try:
+                value = db.trace(stochastic.__name__)[i_sample]
+                stochastic.value = value
+
+            except KeyError:
+                print "No trace available for %s. " % stochastic.__name__
+
+        #get logp
+        logp[i_sample] = model.mc.logp
+
+    return logp
+
 
 def interpolate_trace(x, trace, range=(-1,1), bins=100):
     """Interpolate distribution (from samples) at position x.
@@ -25,7 +79,7 @@ def interpolate_trace(x, trace, range=(-1,1), bins=100):
     import scipy.interpolate
 
     x_histo = np.linspace(range[0], range[1], bins)
-    histo = np.histogram(trace, bins=bins, range=range, normed=True)[0]
+    histo = np.histogram(trace, bins=bins, range=range, density=True)[0]
     interp = scipy.interpolate.InterpolatedUnivariateSpline(x_histo, histo)(x)
 
     return interp
@@ -211,6 +265,21 @@ def find_object(name):
 ######################
 # END OF COPIED CODE #
 ######################
+
+def centered_half_cauchy_rand(S, size):
+    """sample from a half Cauchy distribution with scale S"""
+    return abs(S * np.tan(np.pi * pm.random_number(size) - np.pi/2.0))
+
+def centered_half_cauchy_logp(x, S):
+    """logp of half Cauchy with scale S"""
+    x = np.atleast_1d(x)
+    if sum(x<0): return -np.inf
+    return pm.flib.cauchy(x, 0, S) + len(x) * np.log(2)
+
+HalfCauchy = pm.stochastic_from_dist(name="Half Cauchy",
+                                     random=centered_half_cauchy_rand,
+                                     logp=centered_half_cauchy_logp,
+                                     dtype=np.double)
 
 if __name__ == "__main__":
     import doctest

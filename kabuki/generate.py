@@ -3,7 +3,7 @@ from __future__ import division
 import numpy as np
 from copy import copy
 
-def _add_noise(params, noise=.1, exclude_params=()):
+def _add_noise(params, check_valid_func=None, bounds=None, noise=.1, exclude_params=()):
     """Add individual noise to each parameter.
 
         :Arguments:
@@ -11,6 +11,13 @@ def _add_noise(params, noise=.1, exclude_params=()):
                 Parameter names and values
 
         :Optional:
+            check_valid_func : function <default lambda x: True>
+                Function that takes as input the parameters as kwds
+                and returns True if param values are admissable.
+            bounds : dict <default={}>
+                Dict containing parameter names and
+                (lower, upper) value for valid parameter
+                range.
             noise : float <default=.1>
                 Standard deviation of random gaussian
                 variable to add to each parameter.
@@ -23,21 +30,49 @@ def _add_noise(params, noise=.1, exclude_params=()):
 
     """
 
-    params = copy(params)
+    def normal_rand(mu, sigma):
+        if sigma == 0:
+            return mu
+        else:
+            return np.random.normal(loc=mu, scale=sigma)
 
-    for param, value in params.iteritems():
-        if param not in exclude_params:
-            params[param] = np.random.normal(loc=value, scale=noise)
+    def sample_value(param, value):
+        if np.isscalar(noise):
+            param_noise = noise
+        else:
+            param_noise = noise.get(param, 0)
 
-    return params
+        if param in bounds:
+            while True:
+                sampled_value = normal_rand(value, param_noise)
+                if sampled_value >= bounds[param][0] and sampled_value <= bounds[param][1]:
+                    return sampled_value
+        else:
+            return normal_rand(value, param_noise)
 
-def gen_rand_data(dist, params, samples=50, subjs=1, subj_noise=.1, exclude_params=(), column_name='data'):
+    if bounds is None:
+        bounds = {}
+
+    if check_valid_func is None:
+        check_valid_func = lambda **params: True
+
+    # Sample parameters until accepted
+    while True:
+        params_cur = copy(params)
+
+        for param, value in params_cur.iteritems():
+            if param not in exclude_params:
+                params_cur[param] = sample_value(param, value)
+
+        if check_valid_func(**params_cur):
+            return params_cur
+
+def gen_rand_data(Stochastic, params, size=50, subjs=1, subj_noise=.1, exclude_params=(),
+                  column_name='data', check_valid_func=None, bounds=None, seed=None):
     """Generate a random dataset using a user-defined random distribution.
 
     :Arguments:
-        dist : kabuki.utils.scipy_stochastic
-            Probability distribution to sample from (has to have
-            random function defined).
+        Stochastic : a pymc stochastic class of the target distribution (e.g., pymc.Normal)
         params : dict
             Parameters to use for data generation. Two options possible:
                 * {'param1': value, 'param2': value2}
@@ -47,16 +82,26 @@ def gen_rand_data(dist, params, samples=50, subjs=1, subj_noise=.1, exclude_para
             named after the key and will be sampled using the corresponding parameters.
 
     :Optional:
-        samples : int <default: 50>
+        size : int <default: 50>
             How many values to sample for each condition for each subject.
         subjs : int <default: 1>
             How many subjects to generate data from. Individual subject parameters
             will be normal distributed around the provided parameters with variance
             subj_noise if subjs > 1. If only one subject is simulated no noise is added.
-        subj_noise : float <default: .1>
+        subj_noise : float or dictionary <default: .1>
             How much to perturb individual subj parameters.
+            if float then each parameter will be sampled from a normal distribution with std of subj_noise.
+            if dictionary then only parameters that are keys of subj_noise will be sampled, and the std of the sampling
+            distribution will be the value associated with them.
         exclude_params : tuple <default ()>
             Do not add noise to these parameters.
+        check_valid_func : function <default lambda x: True>
+            Function that takes as input the parameters as kwds
+            and returns True if param values are admissable.
+        bounds : dict <default={}>
+            Dict containing parameter names and
+            (lower, upper) value for valid parameter
+            range.
         column_name : str <default='data'>
             What to name the data column.
 
@@ -75,11 +120,13 @@ def gen_rand_data(dist, params, samples=50, subjs=1, subj_noise=.1, exclude_para
     if not isinstance(params[params.keys()[0]], dict):
         params = {'none': params}
 
+
     subj_params = {}
+    dtype = Stochastic('temp', size=2, **(params.values()[0])).dtype
+    if seed is not None:
+        np.random.seed(seed)
 
-    dtype = np.dtype(dist.dtype)
-
-    idx = list(product(range(subjs), params.keys(), range(samples)))
+    idx = list(product(range(subjs), params.keys(), range(size)))
     data = np.array(idx, dtype=[('subj_idx', np.int32), ('condition', 'S20'), (column_name, dtype)])
 
     for condition, param in params.iteritems():
@@ -87,11 +134,14 @@ def gen_rand_data(dist, params, samples=50, subjs=1, subj_noise=.1, exclude_para
         for subj_idx in range(subjs):
             if subjs > 1:
                 # Sample subject parameters from a normal around the specified parameters
-                subj_param = _add_noise(param, noise=subj_noise, exclude_params=exclude_params)
+                subj_param = _add_noise(param, noise=subj_noise,
+                                        check_valid_func=check_valid_func,
+                                        bounds=bounds,
+                                        exclude_params=exclude_params)
             else:
                 subj_param = param
             subj_params[condition].append(subj_param)
-            samples_from_dist = dist.rv.random(size=samples, **subj_param)
+            samples_from_dist = Stochastic('temp', size=size, **subj_param).value
             idx = (data['subj_idx'] == subj_idx) & (data['condition'] == condition)
             data[column_name][idx] = np.array(samples_from_dist, dtype=dtype)
 
