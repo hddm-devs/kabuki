@@ -6,7 +6,7 @@ import step_methods as steps
 import generate
 import distributions
 
-__version__ = '0.3RC1'
+__version__ = '0.3'
 
 try:
     from IPython.core.debugger import Tracer; debug_here = Tracer()

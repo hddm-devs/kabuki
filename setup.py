@@ -1,8 +1,9 @@
+
 from distutils.core import setup
 
 setup(
     name="kabuki",
-    version="0.3RC4",
+    version="0.3",
     author="Thomas V. Wiecki, Imri Sofer",
     author_email="thomas.wiecki@gmail.com",
     url="http://github.com/hddm-devs/kabuki",
