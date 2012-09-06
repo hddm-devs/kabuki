@@ -14,14 +14,14 @@ Purpose
 =======
 
 Kabuki is a Python library intended to make hierarchical PyMC models
-reusable, portable and more flexible. Once a model has been formualted
+reusable, portable and more flexible. Once a model has been formulated
 in kabuki it is trivial to apply it to new datasets in various
 ways. Currently, it is geared towards hierarchical Bayesian models
 that are common in the cognitive sciences but it might be easily
 adapted to other domains.
 
 In essence, kabuki allows easy creation of model-factories. After
-specifiying the model structure, models tailored to new data sets and
+specifiyng the model structure, models tailored to new data sets and
 new configurations can be instantiated easily.
 
 To see it in action, check out HDDM_ which uses kabuki for the heavy
