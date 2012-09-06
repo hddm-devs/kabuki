@@ -34,7 +34,7 @@ Features
 * Easy model specification: It is quite trivial to convert an existing
   PyMC model to kabuki.
 * Models are classes: The resulting kabuki model is one class with
-  methods for setting the nodes to the MAP, sampling from the
+  methods for setting the nodes to their MAP, sampling from the
   posterior, saving and loading models, plotting output statistics
   etc.
 * Easy interface: New model variations can be constructed and
@@ -46,7 +46,7 @@ Features
   multiple groups and multiple conditions (e.g. for testing parameter
   recovery).
 * Batteries included: Over time we will add more standard models to
-  kabuki such as a model to perform Baysian ANOVA or regression
+  kabuki such as a model to perform Bayesian ANOVA or regression
   analysis.
 
 Motivation
@@ -115,11 +115,17 @@ The first line of create_knodes() creates the group mean knode.
 
 * The first argument is the pymc distribution of the parameter.
 
-* The second argument is the name you want to give to this knode 'lower' and 'upper' in this case are keyword arguments that get passed to PyMC during node creation.
+* The second argument is the name you want to give to this knode
+  'lower' and 'upper' in this case are keyword arguments that get
+  passed to PyMC during node creation.
 
-* The `depends` keyword argument means that seperate PyMC nodes can be created for user-supplied conditions (this will become clear later).
+* The `depends` keyword argument means that seperate PyMC nodes can be
+  created for user-supplied conditions (this will become clear later).
 
-* `self.depends` is a user-supplied dictionary that maps a parameter name to a column in the data specifying the different conditions. Kabuki will then create different group mean nodes depending on the conditions found in this data column.
+* `self.depends` is a user-supplied dictionary that maps a parameter
+  name to a column in the data specifying the different
+  conditions. Kabuki will then create different group mean nodes
+  depending on the conditions found in this data column.
 
 Creation of subject node
 """"""""""""""""""""""""
