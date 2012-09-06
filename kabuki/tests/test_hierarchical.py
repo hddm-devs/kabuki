@@ -130,7 +130,7 @@ class TestEstimation(unittest.TestCase):
         subjs = 40
         data, params_true = kabuki.generate.gen_rand_data(pm.Normal,
                                                           {'A':{'mu':0, 'tau':1}, 'B': {'mu':2, 'tau':1}},
-                                                          subj_noise={'mu':.1}, samples=1000, subjs=subjs)
+                                                          subj_noise={'mu':.1}, size=1000, subjs=subjs)
 
         model = HNodeSimple(data, depends_on={'mu': 'condition'})
 
