@@ -7,8 +7,8 @@ Introduction
 :Contact: thomas_wiecki@brown.edu, imri_sofer@brown.edu
 :Web site: http://github.com/hddm-dev/kabuki
 :Copyright: This document has been placed in the public domain.
-:License: Kabuki is released under the GPLv3.
-:Version: 0.3
+:License: BSD
+:Version: 0.3.1
 
 Purpose
 =======
