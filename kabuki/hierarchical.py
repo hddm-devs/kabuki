@@ -134,8 +134,9 @@ class Knode(object):
 
             node = self.create_node(node_name, kwargs)
 
-            self.nodes[uniq_elem] = node
-            self.append_node_to_db(node, uniq_elem)
+            if node is not None:
+                self.nodes[uniq_elem] = node
+                self.append_node_to_db(node, uniq_elem)
 
     def create_node(self, node_name, kwargs):
         #actually create the node
