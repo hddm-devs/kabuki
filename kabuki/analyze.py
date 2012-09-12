@@ -187,56 +187,6 @@ def check_geweke(model, assert_=True):
 
     return True
 
-def group_cond_diff(hm, node, cond1, cond2, threshold=0):
-    """
-    Compute the difference between different conditions in a group analysis.
-    For each subject the function computes the difference between 'node' under
-    condition 'cond1' to 'node' under condition 'cond2'.
-    By assuming that each of the differences is normal distributed
-    we can easily compute the group mean and group variance of the difference.
-    Then the difference is compared to 'threshold' to compute the mass of the
-    group pdf which is smaller than 'threshold'
-
-    Input:
-        hm - hierachical model
-        node - name of node to be analyized
-        cond1 - name of condition 1
-        cond2 - name of condition 2
-        threshold - see description
-
-    Output:
-        group_mean - group mean of the differnce
-        group_var - group variance of the difference
-        mass_under_threshold  - the mass of the group pdf which is smaller than threshold
-    """
-    import scipy as sp
-
-    name = node
-    node_dict = hm.params_include[name].subj_nodes
-    n_subjs = hm._num_subjs
-
-    #loop over subjs
-    subj_diff_mean = np.zeros(n_subjs)
-    subj_diff_std = np.zeros(n_subjs)
-    for i_subj in range(n_subjs):
-        #compute difference of traces
-        name1 = node_dict[cond1][i_subj].__name__
-        name2 = node_dict[cond2][i_subj].__name__
-        trace1 = hm.mc.db.trace(name1)[:]
-        trace2 = hm.mc.db.trace(name2)[:]
-        diff_trace = trace1 - trace2
-
-        #compute stats
-        subj_diff_mean[i_subj] = np.mean(diff_trace)
-        subj_diff_std[i_subj]= np.std(diff_trace)
-
-    pooled_var = 1. / sum(1. / (subj_diff_std**2))
-    pooled_mean = sum(subj_diff_mean / (subj_diff_std**2)) * pooled_var
-
-    mass_under = sp.stats.norm.cdf(threshold,pooled_mean, np.sqrt(pooled_var))
-
-    return pooled_mean, pooled_var, mass_under
-
 def _evaluate_post_pred(sampled_stats, data_stats, evals=None):
     """Evaluate a summary statistics of sampled sets.
 
