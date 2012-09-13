@@ -132,7 +132,7 @@ class Knode(object):
             if self.pymc_node is pm.Deterministic and 'doc' not in kwargs:
                 kwargs['doc'] = node_name
 
-            node = self.create_node(node_name, kwargs, grouped_data[self.col_name])
+            node = self.create_node(node_name, kwargs, grouped_data)
 
             if node is not None:
                 self.nodes[uniq_elem] = node
