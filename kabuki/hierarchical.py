@@ -132,13 +132,13 @@ class Knode(object):
             if self.pymc_node is pm.Deterministic and 'doc' not in kwargs:
                 kwargs['doc'] = node_name
 
-            node = self.create_node(node_name, kwargs)
+            node = self.create_node(node_name, kwargs, grouped_data[self.col_name])
 
             if node is not None:
                 self.nodes[uniq_elem] = node
                 self.append_node_to_db(node, uniq_elem)
 
-    def create_node(self, node_name, kwargs):
+    def create_node(self, node_name, kwargs, data):
         #actually create the node
         return self.pymc_node(name=node_name, **kwargs)
 
@@ -388,7 +388,7 @@ class Hierarchical(object):
         # subject which is not what we want.
         if self.is_group_model:
             raise NotImplementedError("""Sorry, This method is not yet implemented for group models.
-            you might consider using the subj_by_subj_map_init method""")
+            you might consider using the approximate_map method""")
 
 
         maps = []
