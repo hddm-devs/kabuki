@@ -7,21 +7,21 @@ Introduction
 :Contact: thomas_wiecki@brown.edu, imri_sofer@brown.edu
 :Web site: http://github.com/hddm-dev/kabuki
 :Copyright: This document has been placed in the public domain.
-:License: Kabuki is released under the GPLv3.
-:Version: 0.3
+:License: BSD
+:Version: 0.3.1
 
 Purpose
 =======
 
 Kabuki is a Python library intended to make hierarchical PyMC models
-reusable, portable and more flexible. Once a model has been formualted
+reusable, portable and more flexible. Once a model has been formulated
 in kabuki it is trivial to apply it to new datasets in various
 ways. Currently, it is geared towards hierarchical Bayesian models
 that are common in the cognitive sciences but it might be easily
 adapted to other domains.
 
 In essence, kabuki allows easy creation of model-factories. After
-specifiying the model structure, models tailored to new data sets and
+specifiyng the model structure, models tailored to new data sets and
 new configurations can be instantiated easily.
 
 To see it in action, check out HDDM_ which uses kabuki for the heavy
@@ -34,7 +34,7 @@ Features
 * Easy model specification: It is quite trivial to convert an existing
   PyMC model to kabuki.
 * Models are classes: The resulting kabuki model is one class with
-  methods for setting the nodes to the MAP, sampling from the
+  methods for setting the nodes to their MAP, sampling from the
   posterior, saving and loading models, plotting output statistics
   etc.
 * Easy interface: New model variations can be constructed and
@@ -46,7 +46,7 @@ Features
   multiple groups and multiple conditions (e.g. for testing parameter
   recovery).
 * Batteries included: Over time we will add more standard models to
-  kabuki such as a model to perform Baysian ANOVA or regression
+  kabuki such as a model to perform Bayesian ANOVA or regression
   analysis.
 
 Motivation
@@ -115,11 +115,17 @@ The first line of create_knodes() creates the group mean knode.
 
 * The first argument is the pymc distribution of the parameter.
 
-* The second argument is the name you want to give to this knode 'lower' and 'upper' in this case are keyword arguments that get passed to PyMC during node creation.
+* The second argument is the name you want to give to this knode
+  'lower' and 'upper' in this case are keyword arguments that get
+  passed to PyMC during node creation.
 
-* The `depends` keyword argument means that seperate PyMC nodes can be created for user-supplied conditions (this will become clear later).
+* The `depends` keyword argument means that seperate PyMC nodes can be
+  created for user-supplied conditions (this will become clear later).
 
-* `self.depends` is a user-supplied dictionary that maps a parameter name to a column in the data specifying the different conditions. Kabuki will then create different group mean nodes depending on the conditions found in this data column.
+* `self.depends` is a user-supplied dictionary that maps a parameter
+  name to a column in the data specifying the different
+  conditions. Kabuki will then create different group mean nodes
+  depending on the conditions found in this data column.
 
 Creation of subject node
 """"""""""""""""""""""""

@@ -450,7 +450,8 @@ def plot_posterior_predictive(model, value_range=None, samples=10, columns=3, bi
                 continue # skip nodes that do not define pdf function
 
             ax = fig.add_subplot(np.ceil(len(nodes)/columns), columns, subj_i+1)
-            ax.set_title(str(bottom_node['subj_idx']))
+            if 'subj_idx' in bottom_node:
+                ax.set_title(str(bottom_node['subj_idx']))
             _post_pred_bottom_node(bottom_node['node'], value_range,
                                    axis=ax, bins=bins)
 
