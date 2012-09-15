@@ -262,9 +262,8 @@ class Hierarchical(object):
 
         # Init
         self.plot_subjs = plot_subjs
-
+        self.depends_on = depends_on
         self.mc = None
-
         self.data = pd.DataFrame(data)
 
         if not depends_on:
