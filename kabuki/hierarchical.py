@@ -612,10 +612,6 @@ class Hierarchical(object):
         elif db == 'txt':
             db_loader = pm.database.txt.load
 
-        # Set up model
-        if not self.param_container.nodes:
-            self.create_nodes()
-
         # Ignore annoying sqlite warnings
         warnings.simplefilter('ignore', UserWarning)
 
