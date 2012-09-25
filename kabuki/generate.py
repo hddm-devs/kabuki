@@ -1,15 +1,17 @@
 from __future__ import division
 
+import kabuki
 import numpy as np
-from copy import copy
+from copy import deepcopy
 
-def _add_noise(params, check_valid_func=None, bounds=None, noise=.1, exclude_params=()):
+def _add_noise(params, check_valid_func=None, bounds=None, noise=.1, exclude_params=(), share_noise = ()):
     """Add individual noise to each parameter.
 
         :Arguments:
             params : dict
-                Parameter names and values
-
+                Parameters to use for data generation. should look like this
+                * {'condition1': {'param1': value, 'param2': value2},
+                   'condition2': {'param1': value3, 'param2': value4}}
         :Optional:
             check_valid_func : function <default lambda x: True>
                 Function that takes as input the parameters as kwds
@@ -23,6 +25,8 @@ def _add_noise(params, check_valid_func=None, bounds=None, noise=.1, exclude_par
                 variable to add to each parameter.
             exclude_params : tuple <default=()>
                 Do not add noise to these parameters.
+            share_noise : tuple <default=()>
+                parameters in share_noise will share the noise across conditions
 
         :Returns:
             params : dict
@@ -57,17 +61,32 @@ def _add_noise(params, check_valid_func=None, bounds=None, noise=.1, exclude_par
         check_valid_func = lambda **params: True
 
     # Sample parameters until accepted
+    original_params = deepcopy(params)
     while True:
-        params_cur = copy(params)
+        params = deepcopy(original_params)
 
-        for param, value in params_cur.iteritems():
-            if param not in exclude_params:
-                params_cur[param] = sample_value(param, value)
+        # sample params only if not excluded and make sure they are shaared across condition if necessary
+        for (i_cond, (cond, cond_params)) in enumerate(params.iteritems()):
+            for param, value in cond_params.iteritems():
+                if param not in exclude_params:
+                    if (i_cond == 0) or (param not in share_noise):
+                        cond0 = cond
+                        params[cond][param] = sample_value(param, value)
+                    else:
+                        params[cond][param] = params[cond0][param]
 
-        if check_valid_func(**params_cur):
-            return params_cur
+        # check if params are valid
+        valid = True
+        for cond_params in params.itervalues():
+            valid = check_valid_func(**cond_params)
+            if not valid:
+                break
 
-def gen_rand_data(Stochastic, params, size=50, subjs=1, subj_noise=.1, exclude_params=(),
+        # return params
+        if valid:
+            return params
+
+def gen_rand_data(Stochastic, params, size=50, subjs=1, subj_noise=.1, exclude_params=(), share_noise=(),
                   column_name='data', check_valid_func=None, bounds=None, seed=None):
     """Generate a random dataset using a user-defined random distribution.
 
@@ -95,6 +114,8 @@ def gen_rand_data(Stochastic, params, size=50, subjs=1, subj_noise=.1, exclude_p
             distribution will be the value associated with them.
         exclude_params : tuple <default ()>
             Do not add noise to these parameters.
+        share_noise : tuple <default=()>
+            parameters in share_noise will share the noise across conditions
         check_valid_func : function <default lambda x: True>
             Function that takes as input the parameters as kwds
             and returns True if param values are admissable.
@@ -109,7 +130,7 @@ def gen_rand_data(Stochastic, params, size=50, subjs=1, subj_noise=.1, exclude_p
         data : numpy structured array
             Will contain the columns 'subj_idx', 'condition' and 'data' which contains
             the random samples.
-        subj_params : dict mapping condition to list of individual subject parameters
+        final_params_set : dict mapping condition to list of individual subject parameters
             Tries to be smart and will return direct values if there is only 1 subject
             and no dict if there is only 1 condition.
 
@@ -121,7 +142,9 @@ def gen_rand_data(Stochastic, params, size=50, subjs=1, subj_noise=.1, exclude_p
         params = {'none': params}
 
 
-    subj_params = {}
+    final_params_set = {}
+    for condition in params.iterkeys():
+            final_params_set[condition] = []
     dtype = Stochastic('temp', size=2, **(params.values()[0])).dtype
     if seed is not None:
         np.random.seed(seed)
@@ -129,30 +152,36 @@ def gen_rand_data(Stochastic, params, size=50, subjs=1, subj_noise=.1, exclude_p
     idx = list(product(range(subjs), params.keys(), range(size)))
     data = np.array(idx, dtype=[('subj_idx', np.int32), ('condition', 'S20'), (column_name, dtype)])
 
-    for condition, param in params.iteritems():
-        subj_params[condition] = []
-        for subj_idx in range(subjs):
-            if subjs > 1:
-                # Sample subject parameters from a normal around the specified parameters
-                subj_param = _add_noise(param, noise=subj_noise,
+
+
+
+
+    for subj_idx in range(subjs):
+        #if it is a group model add noise to the parameters
+        if subjs > 1:
+            # Sample subject parameters from a normal around the specified parameters
+            subj_params = _add_noise(params, noise=subj_noise, share_noise=share_noise,
                                         check_valid_func=check_valid_func,
                                         bounds=bounds,
                                         exclude_params=exclude_params)
-            else:
-                subj_param = param
-            subj_params[condition].append(subj_param)
-            samples_from_dist = Stochastic('temp', size=size, **subj_param).value
+        else:
+            subj_params = params.copy()
+
+        #sample for each condition
+        for condition, params_cur in subj_params.iteritems():
+            final_params_set[condition].append(params_cur)
+            samples_from_dist = Stochastic('temp', size=size, **params_cur).value
             idx = (data['subj_idx'] == subj_idx) & (data['condition'] == condition)
             data[column_name][idx] = np.array(samples_from_dist, dtype=dtype)
 
-    # Remove list around subj_params if there is only 1 subject
+    # Remove list around final_params_set if there is only 1 subject
     if subjs == 1:
-        for key, val in subj_params.iteritems():
-            subj_params[key] = val[0]
+        for key, val in final_params_set.iteritems():
+            final_params_set[key] = val[0]
 
-    # Remove dict around subj_params if there is only 1 condition
-    if len(subj_params) == 1:
-        subj_params = subj_params[subj_params.keys()[0]]
+    # Remove dict around final_params_set if there is only 1 condition
+    if len(final_params_set) == 1:
+        final_params_set = final_params_set[final_params_set.keys()[0]]
 
-    return data, subj_params
+    return data, final_params_set
 
