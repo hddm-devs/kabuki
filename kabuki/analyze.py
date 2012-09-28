@@ -398,12 +398,15 @@ def _parents_to_random_posterior_sample(bottom_node, pos=None):
         parent.value = parent.trace()[pos]
 
 
-def _post_pred_bottom_node(bottom_node, value_range, samples=10, bins=100, axis=None):
+def _plot_posterior_pdf_node(bottom_node, axis, value_range=None, samples=10, bins=100):
     """Calculate posterior predictive for a certain bottom node.
 
     :Arguments:
         bottom_node : pymc.stochastic
             Bottom node to compute posterior over.
+
+        axis : matplotlib.axis
+            Axis to plot into.
 
         value_range : numpy.ndarray
             Range over which to evaluate the likelihood.
@@ -415,9 +418,11 @@ def _post_pred_bottom_node(bottom_node, value_range, samples=10, bins=100, axis=
         bins : int (default=100)
             Number of bins to compute histogram over.
 
-        axis : matplotlib.axis (default=None)
-            If provided, will plot into axis.
     """
+
+    if value_range is None:
+        # Infer from data by finding the min and max from the nodes
+        raise NotImplementedError, "value_range keyword argument must be supplied."
 
     like = np.empty((samples, len(value_range)), dtype=np.float32)
     for sample in range(samples):
@@ -432,23 +437,19 @@ def _post_pred_bottom_node(bottom_node, value_range, samples=10, bins=100, axis=
         print "WARNING! %s threw FloatingPointError over std computation. Setting to 0 and continuing." % bottom_node.__name__
         y_std = np.zeros_like(y)
 
+    # Plot pp
+    axis.plot(value_range, y, label='post pred', color='b')
+    axis.fill_between(value_range, y-y_std, y+y_std, color='b', alpha=.8)
 
-    if axis is not None:
-        # Plot pp
-        axis.plot(value_range, y, label='post pred', color='b')
-        axis.fill_between(value_range, y-y_std, y+y_std, color='b', alpha=.8)
+    # Plot data
+    if len(bottom_node.value) != 0:
+        axis.hist(bottom_node.value, normed=True, color='r',
+                  range=(value_range[0], value_range[-1]), label='data',
+                  bins=bins, histtype='step', lw=2.)
 
-        # Plot data
-        if len(bottom_node.value) != 0:
-            axis.hist(bottom_node.value, normed=True, color='r',
-                      range=(value_range[0], value_range[-1]), label='data',
-                      bins=bins, histtype='step', lw=2.)
+    axis.set_ylim(bottom=0) # Likelihood and histogram can only be positive
 
-        axis.set_ylim(bottom=0) # Likelihood and histogram can only be positive
-
-    return (y, y_std) #, hist, ranges)
-
-def plot_posterior_predictive(model, value_range=None, samples=10, columns=3, bins=100, savefig=False, path=None, figsize=(8,6)):
+def plot_posterior_predictive(model, plot_func=None, required_method='pdf', columns=3, savefig=False, path=None, figsize=(8,6), **kwargs):
     """Plot the posterior predictive distribution of a kabuki hierarchical model.
 
     :Arguments:
@@ -471,11 +472,17 @@ def plot_posterior_predictive(model, value_range=None, samples=10, columns=3, bi
         bins : int (default=100)
             How many bins to compute the data histogram over.
 
+        figsize : (int, int) (default=(8, 6))
+
         savefig : bool (default=False)
             Whether to save the figure to a file.
 
         path : str (default=None)
             Save figure into directory prefix
+
+        plot_func : function (default=_plot_posterior_pdf_node)
+            Plotting function to use for each observed node
+            (see default function for an example).
 
     :Note:
 
@@ -483,28 +490,29 @@ def plot_posterior_predictive(model, value_range=None, samples=10, columns=3, bi
 
     """
 
-    if value_range is None:
-        # Infer from data by finding the min and max from the nodes
-        raise NotImplementedError, "value_range keyword argument must be supplied."
+    if plot_func is None:
+        plot_func = _plot_posterior_pdf_node
 
     observeds = model.get_observeds()
 
-
+    # Plot different conditions (new figure for each)
     for tag, nodes in observeds.groupby('tag'):
         fig = plt.figure(figsize=figsize)
         fig.suptitle(tag, fontsize=12)
         fig.subplots_adjust(top=0.9, hspace=.4, wspace=.3)
 
+        # Plot individual subjects (if present)
         for subj_i, (node_name, bottom_node) in enumerate(nodes.iterrows()):
-            if not hasattr(bottom_node['node'], 'pdf'):
-                continue # skip nodes that do not define pdf function
+            if not hasattr(bottom_node['node'], required_method):
+                continue # skip nodes that do not define the required_method
 
             ax = fig.add_subplot(np.ceil(len(nodes)/columns), columns, subj_i+1)
             if 'subj_idx' in bottom_node:
                 ax.set_title(str(bottom_node['subj_idx']))
-            _post_pred_bottom_node(bottom_node['node'], value_range,
-                                   axis=ax, bins=bins)
 
+            plot_func(bottom_node['node'], ax, **kwargs)
+
+        # Save figure if necessary
         if savefig:
             tag_str = '.'.join(tag)
             if path is not None:

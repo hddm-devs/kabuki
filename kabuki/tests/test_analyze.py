@@ -1,3 +1,4 @@
+
 import numpy as np
 import unittest
 import kabuki.analyze as ka
@@ -71,4 +72,4 @@ class TestAnalyzeBreakdown(unittest.TestCase):
 
     def test_plot_posterior_predictive(self):
         for model in self.models:
-            ka.plot_posterior_predictive(model, value_range = np.arange(-2,2,10), samples=10)
+            ka.plot_posterior_predictive(model, value_range=np.arange(-2,2,10), samples=10)
