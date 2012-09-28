@@ -92,7 +92,7 @@ class Knode(object):
         else:
             grouped = self.data.groupby(self.depends)
 
-        #create all the knodes
+        #create all the pymc nodes
         for uniq_elem, grouped_data in grouped:
 
             if not isinstance(uniq_elem, tuple):
@@ -536,6 +536,8 @@ class Hierarchical(object):
         sliced_db = sliced_db[stat_cols]
 
         self._output_stats(sliced_db.to_string(), fname)
+
+        return sliced_db
 
 
     def get_node(self, node_name, params):
