@@ -487,9 +487,14 @@ class Hierarchical(object):
         """returns information about the model DIC"""
 
         info = {}
-        info['DIC'] = self.mc.dic
-        info['deviance']  = np.mean(self.mc.db.trace('deviance')(), axis=0)
-        info['pD'] = info['DIC'] - info['deviance']
+        try:
+            info['DIC'] = self.mc.dic
+            info['deviance']  = np.mean(self.mc.db.trace('deviance')(), axis=0)
+            info['pD'] = info['DIC'] - info['deviance']
+        except pm.ZeroProbability:
+            info['DIC'] = np.nan
+            info['deviance'] = np.nan
+            info['pD'] = np.nan
 
         return info
 
