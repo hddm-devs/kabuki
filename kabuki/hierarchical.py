@@ -489,7 +489,7 @@ class Hierarchical(object):
         info = {}
         try:
             info['DIC'] = self.mc.dic
-            info['deviance']  = np.mean(self.mc.db.trace('deviance')(), axis=0)
+            info['deviance'] = np.mean(self.mc.db.trace('deviance')(), axis=0)
             info['pD'] = info['DIC'] - info['deviance']
         except pm.ZeroProbability:
             info['DIC'] = np.nan
@@ -506,13 +506,13 @@ class Hierarchical(object):
         info = self.dic_info()
         if fname is None:
             print stats_str
-            print "DIC: %f" % self.mc.dic
+            print "DIC: %f" % info['DIC']
             print "deviance: %f" % info['deviance']
             print "pD: %f" % info['pD']
         else:
             with open(fname, 'w') as fd:
                 fd.write(stats_str)
-                fd.write("\nDIC: %f\n" % self.mc.dic)
+                fd.write("\nDIC: %f\n" % info['DIC'])
                 fd.write("deviance: %f\n" % info['deviance'])
                 fd.write("pD: %f" % info['pD'])
 
