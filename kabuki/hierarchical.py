@@ -545,18 +545,6 @@ class Hierarchical(object):
         return sliced_db
 
 
-    def get_node(self, node_name, params):
-        """Returns the node object with node_name from params if node
-        is included in model, otherwise returns default value.
-
-        """
-        if node_name in self.include:
-            return params[node_name]
-        else:
-            assert self.param_container.params_dict[node_name].default is not None, "Default value of not-included parameter not set."
-            return self.param_container.params_dict[node_name].default
-
-
     def append_stats_to_nodes_db(self, *args, **kwargs):
         """
         smart call of MCMC.stats() for the model
