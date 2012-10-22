@@ -415,13 +415,8 @@ class Hierarchical(object):
                 print "Warning! Two best fitting MAP estimates are %f apart. Consider using more runs to avoid local minima." % abs_err
 
         # Set values of nodes
-        for name, node in max_map._dict_container.iteritems():
-            if isinstance(node, pm.ArrayContainer):
-                for i,subj_node in enumerate(node):
-                    if isinstance(node, pm.Node) and not subj_node.observed:
-                        self.param_container.nodes[name][i].value = subj_node.value
-            elif isinstance(node, pm.Node) and not node.observed:
-                self.param_container.nodes[name].value = node.value
+        for max_node in max_map.stochastics:
+            self.nodes_db.ix[max_node.__name__]['node'].value = max_node.value
 
         return max_map
 
