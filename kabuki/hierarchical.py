@@ -790,6 +790,16 @@ class Hierarchical(object):
     def values(self):
         return {name: node['node'].value[()] for (name, node) in self.iter_non_observeds()}
 
+    def set_values(self, new_values):
+        """
+        set values of nodes according to new_values
+        Input:
+            new_values <dict> - dictionary of the format {'node_name1': new_value1, ...}
+        """
+        for (name, value) in new_values.iteritems():
+            self.nodes_db.ix[name]['node'].value = value
+
+
     def _partial_optimize(self, optimize_nodes, evaluate_nodes):
         """Optimize part of the model.
 
