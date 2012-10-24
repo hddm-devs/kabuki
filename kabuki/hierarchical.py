@@ -217,10 +217,6 @@ class Hierarchical(object):
                 keyword.
 
     :Optional:
-        include : tuple
-            If the model has optional arguments, they
-            can be included as a tuple of strings here.
-
         is_group_model : bool
             If True, this results in a hierarchical
             model with separate parameter distributions for each
@@ -517,7 +513,7 @@ class Hierarchical(object):
                 fd.write("pD: %f" % info['pD'])
 
 
-    def print_stats(self, fname=None, print_hidden=False, **kwargs):
+    def gen_stats(self, fname=None, print_hidden=False, **kwargs):
         """print statistics of all variables
         Input (optional)
             fname <string> - the output will be written to a file named fname
@@ -540,22 +536,17 @@ class Hierarchical(object):
 
         sliced_db = sliced_db[stat_cols]
 
-        self._output_stats(sliced_db.to_string(), fname)
-
         return sliced_db
 
-
-    def get_node(self, node_name, params):
-        """Returns the node object with node_name from params if node
-        is included in model, otherwise returns default value.
-
+    def print_stats(self, fname=None, print_hidden=False, **kwargs):
+        """print statistics of all variables
+        Input (optional)
+            fname <string> - the output will be written to a file named fname
+            print_hidden <bool>  - print statistics of hidden nodes
         """
-        if node_name in self.include:
-            return params[node_name]
-        else:
-            assert self.param_container.params_dict[node_name].default is not None, "Default value of not-included parameter not set."
-            return self.param_container.params_dict[node_name].default
 
+        sliced_db = self.gen_stats(fname=fname, print_hidden=print_hidden, **kwargs)
+        self._output_stats(sliced_db.to_string(), fname)
 
     def append_stats_to_nodes_db(self, *args, **kwargs):
         """
@@ -585,6 +576,8 @@ class Hierarchical(object):
 
         #add/overwrite stats to nodes_db
         for name, i_stats in self._stats.iteritems():
+            if self.nodes_db['hidden'][name]:
+                continue
             self.nodes_db['mean'][name]   = i_stats['mean']
             self.nodes_db['std'][name]    = i_stats['standard deviation']
             self.nodes_db['2.5q'][name]   = i_stats['quantiles'][2.5]
@@ -678,7 +671,7 @@ class Hierarchical(object):
                 #get the matching pre_tags
                 try:
                     pre_tags = match[name][tag]
-                except TypeError, AttributeError:
+                except (TypeError, AttributeError):
                     raise ValueError('match argument does not have the coorect name or tag')
 
                 if type(pre_tags) == str:
@@ -858,6 +851,33 @@ class Hierarchical(object):
     def create_family_normal(self, name, value=0, g_mu=None,
                              g_tau=15**-2, var_lower=1e-10,
                              var_upper=100, var_value=.1):
+        """Create a family of knodes. A family is a group of knodes
+        that belong together.
+
+        For example, a family could consist of the following distributions:
+        * group mean g_mean (Normal(g_mu, g_tau))
+        * group variability g_var (Uniform(var_lower, var_upper))
+        * transform node g_var_trans for g_var (x -> x**-2)
+        * subject (Normal(g_mean, g_var_trans))
+
+        In fact, if is_group_model is True and the name does not appear in
+        group_only nodes, this is the family that will be created.
+
+        Otherwise, only a Normal knode will be returned.
+
+        :Arguments:
+            name : str
+                Name of the family. Each family member will have this name prefixed.
+
+        :Optional:
+            value : float
+                Starting value.
+            g_mu, g_tau, var_lower, var_upper, var_value : float
+                The hyper parameters for the different family members (see above).
+
+        :Returns:
+            OrderedDict: member name -> member Knode
+        """
         if g_mu is None:
             g_mu = value
 
@@ -891,6 +911,12 @@ class Hierarchical(object):
     def create_family_trunc_normal(self, name, value=0, lower=None,
                                    upper=None, var_lower=1e-10,
                                    var_upper=100, var_value=.1):
+        """Similar to create_family_normal() but creates a Uniform
+        group distribution and a truncated subject distribution.
+
+        See create_family_normal() help for more information.
+
+        """
         knodes = OrderedDict()
 
         if self.is_group_model and name not in self.group_only_nodes:
@@ -921,6 +947,14 @@ class Hierarchical(object):
 
     def create_family_invlogit(self, name, value, g_mu=None, g_tau=15**-2,
                                var_lower=1e-10, var_upper=100, var_value=.1):
+        """Similar to create_family_normal() but adds a invlogit
+        transform knode to the subject and group mean nodes. This is useful
+        when the parameter space is restricted from [0, 1].
+
+        See create_family_normal() help for more information.
+
+        """
+
         if g_mu is None:
             g_mu = value
 
@@ -983,6 +1017,13 @@ class Hierarchical(object):
 
     def create_family_exp(self, name, value=0, g_mu=None,
                           g_tau=15**-2, var_lower=1e-10, var_upper=100, var_value=.1):
+        """Similar to create_family_normal() but adds an exponential
+        transform knode to the subject and group mean nodes. This is useful
+        when the parameter space is restricted from [0, +oo).
+
+        See create_family_normal() help for more information.
+
+        """
         if g_mu is None:
             g_mu = value
 
