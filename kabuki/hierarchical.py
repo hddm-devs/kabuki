@@ -460,9 +460,13 @@ class Hierarchical(object):
 
         """
 
+        # Fetch out arguments for db backend
+        db = kwargs.pop('db', 'ram')
+        dbname = kwargs.pop('dbname', None)
+
         # init mc if needed
         if self.mc == None:
-            self.mcmc()
+            self.mcmc(db=db, dbname=dbname)
 
         # suppress annoying warnings
         if ('hdf5' in dir(pm.database)) and \
@@ -614,13 +618,10 @@ class Hierarchical(object):
         db = db_loader(dbname)
 
         # Create mcmc instance reading from the opened database
-        self.mc = pm.MCMC(self.param_container.nodes, db=db, verbose=verbose)
+        self.mc = pm.MCMC(self.nodes_db.node, db=db, verbose=verbose)
 
         # Not sure if this does anything useful, but calling for good luck
         self.mc.restore_sampler_state()
-
-        # Take the traces from the database and feed them into our
-        # distribution variables (needed for _gen_stats())
 
         return self
 

@@ -1,3 +1,4 @@
+import os
 import kabuki
 import numpy as np
 import unittest
@@ -5,7 +6,6 @@ from nose.tools import raises
 import pymc as pm
 from utils import HNodeSimple, HNodeSimpleVar, sample_from_models, create_test_models
 import pandas as pd
-from pandas import Series, DataFrame
 
 class TestHierarchicalBreakDown(unittest.TestCase):
     """
@@ -43,9 +43,14 @@ class TestHierarchicalBreakDown(unittest.TestCase):
             if model.is_group_model:
                 model.print_stats(subj_idx=1)
 
-    @unittest.skip("Not implemented")
-    def load_db(self):
-        pass
+    def test_load_db(self):
+        new_models, params = create_test_models()
+        for i, model in enumerate(new_models):
+            print "sample model", i
+            model.sample(100, dbname='unittest.db', db='pickle')
+            model.load_db(dbname='unittest.db', db='pickle')
+            model.gen_stats()
+            os.remove('unittest.db')
 
     @unittest.skip("TODO")
     def test_init_from_existing_model(self):
@@ -93,7 +98,7 @@ class TestModelCreation(unittest.TestCase):
     def test_assertion_on_wrong_param_name(self):
         HNodeSimple(self.data, depends_on={'non_existant': 'condition'})
 
-    def test_assertion_on_wrong_param_name(self):
+    def test_assertion_on_wrong_param_name_tofix(self):
         # does not catch if correct argument
         HNodeSimple(self.data, depends_on={'non_existant': 'condition', 'mu': 'condition'})
 
