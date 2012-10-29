@@ -8,7 +8,7 @@ Introduction
 :Web site: http://github.com/hddm-dev/kabuki
 :Copyright: This document has been placed in the public domain.
 :License: BSD
-:Version: 0.3.1
+:Version: 0.4
 
 Purpose
 =======
