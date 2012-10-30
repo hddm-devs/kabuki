@@ -1,4 +1,4 @@
-include README.rst INSTALL.rst setupegg.py
+include README.rst INSTALL.rst LICENSE setupegg.py
 recursive-include kabuki *.py
 recursive-include docs *.rst
 global-exclude .git
