@@ -12,6 +12,7 @@ import pymc as pm
 import warnings
 
 from kabuki.utils import flatten
+import kabuki
 
 class Knode(object):
     def __init__(self, pymc_node, name, depends=(), col_name='', subj=False, hidden=False, **kwargs):
@@ -713,38 +714,33 @@ class Hierarchical(object):
 
         return assigned
 
-    def plot_posteriors(self, parameters=None, plot_subjs=False, **kwargs):
+    def plot_posteriors(self, params=None, plot_subjs=False, **kwargs):
         """
         plot the nodes posteriors
         Input:
-            parameters (optional) - a list of parameters to plot.
+            params (optional) - a list of parameters to plot.
             plot_subj (optional) - plot subjs nodes
+            kwargs (optional) - optional keywords to pass to pm.Matplot.plot
 
         TODO: add attributes plot_subjs and plot_var to kabuki
         which will change the plot attribute in the relevant nodes
         """
 
-        if parameters is None: #plot the model
-            pm.Matplot.plot(self.mc, **kwargs)
 
-        else: #plot only the given parameters
+        if isinstance(params, str):
+             params = [params]
 
-            if not isinstance(parameters, list):
-                 parameters = [parameters]
-
-            #get the nodes which will be plotted
-            for param in parameters:
-                nodes = tuple(np.unique(param.group_nodes.values() + param.var_nodes.values()))
-                if plot_subjs:
-                    for nodes_array in param.subj_nodes.values():
-                        nodes += list(nodes_array)
-            #this part does the ploting
-            for node in nodes:
-                plot_value = node.plot
-                node.plot = True
-                pm.Matplot.plot(node, **kwargs)
-                node.plot = plot_value
-
+        #loop over nodes and for each node if it
+        for (name, node) in self.iter_non_observeds():
+            if (params is None) or (node['knode_name'] in params): #plot params if its name was mentioned
+                if not node['hidden']: #plot it if it is not hidden
+                    plot_value = node['node'].plot
+                    if (plot_subjs and node['subj']): #plot if it is a subj node and plot_subjs==True
+                        node['node'].plot = True
+                    if (params is not None) and  (node['knode_name'] in params): #plot if it was sepecficily mentioned
+                        node['node'].plot = True
+                    pm.Matplot.plot(node['node'], **kwargs)
+                    node['node'].plot = plot_value
 
     def get_observeds(self):
         return self.nodes_db[self.nodes_db.observed == True]
