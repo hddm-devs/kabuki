@@ -726,6 +726,8 @@ class Hierarchical(object):
         which will change the plot attribute in the relevant nodes
         """
 
+        #should we save the figures
+        last = kwargs.pop('last', False)
 
         if isinstance(params, str):
              params = [params]
@@ -739,7 +741,7 @@ class Hierarchical(object):
                         node['node'].plot = True
                     if (params is not None) and  (node['knode_name'] in params): #plot if it was sepecficily mentioned
                         node['node'].plot = True
-                    pm.Matplot.plot(node['node'], **kwargs)
+                    pm.Matplot.plot(node['node'], last=last, **kwargs)
                     node['node'].plot = plot_value
 
     def get_observeds(self):
