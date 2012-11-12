@@ -295,7 +295,7 @@ class Hierarchical(object):
 
         else:
             if is_group_model:
-                if 'subj_idx' not in data.dtype.names:
+                if 'subj_idx' not in data.columns:
                     raise ValueError("Group models require 'subj_idx' column in input data.")
 
             self.is_group_model = is_group_model
