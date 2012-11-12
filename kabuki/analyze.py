@@ -322,7 +322,7 @@ def _post_pred_summary_bottom_node(bottom_node, samples=500, stats=None, plot=Fa
     if plot:
         from pymc.Matplot import gof_plot
         for name, value in sampled_stats.iteritems():
-            gof_plot(value, data_stats[name], nbins=bins, name=name, verbose=0)
+            gof_plot(value, data_stats[name], bins=bins, name=name, verbose=0)
 
     result = _evaluate_post_pred(sampled_stats, data_stats, evals=evals)
 
