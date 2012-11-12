@@ -449,7 +449,7 @@ def _plot_posterior_pdf_node(bottom_node, axis, value_range=None, samples=10, bi
 
     axis.set_ylim(bottom=0) # Likelihood and histogram can only be positive
 
-def plot_posterior_predictive(model, plot_func=None, required_method='pdf', columns=3, savefig=False, path=None, figsize=(8,6), **kwargs):
+def plot_posterior_predictive(model, plot_func=None, required_method='pdf', columns=3, save=False, path=None, figsize=(8,6), **kwargs):
     """Plot the posterior predictive distribution of a kabuki hierarchical model.
 
     :Arguments:
@@ -474,7 +474,7 @@ def plot_posterior_predictive(model, plot_func=None, required_method='pdf', colu
 
         figsize : (int, int) (default=(8, 6))
 
-        savefig : bool (default=False)
+        save : bool (default=False)
             Whether to save the figure to a file.
 
         path : str (default=None)
