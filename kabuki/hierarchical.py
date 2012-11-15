@@ -295,7 +295,7 @@ class Hierarchical(object):
 
         else:
             if is_group_model:
-                if 'subj_idx' not in data.dtype.names:
+                if 'subj_idx' not in data.columns:
                     raise ValueError("Group models require 'subj_idx' column in input data.")
 
             self.is_group_model = is_group_model
@@ -714,7 +714,7 @@ class Hierarchical(object):
 
         return assigned
 
-    def plot_posteriors(self, params=None, plot_subjs=False, **kwargs):
+    def plot_posteriors(self, params=None, plot_subjs=False, save=False, **kwargs):
         """
         plot the nodes posteriors
         Input:
@@ -727,7 +727,7 @@ class Hierarchical(object):
         """
 
         #should we save the figures
-        last = kwargs.pop('last', False)
+        kwargs.pop('last', None)
 
         if isinstance(params, str):
              params = [params]
@@ -741,7 +741,7 @@ class Hierarchical(object):
                         node['node'].plot = True
                     if (params is not None) and  (node['knode_name'] in params): #plot if it was sepecficily mentioned
                         node['node'].plot = True
-                    pm.Matplot.plot(node['node'], last=last, **kwargs)
+                    pm.Matplot.plot(node['node'], last=save, **kwargs)
                     node['node'].plot = plot_value
 
     def get_observeds(self):

@@ -4,7 +4,7 @@ import kabuki
 import numpy as np
 from copy import deepcopy
 
-def _add_noise(params, check_valid_func=None, bounds=None, noise=.1, exclude_params=(), share_noise = ()):
+def _add_noise(params, check_valid_func=None, bounds=None, noise=.1, exclude_params=(), share_noise=()):
     """Add individual noise to each parameter.
 
         :Arguments:

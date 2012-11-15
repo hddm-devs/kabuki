@@ -322,7 +322,7 @@ def _post_pred_summary_bottom_node(bottom_node, samples=500, stats=None, plot=Fa
     if plot:
         from pymc.Matplot import gof_plot
         for name, value in sampled_stats.iteritems():
-            gof_plot(value, data_stats[name], nbins=bins, name=name, verbose=0)
+            gof_plot(value, data_stats[name], bins=bins, name=name, verbose=0)
 
     result = _evaluate_post_pred(sampled_stats, data_stats, evals=evals)
 
@@ -449,7 +449,7 @@ def _plot_posterior_pdf_node(bottom_node, axis, value_range=None, samples=10, bi
 
     axis.set_ylim(bottom=0) # Likelihood and histogram can only be positive
 
-def plot_posterior_predictive(model, plot_func=None, required_method='pdf', columns=3, savefig=False, path=None, figsize=(8,6), **kwargs):
+def plot_posterior_predictive(model, plot_func=None, required_method='pdf', columns=3, save=False, path=None, figsize=(8,6), **kwargs):
     """Plot the posterior predictive distribution of a kabuki hierarchical model.
 
     :Arguments:
@@ -474,7 +474,7 @@ def plot_posterior_predictive(model, plot_func=None, required_method='pdf', colu
 
         figsize : (int, int) (default=(8, 6))
 
-        savefig : bool (default=False)
+        save : bool (default=False)
             Whether to save the figure to a file.
 
         path : str (default=None)
