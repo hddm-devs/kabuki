@@ -60,20 +60,25 @@ def _add_noise(params, check_valid_func=None, bounds=None, noise=.1, exclude_par
     if check_valid_func is None:
         check_valid_func = lambda **params: True
 
+
     # Sample parameters until accepted
     original_params = deepcopy(params)
+    params_noise= deepcopy(params)
     while True:
         params = deepcopy(original_params)
 
         # sample params only if not excluded and make sure they are shaared across condition if necessary
-        for (i_cond, (cond, cond_params)) in enumerate(params.iteritems()):
+        for (i_cond, (cond, cond_params)) in enumerate(original_params.iteritems()):
+            if i_cond == 0:
+                cond0 = cond
             for param, value in cond_params.iteritems():
                 if param not in exclude_params:
                     if (i_cond == 0) or (param not in share_noise):
-                        cond0 = cond
-                        params[cond][param] = sample_value(param, value)
+                        new_value = sample_value(param, value)
+                        params[cond][param] = new_value
+                        params_noise[cond][param] = new_value - value
                     else:
-                        params[cond][param] = params[cond0][param]
+                        params[cond][param] += params_noise[cond0][param]
 
         # check if params are valid
         valid = True
