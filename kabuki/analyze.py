@@ -513,7 +513,7 @@ def plot_posterior_predictive(model, plot_func=None, required_method='pdf', colu
             plot_func(bottom_node['node'], ax, **kwargs)
 
         # Save figure if necessary
-        if savefig:
+        if save:
             tag_str = '.'.join(tag)
             if path is not None:
                 fig.savefig(os.path.join(path, tag_str) + '.svg', format='svg')
