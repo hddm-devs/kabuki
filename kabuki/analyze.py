@@ -107,30 +107,6 @@ def group_plot(model, params_to_plot=(), bins=50, samples=5000, save_to=None):
             plt.savefig(os.path.join(save_to, "group_%s.png" % knode_name))
             plt.savefig(os.path.join(save_to, "group_%s.pdf" % knode_name))
 
-def compare_all_pairwise(model):
-    """Perform all pairwise comparisons of dependent parameter
-    distributions (as indicated by depends_on).
-     :Stats generated:
-        * Mean difference
-        * 5th and 95th percentile
-    """
-    raise NotImplementedError, "compare_all_pairwise is currently not functional."
-    from scipy.stats import scoreatpercentile
-
-    print "Parameters\tMean difference\t5%\t95%"
-
-    # Loop through dependent parameters and generate stats
-    for param in model.nodes_db.itervalues():
-        if len(param.group_nodes) < 2:
-            continue
-        # Loop through all pairwise combinations
-        for p0,p1 in combinations(param.group_nodes.values(), 2):
-            diff = p0.trace() - p1.trace()
-            perc_5 = scoreatpercentile(diff, 5)
-            perc_95 = scoreatpercentile(diff, 95)
-            print "%s vs %s\t%.3f\t%.3f\t%.3f" %(p0.__name__, p1.__name__, np.mean(diff), perc_5, perc_95)
-
-
 def plot_all_pairwise(model):
     """Plot all pairwise posteriors to find correlations."""
     import scipy as sp
@@ -322,7 +298,7 @@ def _post_pred_summary_bottom_node(bottom_node, samples=500, stats=None, plot=Fa
     if plot:
         from pymc.Matplot import gof_plot
         for name, value in sampled_stats.iteritems():
-            gof_plot(value, data_stats[name], bins=bins, name=name, verbose=0)
+            gof_plot(value, data_stats[name], nbins=bins, name=name, verbose=0)
 
     result = _evaluate_post_pred(sampled_stats, data_stats, evals=evals)
 
