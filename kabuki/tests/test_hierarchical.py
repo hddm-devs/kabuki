@@ -26,6 +26,7 @@ class TestHierarchicalBreakDown(unittest.TestCase):
         pass
 
     def test_map(self):
+        np.random.seed(123)
         for model in self.models:
             if model.is_group_model:
                 model.approximate_map()

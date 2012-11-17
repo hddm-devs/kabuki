@@ -3,7 +3,7 @@ from __future__ import division
 from copy import copy
 
 import numpy as np
-from scipy.optimize import fmin_powell
+from scipy.optimize import fmin_powell, fmin
 
 from collections import OrderedDict, defaultdict
 
@@ -699,6 +699,14 @@ class Hierarchical(object):
         for (name, value) in new_values.iteritems():
             self.nodes_db.ix[name]['node'].value = value
 
+    def find_starting_values(self):
+        """Find good starting values for the different parameters by
+        optimization.
+        """
+        if self.is_group_model:
+            self.approximate_map()
+        else:
+            self.map()
 
     def _partial_optimize(self, optimize_nodes, evaluate_nodes):
         """Optimize part of the model.
@@ -722,7 +730,11 @@ class Hierarchical(object):
             except pm.ZeroProbability:
                 return np.inf
 
-        fmin_powell(opt, init_vals)
+        try:
+            fmin_powell(opt, init_vals)
+        except Exception:
+            print "Warning: Powell optimization failed. Falling back to simplex."
+            fmin(opt, init_vals)
 
     def approximate_map(self):
         """Set model to its approximate MAP.
