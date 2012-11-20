@@ -304,7 +304,7 @@ def _post_pred_summary_bottom_node(bottom_node, samples=500, stats=None, plot=Fa
 
     return result
 
-def post_pred_check(model, samples=500, bins=100, stats=None, evals=None, plot=False, progress_bar=True):
+def post_pred_check(model, samples=500, bins=100, stats=None, evals=None, plot=False, progress_bar=False):
     """Run posterior predictive check on a model.
 
     :Arguments:
@@ -325,7 +325,7 @@ def post_pred_check(model, samples=500, bins=100, stats=None, evals=None, plot=F
             :Example: {'percentile': scoreatpercentile}
         plot : bool
             Whether to plot the posterior predictive distributions.
-        progress_bar: bool
+        progress_bar : bool
             Display progress bar while sampling.
 
 
