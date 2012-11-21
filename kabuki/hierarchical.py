@@ -3,7 +3,7 @@ from __future__ import division
 from copy import copy
 
 import numpy as np
-from scipy.optimize import fmin_powell
+from scipy.optimize import fmin_powell, fmin
 
 from collections import OrderedDict, defaultdict
 
@@ -437,22 +437,6 @@ class Hierarchical(object):
     def pre_sample(self):
         pass
 
-
-    def _assign_spx(self, param, loc, scale):
-        """assign spx step method to param"""
-        # TODO Imri
-        # self.mc.use_step_method(kabuki.steps.SPXcentered,
-        #                         loc=loc,
-        #                         scale=scale,
-        #                         loc_step_method=param.group_knode.step_method,
-        #                         loc_step_method_args=param.group_knode.step_method_args,
-        #                         scale_step_method=param.var_knode.step_method,
-        #                         scale_step_method_args=param.var_knode.step_method_args,
-        #                         beta_step_method=param.subj_knode.step_method,
-        #                         beta_step_method_args=param.subj_knode.step_method_args)
-        pass
-
-
     def sample(self, *args, **kwargs):
         """Sample from posterior.
 
@@ -626,94 +610,6 @@ class Hierarchical(object):
 
         return self
 
-
-    def init_from_existing_model(self, pre_model, assign_values=True, assign_step_methods=True,
-                                 match=None, **mcmc_kwargs):
-        """
-        initialize the value and step methods of the model using an existing model
-        Input:
-            pre_model - existing mode
-
-            assign_values (boolean) - should values of nodes from the existing model
-                be assigned to the new model
-
-            assign_step_method (boolean) - same as assign_values only for step methods
-
-            match (dict) - dictionary which maps tags from the new model to tags from the
-                existing model. match is a dictionary of dictionaries and it has
-                the following structure:  match[name][new_tag] = pre_tag
-                name is the parameter name. new_tag is the tag of the new model,
-                and pre_tag is a single tag or list of tags from the exisiting model that will be map
-                to the new_tag.
-        """
-        # TODO Imri
-        raise NotImplementedError("TODO")
-        if not self.mc:
-            self.mcmc(assign_step_methods=False, **mcmc_kwargs)
-
-        pre_d = pre_model.param_container.stoch_by_tuple
-        assigned_s = 0; assigned_v = 0
-
-        #set the new nodes
-        for (key, node) in self.param_container.stoch_by_tuple.iteritems():
-            name, h_type, tag, idx = key
-            if name not in pre_model.param_container.params:
-                continue
-
-            #if the key was found then match_nodes assigns the old node value to the new node
-            if pre_d.has_key(key):
-                matched_nodes = [pre_d[key]]
-
-            else: #match tags
-                #get the matching pre_tags
-                try:
-                    pre_tags = match[name][tag]
-                except (TypeError, AttributeError):
-                    raise ValueError('match argument does not have the coorect name or tag')
-
-                if type(pre_tags) == str:
-                    pre_tags = [pre_tags]
-
-                #get matching nodes
-                matched_nodes = [pre_d[(name, h_type, x, idx)] for x in pre_tags]
-
-            #average matched_nodes values
-            if assign_values:
-                node.value = np.mean([x.value for x in matched_nodes])
-                assigned_v += 1
-
-            #assign step method
-            if assign_step_methods:
-                assigned_s += self._assign_step_methods_from_existing(node, pre_model, matched_nodes)
-
-        print "assigned %d values (out of %d)." % (assigned_v, len(self.mc.stochastics))
-        print "assigned %d step methods (out of %d)." % (assigned_s, len(self.mc.stochastics))
-
-    def _assign_step_methods_from_existing(self, node, pre_model, matched_nodes):
-        """
-        private funciton used by init_from_existing_model to assign a node
-        using matched_nodes from pre_model
-        Output:
-             assigned (boolean) - step method was assigned
-
-        """
-
-        if isinstance(matched_nodes, pm.Node):
-            matched_node = [matched_nodes]
-
-        #find the step methods
-        steps = [pre_model.mc.step_method_dict[x][0] for x in matched_nodes]
-
-        #only assign it if it's a Metropolis
-        if isinstance(steps[0], pm.Metropolis):
-            pre_sd = np.median([x.proposal_sd * x.adaptive_scale_factor for x in steps])
-            self.mc.use_step_method(pm.Metropolis, node, proposal_sd = pre_sd)
-            assigned = True
-        else:
-            assigned = False
-
-        return assigned
-
     def plot_posteriors(self, params=None, plot_subjs=False, save=False, **kwargs):
         """
         plot the nodes posteriors
@@ -803,6 +699,14 @@ class Hierarchical(object):
         for (name, value) in new_values.iteritems():
             self.nodes_db.ix[name]['node'].value = value
 
+    def find_starting_values(self):
+        """Find good starting values for the different parameters by
+        optimization.
+        """
+        if self.is_group_model:
+            self.approximate_map()
+        else:
+            self.map()
 
     def _partial_optimize(self, optimize_nodes, evaluate_nodes):
         """Optimize part of the model.
@@ -826,7 +730,11 @@ class Hierarchical(object):
             except pm.ZeroProbability:
                 return np.inf
 
-        fmin_powell(opt, init_vals)
+        try:
+            fmin_powell(opt, init_vals)
+        except Exception:
+            print "Warning: Powell optimization failed. Falling back to simplex."
+            fmin(opt, init_vals)
 
     def approximate_map(self):
         """Set model to its approximate MAP.

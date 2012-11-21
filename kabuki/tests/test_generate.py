@@ -14,7 +14,7 @@ class TestGenerate(unittest.TestCase):
         noise = 1
         params = OrderedDict([('loc', 0), ('scale', 1)])
         np.random.seed(31337)
-        new_params = _add_noise(params, noise=noise)
+        new_params = _add_noise({'test': params}, noise=noise)['test']
 
         # check if copied
         self.assertFalse(new_params is params)
@@ -25,19 +25,19 @@ class TestGenerate(unittest.TestCase):
         self.assertTrue(new_params['scale'] == np.random.normal(loc=params['scale'], scale=noise))
 
         # test whether exclude works
-        new_params = _add_noise(params, noise=noise, exclude_params=('scale',))
+        new_params = _add_noise({'test': params}, noise=noise, exclude_params=('scale',))['test']
         self.assertTrue(new_params['scale'] == 1)
 
         # test whether bounds work
         for i in range(10):
-            bound_params = _add_noise(params, bounds={'loc': (-1, 1), 'scale': (0, 2)}, noise=3)
+            bound_params = _add_noise({'test': params}, bounds={'loc': (-1, 1), 'scale': (0, 2)}, noise=3)['test']
             assert (bound_params['loc'] > -1) and (bound_params['loc'] < 1)
             assert (bound_params['scale'] > 0) and (bound_params['scale'] < 2)
 
         # test whether valid_func works
         check_valid_func = lambda **params: (params['loc'] > -1) and (params['loc'] < 1) and (params['scale'] > 0) and (params['scale'] < 2)
         for i in range(10):
-            bound_params = _add_noise(params, check_valid_func=check_valid_func, noise=3)
+            bound_params = _add_noise({'test': params}, check_valid_func=check_valid_func, noise=3)['test']
             assert (bound_params['loc'] > -1) and (bound_params['loc'] < 1)
             assert (bound_params['scale'] > 0) and (bound_params['scale'] < 2)
 
@@ -69,7 +69,7 @@ class TestGenerate(unittest.TestCase):
         # generate truth
         np.random.seed(seed)
         for i in range(subjs):
-            new_params = _add_noise(params)
+            new_params = _add_noise({'test': params})['test']
             print "check", new_params
             truth = np.float64(pm.rnormal(size=size, **new_params))
             np.testing.assert_array_equal(data[data['subj_idx'] == i]['data'], truth)
@@ -94,7 +94,7 @@ class TestGenerate(unittest.TestCase):
         # generate truth
         np.random.seed(seed)
         for i in range(subjs):
-            new_params = _add_noise(params, exclude_params=('tau',))
+            new_params = _add_noise({'test': params}, exclude_params=('tau',))['test']
             truth = np.float64(pm.rnormal(size=size, **new_params))
             np.testing.assert_array_equal(data[data['subj_idx'] == i]['data'], truth)
             self.assertEqual(params_subjs[i], new_params)
