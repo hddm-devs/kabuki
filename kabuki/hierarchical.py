@@ -256,7 +256,6 @@ class Hierarchical(object):
 
     def __init__(self, data, is_group_model=None, depends_on=None, trace_subjs=True,
                  plot_subjs=False, plot_var=False):
-
         # Init
         self.plot_subjs = plot_subjs
         self.depends_on = depends_on
@@ -266,6 +265,7 @@ class Hierarchical(object):
         if not depends_on:
             depends_on = {}
         else:
+            assert isinstance(depends_on, dict), "depends_on must be a dictionary."
             # Support for supplying columns as a single string
             # -> transform to list
             for key in depends_on:
