@@ -757,8 +757,11 @@ class Hierarchical(object):
         #update map in nodes_db
         self.nodes_db['map'] = np.NaN
         for name, value in self.values.iteritems():
-            self.nodes_db['map'].ix[name] = value
-
+            try:
+                self.nodes_db['map'].ix[name] = value
+            # Some values can be series which we'll just ignore
+            except (AttributeError, ValueError):
+                pass
 
     def create_family_normal(self, name, value=0, g_mu=None,
                              g_tau=15**-2, var_lower=1e-10,
