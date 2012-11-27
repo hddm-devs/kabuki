@@ -708,7 +708,7 @@ class Hierarchical(object):
         else:
             self.map()
 
-    def _partial_optimize(self, optimize_nodes, evaluate_nodes):
+    def _partial_optimize(self, optimize_nodes, evaluate_nodes, fall_to_simplex):
         """Optimize part of the model.
 
         :Arguments:
@@ -730,14 +730,22 @@ class Hierarchical(object):
             except pm.ZeroProbability:
                 return np.inf
 
+        #optimize
         try:
             fmin_powell(opt, init_vals)
-        except Exception:
-            print "Warning: Powell optimization failed. Falling back to simplex."
-            fmin(opt, init_vals)
+        except Exception as e:
+            if fall_to_simplex:
+                print "Warning: Powell optimization failed. Falling back to simplex."
+                fmin(opt, init_vals)
+            else:
+                raise e
 
-    def approximate_map(self):
+
+    def approximate_map(self, fall_to_simplex = True):
         """Set model to its approximate MAP.
+        Input:
+            fall_to_simplex <bool>
+                should map try using simplex algorithm if powell method failes
         """
         ###############################
         # In order to find the MAP of a hierarchical model one needs
@@ -752,7 +760,7 @@ class Hierarchical(object):
 
         for i in range(len(generations)-1, 0, -1):
             # Optimize the generation at i-1 evaluated over the generation at i
-            self._partial_optimize(generations[i-1], generations[i])
+            self._partial_optimize(generations[i-1], generations[i], fall_to_simplex)
 
         #update map in nodes_db
         self.nodes_db['map'] = np.NaN
