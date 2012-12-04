@@ -1,6 +1,7 @@
  #!/usr/bin/python
 from __future__ import division
 from copy import copy
+import pickle
 
 import numpy as np
 from scipy.optimize import fmin_powell, fmin
@@ -12,7 +13,7 @@ import pymc as pm
 import warnings
 
 from kabuki.utils import flatten
-import kabuki
+
 
 class Knode(object):
     def __init__(self, pymc_node, name, depends=(), col_name='', subj=False, hidden=False, **kwargs):
@@ -309,6 +310,9 @@ class Hierarchical(object):
 
         self.num_subjs = self._num_subjs
 
+        self._setup_model()
+
+    def _setup_model(self):
         # create knodes (does not build according pymc nodes)
         self.knodes = self.create_knodes()
 
@@ -319,10 +323,50 @@ class Hierarchical(object):
         # constructs pymc nodes etc and connects them appropriately
         self.create_model()
 
+    def __getstate__(self):
+        from copy import deepcopy
+        d = copy(self.__dict__)
+        d['nodes_db'] = deepcopy(d['nodes_db'].drop('node', axis=1))
+        d['depends'] = dict(d['depends'])
+        #d['model_type'] = self.__class__
+        d['db'] = self.mc.db.__name__
+
+        dbname = d['mc'].db.__name__
+	if (dbname == 'ram'):
+            raise ValueError("db is 'ram'. Saving a model requires a database on disk.")
+	elif (dbname == 'pickle'):
+            d['dbname'] = d['mc'].db.filename
+	elif (dbname == 'txt'):
+            d['dbname'] = d['mc'].db._directory
+	else: # hdf5, sqlite
+            d['dbname'] = d['mc'].db.dbname
+
+        del d['mc']
+        del d['knodes']
+
+        return d
+
+    def __setstate__(self, d):
+        self.__dict__.update(d)
+        self._setup_model()
+        self.create_model()
+        self.load_db(d['dbname'], db=d['db'])
+
+    def save(self, fname):
+        """Save model to file.
+        :Arguments:
+           fname : str
+              filename to save to
+
+        :Notes:
+            * Load models using kabuki.utils.load(fname).
+            * You have to save traces to db, not RAM.
+            * Uses the pickle protocol internally.
+        """
+        pickle.dump(self, open(fname, 'w'))
 
     def create_knodes(self):
         raise NotImplementedError("create_knodes has to be overwritten")
-
 
     def create_model(self, max_retries=8):
         """Set group level distributions. One distribution for each

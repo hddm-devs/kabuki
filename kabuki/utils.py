@@ -1,10 +1,20 @@
 from __future__ import division
+import pickle
+
 import numpy as np
 import pymc as pm
 import sys
 
 def flatten(l):
     return reduce(lambda x, y: list(x)+list(y), l)
+
+def load(fname):
+    """Load a hierarchical model saved to file via
+    model.save(fname)
+
+    """
+    model = pickle.load(open(fname, 'r'))
+    return model
 
 def get_traces(model):
     """Returns recarray of all traces in the model.
