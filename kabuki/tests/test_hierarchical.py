@@ -85,6 +85,14 @@ class TestModelCreation(unittest.TestCase):
     def runTest(self):
         pass
 
+    def test_save_and_load_breakdown(self):
+        m = HNodeSimple(self.data)
+        m.sample(500, dbname='test.db', db='pickle')
+        m.save('test.model')
+        m_load = kabuki.utils.load('test.model')
+        os.remove('test.db')
+        os.remove('test.model')
+
     def test_simple_no_deps(self):
         m = HNodeSimple(self.data)
         n_nodes = 1 + self.n_subj*2 #mu_g + n_subj * (mu_subj + like)
