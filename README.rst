@@ -7,8 +7,8 @@ Introduction
 :Contact: thomas_wiecki@brown.edu, imri_sofer@brown.edu
 :Web site: http://github.com/hddm-dev/kabuki
 :Copyright: This document has been placed in the public domain.
-:License: BSD
-:Version: 0.4
+:License: Simplified BSD (see LICENSE)
+:Version: 0.4.1
 
 Purpose
 =======
