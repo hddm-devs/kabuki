@@ -178,7 +178,8 @@ def gen_rand_data(Stochastic, params, size=50, subjs=1, subj_noise=.1, exclude_p
             if generate_data:
                 samples_from_dist = Stochastic('temp', size=size, **params_cur).value
             else:
-                samples_from_dist = np.empty(size,dtype=np.float) * np.nan
+                samples_from_dist = np.empty(size,dtype=np.float)
+                samples_from_dist[:] = np.nan
             idx = (data['subj_idx'] == subj_idx) & (data['condition'] == condition)
             data[column_name][idx] = np.array(samples_from_dist, dtype=dtype)
 
