@@ -21,6 +21,9 @@ class Knode(object):
         self.name = name
         self.kwargs = kwargs
         self.subj = subj
+        if isinstance(col_name, basestring):
+            col_name = [col_name]
+
         self.col_name = col_name
         self.nodes = OrderedDict()
         self.hidden = hidden
@@ -113,7 +116,7 @@ class Knode(object):
 
             #get value for observed node
             if self.observed:
-                kwargs['value'] = grouped_data[self.col_name].values
+                kwargs['value'] = grouped_data[self.col_name].to_records(index=False)
 
             # Deterministic nodes require a parent argument that is a
             # dict mapping parent names to parent nodes. Knode wraps
@@ -256,12 +259,13 @@ class Hierarchical(object):
     """
 
     def __init__(self, data, is_group_model=None, depends_on=None, trace_subjs=True,
-                 plot_subjs=False, plot_var=False):
+                 plot_subjs=False, plot_var=False, group_only_nodes=()):
         # Init
         self.plot_subjs = plot_subjs
         self.depends_on = depends_on
         self.mc = None
         self.data = pd.DataFrame(data)
+        self.group_only_nodes = group_only_nodes
 
         if not depends_on:
             depends_on = {}

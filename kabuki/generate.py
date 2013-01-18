@@ -1,8 +1,11 @@
 from __future__ import division
 
-import kabuki
-import numpy as np
 from copy import deepcopy
+from itertools import product
+
+import numpy as np
+import pandas as pd
+
 
 def _add_noise(params, check_valid_func=None, bounds=None, noise=.1, exclude_params=(), share_noise=()):
     """Add individual noise to each parameter.
@@ -91,12 +94,12 @@ def _add_noise(params, check_valid_func=None, bounds=None, noise=.1, exclude_par
         if valid:
             return params
 
-def gen_rand_data(Stochastic, params, size=50, subjs=1, subj_noise=.1, exclude_params=(), share_noise=(),
+def gen_rand_data(gen_func, params, size=50, subjs=1, subj_noise=.1, exclude_params=(), share_noise=(),
                   column_name='data', check_valid_func=None, bounds=None, seed=None):
-    """Generate a random dataset using a user-defined random distribution.
+    """Generate a random dataset using a user-defined random function.
 
     :Arguments:
-        Stochastic : a pymc stochastic class of the target distribution (e.g., pymc.Normal)
+        gen_func : A python function taking size and **param kwargs and returning a dataframe
         params : dict
             Parameters to use for data generation. Two options possible:
                 * {'param1': value, 'param2': value2}
@@ -140,44 +143,36 @@ def gen_rand_data(Stochastic, params, size=50, subjs=1, subj_noise=.1, exclude_p
             and no dict if there is only 1 condition.
 
     """
-    from itertools import product
-
     # Check if only dict of params was passed, i.e. no conditions
     if not isinstance(params[params.keys()[0]], dict):
         params = {'none': params}
-
-
-    final_params_set = {}
-    for condition in params.iterkeys():
-            final_params_set[condition] = []
-    dtype = Stochastic('temp', size=2, **(params.values()[0])).dtype
     if seed is not None:
         np.random.seed(seed)
 
-    idx = list(product(range(subjs), params.keys(), range(size)))
-    data = np.array(idx, dtype=[('subj_idx', np.int32), ('condition', 'S20'), (column_name, dtype)])
+    final_params_set = {}
+    for condition in params.iterkeys():
+        final_params_set[condition] = []
 
-
-
-
-
+    data = []
     for subj_idx in range(subjs):
         #if it is a group model add noise to the parameters
         if subjs > 1:
             # Sample subject parameters from a normal around the specified parameters
             subj_params = _add_noise(params, noise=subj_noise, share_noise=share_noise,
-                                        check_valid_func=check_valid_func,
-                                        bounds=bounds,
-                                        exclude_params=exclude_params)
+                                     check_valid_func=check_valid_func,
+                                     bounds=bounds,
+                                     exclude_params=exclude_params)
         else:
             subj_params = params.copy()
 
         #sample for each condition
         for condition, params_cur in subj_params.iteritems():
             final_params_set[condition].append(params_cur)
-            samples_from_dist = Stochastic('temp', size=size, **params_cur).value
-            idx = (data['subj_idx'] == subj_idx) & (data['condition'] == condition)
-            data[column_name][idx] = np.array(samples_from_dist, dtype=dtype)
+            samples_from_dist = gen_func(size=size, **params_cur)
+            samples_from_dist = pd.DataFrame(samples_from_dist)
+            samples_from_dist['subj_idx'] = subj_idx
+            samples_from_dist['condition'] = condition
+            data.append(samples_from_dist)
 
     # Remove list around final_params_set if there is only 1 subject
     if subjs == 1:
@@ -188,5 +183,4 @@ def gen_rand_data(Stochastic, params, size=50, subjs=1, subj_noise=.1, exclude_p
     if len(final_params_set) == 1:
         final_params_set = final_params_set[final_params_set.keys()[0]]
 
-    return data, final_params_set
-
+    return pd.concat(data), final_params_set
