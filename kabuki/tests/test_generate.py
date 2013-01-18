@@ -1,10 +1,13 @@
-import kabuki
-import pymc as pm
 import numpy as np
+import pandas as pd
+
 import unittest
-import scipy.stats
 from collections import OrderedDict
 from kabuki.generate import gen_rand_data, _add_noise
+
+def gen_func_df(size=100, loc=0, scale=1):
+    data = np.random.normal(loc=loc, scale=scale, size=size)
+    return pd.DataFrame(data, columns=['data'])
 
 class TestGenerate(unittest.TestCase):
     def runTest(self):
@@ -42,23 +45,22 @@ class TestGenerate(unittest.TestCase):
             assert (bound_params['scale'] > 0) and (bound_params['scale'] < 2)
 
     def test_single_cond_no_subj(self):
-        params = {'mu': 0, 'tau': 1}
+        params = {'loc': 0, 'scale': 1}
         seed = 31337
-        data, params_return = gen_rand_data(pm.Normal, params, size=100, seed=seed)
+        data, params_return = gen_rand_data(gen_func_df, params, size=100, seed=seed)
         np.random.seed(seed)
-        truth = np.float64(pm.rnormal(size=100, **params))
-
-        np.testing.assert_array_equal(data['data'], truth)
+        truth = gen_func_df(size=100, **params)
+        np.testing.assert_array_equal(data['data'], truth['data'])
         self.assertEqual(params, params_return)
 
     def test_single_cond_multi_subjs(self):
-        params = OrderedDict([('mu', 0), ('tau', 1)])
+        params = OrderedDict([('loc', 0), ('scale', 1)])
         subjs = 3
         size = 100
 
         # generate test data
         seed = 31337
-        data, params_subjs = gen_rand_data(pm.Normal, params, size=size, subjs=subjs, seed=seed)
+        data, params_subjs = gen_rand_data(gen_func_df, params, size=size, subjs=subjs, seed=seed)
 
         # test subj present
         np.testing.assert_array_equal(np.unique(data['subj_idx']), range(subjs))
@@ -71,19 +73,19 @@ class TestGenerate(unittest.TestCase):
         for i in range(subjs):
             new_params = _add_noise({'test': params})['test']
             print "check", new_params
-            truth = np.float64(pm.rnormal(size=size, **new_params))
-            np.testing.assert_array_equal(data[data['subj_idx'] == i]['data'], truth)
+            truth = gen_func_df(size=size, **new_params)
+            np.testing.assert_array_equal(data[data['subj_idx'] == i]['data'], truth['data'])
             self.assertEqual(params_subjs[i], new_params)
 
     def test_single_cond_multi_subjs_exclude(self):
-        params = OrderedDict([('mu', 0), ('tau', 1)])
+        params = OrderedDict([('loc', 0), ('scale', 1)])
         subjs = 3
         size = 100
 
         # generate test data
         seed = 31337
-        data, params_subjs = gen_rand_data(pm.Normal, params, size=size, subjs=subjs,
-                                           exclude_params=('tau',), seed=seed)
+        data, params_subjs = gen_rand_data(gen_func_df, params, size=size, subjs=subjs,
+                                           exclude_params=('scale',), seed=seed)
 
         # test subj present
         np.testing.assert_array_equal(np.unique(data['subj_idx']), range(subjs))
@@ -94,21 +96,21 @@ class TestGenerate(unittest.TestCase):
         # generate truth
         np.random.seed(seed)
         for i in range(subjs):
-            new_params = _add_noise({'test': params}, exclude_params=('tau',))['test']
-            truth = np.float64(pm.rnormal(size=size, **new_params))
-            np.testing.assert_array_equal(data[data['subj_idx'] == i]['data'], truth)
+            new_params = _add_noise({'test': params}, exclude_params=('scale',))['test']
+            truth = gen_func_df(size=size, **new_params)
+            np.testing.assert_array_equal(data[data['subj_idx'] == i]['data'], truth['data'])
             self.assertEqual(params_subjs[i], new_params)
 
 
     def test_mulltiple_cond_no_subj(self):
         size = 100
-        params = OrderedDict([('cond1', {'mu': 0, 'tau': 1}), ('cond2', {'mu': 100, 'tau': 10})])
+        params = OrderedDict([('cond1', {'loc': 0, 'scale': 1}), ('cond2', {'loc': 100, 'scale': 10})])
 
         seed = 31337
-        data, subj_params = gen_rand_data(pm.Normal, params, size=size, seed=seed)
+        data, subj_params = gen_rand_data(gen_func_df, params, size=size, seed=seed)
 
         # test whether conditions are present
-        np.testing.assert_array_equal(np.unique(data['condition']), ['cond1', 'cond2'])
+        np.testing.assert_array_equal(np.unique(data['condition']).values, ['cond1', 'cond2'])
         self.assertEqual(subj_params.keys(), ['cond1', 'cond2'])
 
         # test for correct length
@@ -116,20 +118,20 @@ class TestGenerate(unittest.TestCase):
 
         # generate truth
         np.random.seed(31337)
-        truth = np.float64(pm.rnormal(size=100, **params['cond1']))
-        np.testing.assert_array_equal(data[data['condition'] == 'cond1']['data'], truth)
+        truth = gen_func_df(size=100, **params['cond1'])
+        np.testing.assert_array_equal(data[data['condition'] == 'cond1']['data'], truth['data'])
 
-        truth = np.float64(pm.rnormal(size=100, **params['cond2']))
-        np.testing.assert_array_equal(data[data['condition'] == 'cond2']['data'], truth)
+        truth = gen_func_df(size=100, **params['cond2'])
+        np.testing.assert_array_equal(data[data['condition'] == 'cond2']['data'], truth['data'])
 
 
     def test_column_name(self):
-        params = OrderedDict([('mu', 0), ('tau', 1)])
+        params = OrderedDict([('loc', 0), ('scale', 1)])
         subjs = 100
         size = 100
 
         # generate test data
         np.random.seed(31337)
-        data, params_subjs = gen_rand_data(pm.Normal, params, size=size, subjs=subjs, exclude_params=('tau',), column_name='test')
+        data, params_subjs = gen_rand_data(gen_func_df, params, size=size, subjs=subjs, exclude_params=('scale',))
 
-        self.assertIn('test', data.dtype.names)
+        self.assertIn('data', data.columns)
