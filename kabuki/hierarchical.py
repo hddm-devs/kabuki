@@ -992,3 +992,45 @@ class Hierarchical(object):
 
         return knodes
 
+    def create_family_gamma(self, name, value=0, mean_lower=0, mean_upper=100,
+                          g_tau=15**-2, var_lower=1e-10, var_upper=100, var_value=.1):
+        """Similar to create_family_normal() but adds an exponential
+        transform knode to the subject and group mean nodes. This is useful
+        when the parameter space is restricted from [0, +oo).
+
+        See create_family_normal() help for more information.
+
+        """
+
+        knodes = OrderedDict()
+        if self.is_group_model and name not in self.group_only_nodes:
+            g = Knode(pm.Uniform, name,lower=mean_lower, upper=mean_upper,
+                            value=value, depends=self.depends[name])
+
+            var = Knode(pm.Uniform, '%s_var' % name,
+                        lower=var_lower, upper=var_upper, value=var_value)
+
+            shape = Knode(pm.Deterministic, '%s_shape' % name, eval=lambda x,y: (x**2)/(y**2),
+                        x=g, y=var, plot=False, trace=False, hidden=True)
+
+            rate = Knode(pm.Deterministic, '%s_rate' % name, eval=lambda x,y: x/(y**2),
+                        x=g, y=var, plot=False, trace=False, hidden=True)
+
+
+            subj = Knode(pm.Gamma, '%s_subj'%name, alpha=shape, beta=rate,
+                         value=value, depends=('subj_idx',),
+                         subj=True, plot=False)
+
+            knodes['%s'%name]            = g
+            knodes['%s_var'%name]        = var
+            knodes['%s_rate'%name]       = rate
+            knodes['%s_shape'%name]      = shape
+            knodes['%s_bottom'%name]     = subj
+
+        else:
+            g = Knode(pm.Uniform, name, lower=mean_lower, upper=mean_upper, value=value,
+                            depends=self.depends[name])
+
+            knodes['%s_bottom'%name] = g
+
+        return knodes
