@@ -150,9 +150,12 @@ def gen_rand_data(Stochastic, params, size=50, subjs=1, subj_noise=.1, exclude_p
     final_params_set = {}
     for condition in params.iterkeys():
             final_params_set[condition] = []
-    dtype = Stochastic('temp', size=2, **(params.values()[0])).dtype
+            try:
+                dtype = Stochastic('temp', size=2, **(params.values()[0])).dtype
+            except ValueError:
+                dtype = Stochastic('temp', size=size, **(params.values()[0])).dtype
     if seed is not None:
-        np.random.seed(seed)
+       np.random.seed(seed)
 
     idx = list(product(range(subjs), params.keys(), range(size)))
     data = np.array(idx, dtype=[('subj_idx', np.int32), ('condition', 'S20'), (column_name, dtype)])
