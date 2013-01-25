@@ -992,7 +992,7 @@ class Hierarchical(object):
 
         return knodes
 
-    def create_family_gamma(self, name, value=0, mean_lower=0, mean_upper=100,
+    def create_family_gamma(self, name, value=1, mean_value=1, mean_lower=0, mean_upper=100,
                           g_tau=15**-2, var_lower=1e-10, var_upper=100, var_value=.1):
         """Similar to create_family_normal() but adds an exponential
         transform knode to the subject and group mean nodes. This is useful
@@ -1005,7 +1005,7 @@ class Hierarchical(object):
         knodes = OrderedDict()
         if self.is_group_model and name not in self.group_only_nodes:
             g = Knode(pm.Uniform, name,lower=mean_lower, upper=mean_upper,
-                            value=value, depends=self.depends[name])
+                            value=mean_value, depends=self.depends[name])
 
             var = Knode(pm.Uniform, '%s_var' % name,
                         lower=var_lower, upper=var_upper, value=var_value)
