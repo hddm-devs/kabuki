@@ -4,6 +4,7 @@ import numpy as np
 import pymc as pm
 import math
 import scipy as sc
+import collections
 from pprint import pprint
 from numpy.random import randn
 from numpy import array, sqrt
@@ -184,12 +185,19 @@ class TestStepMethods(unittest.TestCase):
         elif prior is kabuki.utils.HalfCauchy:
             sigma = kabuki.utils.HalfCauchy('sigma', **kwargs)
 
-        x_values = [None]*n_subjs
+        x_values = []
         nodes = {'sigma': sigma}
-        for i in range(n_subjs):
-            x_values[i] = randn()*sigma_0 + mu_0
-            x = pm.Normal('x%d' % i, mu_0, sigma**-2, value=x_values[i], observed=True)
-            nodes['x%d' % i] = x
+        if not isinstance(mu_0, collections.Sequence):
+            mu_0 = [mu_0]
+        n_conds = len(mu_0)
+
+        for i_cond in range(n_conds):
+            for i in range(n_subjs):
+                x_value = randn()*sigma_0 + mu_0[i_cond]
+                x_values.append(x_value)
+                x = pm.Normal('x%d' % i, mu_0[i_cond], sigma**-2, value=x_value, observed=True)
+                nodes['x%d_%d' % (i, i_cond)] = x
+
         return nodes, x_values
 
 
@@ -225,6 +233,42 @@ class TestStepMethods(unittest.TestCase):
         self.assert_results(sigma, sigma_0, true_mean, true_std)
         return mm
 
+    def uniform_normalstd_multiple_conds_with_shared_sigma(self, sigma_0, mu_0, n_subjs, seed, use_metropolis):
+        """test estimation of Normal distribution std with uniform prior
+            sigma_0 - the value of the std noe
+            mu_0 - the value of the mu node
+            use_metropolis - should it use metropolis to evaluate the sampled mean
+                instead of the UniformPriorNormalstd
+        """
+
+        np.random.seed(seed)
+        n_conds = len(mu_0)
+
+        nodes, x_values = self.create_nodes_for_PriorNormalstd(n_subjs, sigma_0, mu_0, prior=pm.Uniform)
+        sigma = nodes['sigma']
+        mm = pm.MCMC(nodes)
+
+        if use_metropolis:
+            mm.sample(20000,5000)
+        else:
+            mm.use_step_method(kabuki.steps.UniformPriorNormalstd, sigma)
+            mm.sample(10000)
+
+
+
+        #calc the new distrbution
+        alpha = (n_subjs*n_conds - 1) / 2.
+        beta = 0
+        for i_cond in range(n_conds):
+            cur_x_values = x_values[i_cond*n_subjs:(i_cond+1)*n_subjs]
+            beta  += sum([(x - mu_0[i_cond])**2 for x in cur_x_values]) / 2.
+        true_mean = math.gamma(alpha-0.5)/math.gamma(alpha)*np.sqrt(beta)
+        anal_var = beta / (alpha - 1) - true_mean**2
+        true_std = np.sqrt(anal_var)
+
+        self.assert_results(sigma, sigma_0, true_mean, true_std)
+        return mm
+
 
     def test_uniform_normalstd_numerical_solution(self):
         """test uniform_normalstd with Metropolis to evaluate the numerical solution of
@@ -242,6 +286,22 @@ class TestStepMethods(unittest.TestCase):
         self.uniform_normalstd(sigma_0=2.5, mu_0=2, n_subjs=5, seed=3, use_metropolis=False)
         self.uniform_normalstd(sigma_0=3.5, mu_0=-4, n_subjs=7, seed=4, use_metropolis=False)
         self.uniform_normalstd(sigma_0=4.5, mu_0=10, n_subjs=4, seed=5, use_metropolis=False)
+
+    def test_uniform_normalstd_with_multiple_condition_numerical_solution(self):
+        """test uniform_normalstd with Metropolis to evaluate the numerical solution of
+        the mean and std"""
+        self.uniform_normalstd_multiple_conds_with_shared_sigma(sigma_0=0.5, mu_0=(0,2,10), n_subjs=8, seed=1, use_metropolis=True)
+        self.uniform_normalstd_multiple_conds_with_shared_sigma(sigma_0=3.5, mu_0=(-100,3), n_subjs=4, seed=2, use_metropolis=True)
+        self.uniform_normalstd_multiple_conds_with_shared_sigma(sigma_0=2.5, mu_0=(1,2), n_subjs=5, seed=3, use_metropolis=True)
+        self.uniform_normalstd_multiple_conds_with_shared_sigma(sigma_0=0.5, mu_0=(-4,-3,2,1,0), n_subjs=7, seed=4, use_metropolis=True)
+
+    def test_UniformNormalstd_step_method_with_multiple_condition(self):
+        """test UniformPriorNormalstd step method"""
+        self.uniform_normalstd_multiple_conds_with_shared_sigma(sigma_0=0.5, mu_0=(0,2,10), n_subjs=8, seed=1, use_metropolis=False)
+        self.uniform_normalstd_multiple_conds_with_shared_sigma(sigma_0=3.5, mu_0=(-100,3), n_subjs=4, seed=2, use_metropolis=False)
+        self.uniform_normalstd_multiple_conds_with_shared_sigma(sigma_0=2.5, mu_0=(1,2), n_subjs=5, seed=3, use_metropolis=False)
+        self.uniform_normalstd_multiple_conds_with_shared_sigma(sigma_0=0.5, mu_0=[-4], n_subjs=7, seed=4, use_metropolis=False)
+
 
 
     def numerical_solution(self, defective_posterior, lb, ub):
