@@ -1,7 +1,6 @@
 from __future__ import division
 
 from copy import deepcopy
-from itertools import product
 
 import numpy as np
 import pandas as pd
@@ -95,7 +94,7 @@ def _add_noise(params, check_valid_func=None, bounds=None, noise=.1, exclude_par
             return params
 
 def gen_rand_data(gen_func, params, size=50, subjs=1, subj_noise=.1, exclude_params=(), share_noise=(),
-                  column_name='data', check_valid_func=None, bounds=None, seed=None):
+                  column_name='data', check_valid_func=None, bounds=None, seed=None, generate_data=True):
     """Generate a random dataset using a user-defined random function.
 
     :Arguments:
@@ -168,7 +167,12 @@ def gen_rand_data(gen_func, params, size=50, subjs=1, subj_noise=.1, exclude_par
         #sample for each condition
         for condition, params_cur in subj_params.iteritems():
             final_params_set[condition].append(params_cur)
-            samples_from_dist = gen_func(size=size, **params_cur)
+            if generate_data:
+                samples_from_dist = gen_func(size=size, **params_cur)
+            else:
+                samples_from_dist = np.empty(size,dtype=np.float)
+                samples_from_dist[:] = np.nan
+
             samples_from_dist = pd.DataFrame(samples_from_dist)
             samples_from_dist['subj_idx'] = subj_idx
             samples_from_dist['condition'] = condition
