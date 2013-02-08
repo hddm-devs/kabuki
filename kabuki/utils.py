@@ -1,9 +1,11 @@
 from __future__ import division
 import pickle
+import sys
 
 import numpy as np
+import pandas as pd
+
 import pymc as pm
-import sys
 
 def flatten(l):
     return reduce(lambda x, y: list(x)+list(y), l)
@@ -94,47 +96,37 @@ def interpolate_trace(x, trace, range=(-1,1), bins=100):
 
     return interp
 
-def save_csv(data, fname, sep=None):
+def save_csv(data, fname, *args, **kwargs):
     """Save record array to fname as csv.
 
     :Arguments:
         data <np.recarray>: Data array to output.
         fname <str>: File name.
 
-    :Optional:
-        sep <str=','>: Separator between columns.
+    :Notes:
+        Forwards call to pandas DataFrame.to_csv
 
     :SeeAlso: load_csv
     """
-    if sep is None:
-        sep = ','
-    with open(fname, 'w') as fd:
-        # Write header
-        fd.write(sep.join(data.dtype.names))
-        fd.write('\n')
-        # Write data
-        for line in data:
-            line_str = [str(i) for i in line]
-            fd.write(sep.join(line_str))
-            fd.write('\n')
+    pd.DataFrame(data).to_csv(fname, *args, **kwargs)
+
 
 def load_csv(*args, **kwargs):
     """Load record array from csv.
 
     :Arguments:
         fname <str>: File name.
-        See numpy.recfromcsv
+        See pandas.read_csv()
 
     :Optional:
-        See numpy.recfromcsv
+        See pandas.read_csv()
 
     :Note:
-        Direct wrapper for numpy.recfromcsv().
+        Forwards call to pandas.read_csv()
 
-    :SeeAlso: save_csv, numpy.recfromcsv
+    :SeeAlso: save_csv, pandas.read_csv()
     """
-    #read data
-    return np.recfromcsv(*args, **kwargs)
+    return pd.read_csv(*args, **kwargs)
 
 
 def set_proposal_sd(mc, tau=.1):
