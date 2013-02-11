@@ -187,4 +187,4 @@ def gen_rand_data(gen_func, params, size=50, subjs=1, subj_noise=.1, exclude_par
     if len(final_params_set) == 1:
         final_params_set = final_params_set[final_params_set.keys()[0]]
 
-    return pd.concat(data), final_params_set
+    return pd.concat(data, ignore_index=True), final_params_set
