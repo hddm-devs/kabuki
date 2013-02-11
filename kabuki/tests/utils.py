@@ -61,10 +61,14 @@ class HNodeTransform(kabuki.Hierarchical):
 
             return [mu_subj, mu_subj_trans, like]
 
+def gen_func_df(size=100, loc=0, scale=1):
+    data = np.random.normal(loc=loc, scale=scale, size=size)
+    return pd.DataFrame(data, columns=['data'])
+
 
 def create_test_models():
     n_subj = 5
-    data, params = kabuki.generate.gen_rand_data(pm.Normal, {'A':{'mu':0, 'tau':1}, 'B': {'mu':0, 'tau':1}}, subjs=n_subj)
+    data, params = kabuki.generate.gen_rand_data(gen_func_df, {'A':{'loc':0, 'scale':1}, 'B': {'loc':0, 'scale':1}}, subjs=n_subj)
     data = pd.DataFrame(data)
     data['condition2'] = np.random.randint(2, size=len(data))
     models = []
