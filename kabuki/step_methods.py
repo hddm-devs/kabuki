@@ -94,15 +94,25 @@ class PriorNormalstd(pm.Gibbs):
         self.maxiter = maxiter
         n = sum([len(x.value.flatten()) for x in self.children])
         self.alpha = (n - 1) / 2.
-        self.mu_node = list(self.children)[0].parents['mu']
+        self.mu_nodes = np.unique([x.parents['mu'] for x in self.children])
         self.fail = 0
 
+        self.groups = [None]*len(self.mu_nodes)
+        for i, mu in enumerate(self.mu_nodes):
+            self.groups[i] = [x for x in self.children if x.parents['mu'] == mu]
+
     def step(self):
-        if isinstance(self.mu_node, pm.Node):
-            mu_val = self.mu_node.value
-        else:
-            mu_val = self.mu_node
-        self.beta  = sum([sum((x.value.flatten() - mu_val)**2) for x in self.children]) / 2.
+
+        #compute beta
+        self.beta = 0
+        for i, mu in enumerate(self.mu_nodes):
+            if isinstance(mu, pm.Node):
+                mu_val = mu.value
+            else:
+                mu_val = mu
+            self.beta  += sum([sum((x.value.flatten() - mu_val)**2) for x in self.groups[i]])
+        self.beta /= 2.
+
         reject = True
         iter = 0
         while (reject) and (iter < self.maxiter):

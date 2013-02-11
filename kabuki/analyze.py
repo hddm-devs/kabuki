@@ -214,7 +214,7 @@ def group_cond_diff(hm, node, cond1, cond2, threshold=0):
     return pooled_mean, pooled_var, mass_under
 
 def _evaluate_post_pred(sampled_stats, data_stats, evals=None):
-    """Evaluate a summary statistics of sampled sets.
+    """Evaluate summary statistics of sampled sets.
 
     :Arguments:
         sampled_stats : dict
@@ -255,7 +255,6 @@ def _evaluate_post_pred(sampled_stats, data_stats, evals=None):
         #evaluate
         for eval_name, func in evals.iteritems():
             value = func(s, data_stats[stat_name])
-            assert np.isscalar(value), "eval function %s is not returning scalar." % eval_name
             results.ix[stat_name][eval_name] = value
 
     return results

@@ -7,6 +7,8 @@ import pymc as pm
 from utils import HNodeSimple, HNodeSimpleVar, sample_from_models, create_test_models
 import pandas as pd
 
+from utils import gen_func_df
+
 class TestHierarchicalBreakDown(unittest.TestCase):
     """
     simple tests to see if hierarchical merthods do not raise and error
@@ -76,7 +78,7 @@ class TestModelCreation(unittest.TestCase):
     def setUpClass(self):
 #    def setUp(self):
         self.n_subj = 3
-        data, _ = kabuki.generate.gen_rand_data(pm.Normal, {'A':{'mu':0, 'tau':1}, 'B': {'mu':0, 'tau':1}},
+        data, _ = kabuki.generate.gen_rand_data(gen_func_df, {'A':{'loc':0, 'scale':1}, 'B': {'loc':0, 'scale':1}},
                                                 subjs=self.n_subj)
         data = pd.DataFrame(data)
         data['condition2'] = np.random.randint(2, size=len(data))
@@ -142,23 +144,23 @@ class TestEstimation(unittest.TestCase):
 
     def test_map_approx(self):
         subjs = 40
-        data, params_true = kabuki.generate.gen_rand_data(pm.Normal,
-                                                          {'A':{'mu':0, 'tau':1}, 'B': {'mu':2, 'tau':1}},
-                                                          subj_noise={'mu':.1}, size=1000, subjs=subjs)
+        data, params_true = kabuki.generate.gen_rand_data(gen_func_df,
+                                                          {'A':{'loc':0, 'scale':1}, 'B': {'loc':2, 'scale':1}},
+                                                          subj_noise={'loc':.1}, size=1000, subjs=subjs)
 
         model = HNodeSimple(data, depends_on={'mu': 'condition'})
 
         model.approximate_map()
 
-        counter = 0;
+        counter = 0
         for condition, subj_params in params_true.iteritems():
             nodes = model.nodes_db[model.nodes_db['condition'] == condition]
             for idx, params in enumerate(subj_params):
                 nodes_subj = nodes[nodes['subj_idx'] == idx]
                 for param_name, value in params.iteritems():
-                    if param_name != 'mu':
+                    if param_name != 'loc':
                         continue
-                    node = nodes_subj[nodes_subj.knode_name == param_name + '_subj']
+                    node = nodes_subj[nodes_subj.knode_name == 'mu_subj']
                     assert len(node) == 1, "Only one node should have been left after slicing."
                     abs_error = np.abs(node.map[0] - value)
                     self.assertTrue(abs_error < .2)
