@@ -1,14 +1,17 @@
 from __future__ import division
 import pickle
 import sys
+import string
 
 import numpy as np
 import pandas as pd
-
 import pymc as pm
 
 def flatten(l):
     return reduce(lambda x, y: list(x)+list(y), l)
+
+def pretty_tag(tag):
+    return tag[0] if len(tag) == 1 else string.join(tag, ', ')
 
 def load(fname):
     """Load a hierarchical model saved to file via

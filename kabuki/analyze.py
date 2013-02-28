@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import pymc as pm
 import pymc.progressbar as pbar
+import utils
 
 from utils import interpolate_trace
 from itertools import combinations
@@ -424,7 +425,8 @@ def _plot_posterior_pdf_node(bottom_node, axis, value_range=None, samples=10, bi
 
     axis.set_ylim(bottom=0) # Likelihood and histogram can only be positive
 
-def plot_posterior_predictive(model, plot_func=None, required_method='pdf', columns=3, save=False, path=None, figsize=(8,6), **kwargs):
+def plot_posterior_predictive(model, plot_func=None, required_method='pdf', columns=3, save=False, path=None,
+                              figsize=(8,6), format='png', **kwargs):
     """Plot the posterior predictive distribution of a kabuki hierarchical model.
 
     :Arguments:
@@ -455,6 +457,10 @@ def plot_posterior_predictive(model, plot_func=None, required_method='pdf', colu
         path : str (default=None)
             Save figure into directory prefix
 
+        format : str or list of strings
+            Save figure to a image file of type 'format'. If more then one format is
+            givven them multiple files are created
+
         plot_func : function (default=_plot_posterior_pdf_node)
             Plotting function to use for each observed node
             (see default function for an example).
@@ -473,7 +479,7 @@ def plot_posterior_predictive(model, plot_func=None, required_method='pdf', colu
     # Plot different conditions (new figure for each)
     for tag, nodes in observeds.groupby('tag'):
         fig = plt.figure(figsize=figsize)
-        fig.suptitle(tag, fontsize=12)
+        fig.suptitle(utils.pretty_tag(tag), fontsize=12)
         fig.subplots_adjust(top=0.9, hspace=.4, wspace=.3)
 
         # Plot individual subjects (if present)
@@ -489,11 +495,10 @@ def plot_posterior_predictive(model, plot_func=None, required_method='pdf', colu
 
         # Save figure if necessary
         if save:
-            tag_str = '.'.join(tag)
-            if path is not None:
-                fig.savefig(os.path.join(path, tag_str) + '.svg', format='svg')
-                fig.savefig(os.path.join(path, tag_str) + '.png', format='png')
-            else:
-                fig.savefig(tag_str + '.svg', format='svg')
-                fig.savefig(tag_str + '.png', format='png')
+            fname = 'ppq_' + '.'.join(tag)
+            if path is None:
+                path = '.'
+            if isinstance(format, str):
+                format = [format]
+            [fig.savefig('%s.%s' % (os.path.join(path, fname), x), format=x) for x in format]
 
