@@ -142,6 +142,11 @@ def gen_rand_data(gen_func, params, size=50, subjs=1, subj_noise=.1, exclude_par
             and no dict if there is only 1 condition.
 
     """
+
+    #The value of generate_data affects the parameters generation
+    #so in the mean time we fix that, by completely ignoring the argument.
+    generate_data = True
+
     # Check if only dict of params was passed, i.e. no conditions
     if not isinstance(params[params.keys()[0]], dict):
         params = {'none': params}
