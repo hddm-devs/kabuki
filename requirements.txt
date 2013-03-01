@@ -1,4 +1,4 @@
-scipy==0.7.0
+scipy
 Distutils2==1.0a4
 argparse==1.2.1
 numpy
