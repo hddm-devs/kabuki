@@ -12,6 +12,7 @@ from nose import SkipTest
 from pandas import DataFrame
 from time import time
 
+from kabuki.utils import stochastic_from_dist
 
 def multi_normal_like(values, vec_mu, tau):
     """logp for multi normal"""
@@ -21,7 +22,7 @@ def multi_normal_like(values, vec_mu, tau):
 
     return logp
 
-MN = pm.stochastic_from_dist(name="MultiNormal", logp=multi_normal_like, dtype=np.double, mv=True)
+MN = stochastic_from_dist(name="MultiNormal", logp=multi_normal_like)
 
 
 

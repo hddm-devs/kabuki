@@ -137,6 +137,9 @@ def set_proposal_sd(mc, tau=.1):
 
     return
 
+def stochastic_from_dist(*args, **kwargs):
+    return pm.stochastic_from_dist(*args, dtype=np.dtype('O'),
+                                   mv=True, **kwargs)
 
 ###########################################################################
 # The following code is directly copied from Twisted:
