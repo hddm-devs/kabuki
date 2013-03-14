@@ -502,3 +502,27 @@ def plot_posterior_predictive(model, plot_func=None, required_method='pdf', colu
                 format = [format]
             [fig.savefig('%s.%s' % (os.path.join(path, fname), x), format=x) for x in format]
 
+def geweke_problems(model, fname=None, **kwargs):
+    """
+    return a list of nodes who were detected as problemtic according to the geweke test
+    Input:
+        fname : string (deafult - None)
+            Save result to file named fname
+        kwargs : keywords argument passed to the geweke function
+    """
+
+    #search for geweke problems
+    g = pm.geweke(model.mc)
+    problems = []
+    for node, output in g.iteritems():
+        values = np.array(output)[:,1]
+        if np.any(np.abs(values) > 2):
+            problems.append(node)
+
+    #write results to file if needed
+    if fname is not None:
+        with open(fname, 'w') as f:
+            for node in problems:
+                f.write(node)
+
+    return problems
