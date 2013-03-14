@@ -116,7 +116,7 @@ class Knode(object):
 
             #get value for observed node
             if self.observed:
-                kwargs['value'] = grouped_data[self.col_name].to_records(index=False)
+                kwargs['value'] = grouped_data[self.col_name] #.to_records(index=False)
 
             # Deterministic nodes require a parent argument that is a
             # dict mapping parent names to parent nodes. Knode wraps

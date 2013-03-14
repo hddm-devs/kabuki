@@ -419,13 +419,13 @@ def _plot_posterior_pdf_node(bottom_node, axis, value_range=None, samples=10, bi
 
     # Plot data
     if len(bottom_node.value) != 0:
-        axis.hist(bottom_node.value, normed=True, color='r',
+        axis.hist(bottom_node.value.values, normed=True, color='r',
                   range=(value_range[0], value_range[-1]), label='data',
                   bins=bins, histtype='step', lw=2.)
 
     axis.set_ylim(bottom=0) # Likelihood and histogram can only be positive
 
-def plot_posterior_predictive(model, plot_func=None, required_method='pdf', columns=3, save=False, path=None,
+def plot_posterior_predictive(model, plot_func=None, required_method='pdf', columns=None, save=False, path=None,
                               figsize=(8,6), format='png', **kwargs):
     """Plot the posterior predictive distribution of a kabuki hierarchical model.
 
@@ -475,6 +475,16 @@ def plot_posterior_predictive(model, plot_func=None, required_method='pdf', colu
         plot_func = _plot_posterior_pdf_node
 
     observeds = model.get_observeds()
+
+    if columns is None:
+        # If there are less than 3 items to plot per figure,
+        # only use as many columns as there are items.
+        max_items = max([len(i[1]) for i in
+                         observeds.groupby('tag').groups.iteritems()])
+        if max_items > 3:
+            columns = 3
+        else:
+            columns = max_items
 
     # Plot different conditions (new figure for each)
     for tag, nodes in observeds.groupby('tag'):

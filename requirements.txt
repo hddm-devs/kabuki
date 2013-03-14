@@ -1,7 +1,8 @@
+scipy
 Distutils2==1.0a4
 argparse==1.2.1
-numpy==1.6.2
-pandas==0.8.1
+numpy
+pandas
 pymc==2.2
 python-dateutil==1.5
 pytz==2012d

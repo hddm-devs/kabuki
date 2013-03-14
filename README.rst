@@ -2,13 +2,12 @@
 Introduction
 ************
 
-:Date: August 15, 2012
 :Author: Thomas Wiecki, Imri Sofer
 :Contact: thomas_wiecki@brown.edu, imri_sofer@brown.edu
 :Web site: http://github.com/hddm-dev/kabuki
 :Copyright: This document has been placed in the public domain.
 :License: Simplified BSD (see LICENSE)
-:Version: 0.4.1
+:Version: 0.5dev
 
 Purpose
 =======
