@@ -89,6 +89,15 @@ def _add_noise(params, check_valid_func=None, bounds=None, noise=.1, exclude_par
             if not valid:
                 break
 
+        #The bounds that we used in the HDDM-paper were a:(0,inf) and t:(0,inf).
+        #But these bounds can lead to sampled values which are too close to 0, and can cause
+        #problems in the estimation. The best fix is to change the bounds in hddm.generate.gen_rand_data
+        #However this might means that we would not be able to reporduce old simulation, and we will need
+        #to rerun them. so instead we use this small patch.
+        for cond_params in params.itervalues():
+            cond_params['a'] = max(cond_params['a'], 0.07)
+            cond_params['t'] = max(cond_params['t'], 0.0003)
+
         # return params
         if valid:
             return params
