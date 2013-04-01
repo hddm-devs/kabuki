@@ -511,8 +511,9 @@ class Hierarchical(object):
 
         return self.mc
 
+    @property
     def dic_info(self):
-        """returns information about the model DIC"""
+        """returns information about the model DIC."""
 
         info = {}
         try:
@@ -525,6 +526,10 @@ class Hierarchical(object):
             info['pD'] = np.nan
 
         return info
+
+    @property
+    def dic(self):
+        return self.dic_info['DIC']
 
     def _output_stats(self, stats_str, fname=None):
         """
