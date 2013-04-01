@@ -475,10 +475,7 @@ def plot_posterior_predictive(model, plot_func=None, required_method='pdf', colu
         # only use as many columns as there are items.
         max_items = max([len(i[1]) for i in
                          observeds.groupby('tag').groups.iteritems()])
-        if max_items > 3:
-            columns = 3
-        else:
-            columns = max_items
+        columns = min(3, max_items)
 
     # Plot different conditions (new figure for each)
     for tag, nodes in observeds.groupby('tag'):
