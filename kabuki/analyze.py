@@ -11,13 +11,8 @@ import pymc.progressbar as pbar
 import utils
 
 from utils import interpolate_trace
-from itertools import combinations
 
-try:
-    from collections import OrderedDict
-except ImportError:
-    from ordereddict import OrderedDict
-
+from collections import OrderedDict
 
 def plot_posterior_nodes(nodes, bins=50):
     """Plot interpolated posterior of a list of nodes.
