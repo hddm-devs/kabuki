@@ -14,7 +14,7 @@ from utils import interpolate_trace
 
 from collections import OrderedDict
 
-def plot_posterior_nodes(nodes, bins=50):
+def plot_posterior_nodes(nodes, bins=50, lb=None, ub=None):
     """Plot interpolated posterior of a list of nodes.
 
     :Arguments:
@@ -22,11 +22,17 @@ def plot_posterior_nodes(nodes, bins=50):
             List of pymc.Node's to plot the posterior of
         bins : int (default=50)
             How many bins to use for computing the histogram.
-
+        lb : float (default is to infer from data)
+            Lower boundary to use for plotting.
+        ub : float (default is to infer from data)
+            Upper boundary to use for plotting.
     """
     figure()
-    lb = min([min(node.trace()[:]) for node in nodes])
-    ub = max([max(node.trace()[:]) for node in nodes])
+    if lb is None:
+        lb = min([min(node.trace()[:]) for node in nodes])
+    if ub is None:
+        ub = max([max(node.trace()[:]) for node in nodes])
+
     x_data = np.linspace(lb, ub, 300)
 
     for node in nodes:
