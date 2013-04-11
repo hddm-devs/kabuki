@@ -536,7 +536,7 @@ class Hierarchical(object):
         used by print_stats and print_group_stats to print the stats to the screen
         or to file
         """
-        info = self.dic_info()
+        info = self.dic_info
         if fname is None:
             print stats_str
             print "DIC: %f" % info['DIC']
