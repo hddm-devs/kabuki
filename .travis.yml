@@ -5,6 +5,7 @@ before_install:
   - sudo apt-get install gfortran liblapack-dev python-scipy libblas-dev
 install:
   - pip install numpy
+  - pip install scipy
   - pip install matplotlib
   - pip install pandas
   - pip install --no-deps pymc
