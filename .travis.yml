@@ -3,5 +3,10 @@ python:
   - "2.7"
 before_install:
   - sudo apt-get install gfortran liblapack-dev python-scipy libblas-dev
-install: "pip install -r requirements.txt --use-mirrors"
+install:
+  - pip install numpy
+  - pip install matplotlib
+  - pip install pandas
+  - pip install --no-deps pymc
+  - python setup.py build_ext --inplace
 script: nosetests
