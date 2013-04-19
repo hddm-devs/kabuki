@@ -739,6 +739,15 @@ class Hierarchical(object):
         for node in nodes.iterrows():
             yield node
 
+    def get_traces(self):
+        """Returns a DataFrame containing traces of all stochastic
+        nodes in the model.
+
+        :Note: It is quite easy to then save this trace to csv by
+        calling model.get_traces().to_csv('samples.csv')
+        """
+        return pd.DataFrame({i.__name__: i.trace() for i in self.get_stochastics().node})
+
     @property
     def values(self):
         return {name: node['node'].value[()] for (name, node) in self.iter_non_observeds()}
