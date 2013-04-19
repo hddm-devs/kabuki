@@ -739,6 +739,12 @@ class Hierarchical(object):
         for node in nodes.iterrows():
             yield node
 
+    def get_group_traces(self):
+        """Returns a DataFrame containing traces of all stochastic
+        group nodes in the model.
+        """
+        return pd.DataFrame({i.__name__: i.trace() for i in self.get_group_nodes().node})
+
     def get_traces(self):
         """Returns a DataFrame containing traces of all stochastic
         nodes in the model.
