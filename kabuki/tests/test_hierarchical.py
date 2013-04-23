@@ -168,3 +168,21 @@ class TestEstimation(unittest.TestCase):
 
         # looping for each condition (i.e. twice)
         self.assertEqual(counter, subjs*2)
+
+
+class TestConcatenate(unittest.TestCase):
+    def test_concat(self):
+        n_subj = 5
+        data, params = kabuki.generate.gen_rand_data(gen_func_df, {'A':{'loc':0, 'scale':1}, 'B': {'loc':0, 'scale':1}}, subjs=n_subj)
+        data = pd.DataFrame(data)
+
+        models = []
+        for i in range(4):
+            m = HNodeSimple(data)
+            m.sample(50, burn=0, db='pickle', dbname='test_%d'%i)
+            models.append(m)
+
+        super_model = kabuki.utils.concat_models(models)
+        stochs = super_model.get_stochastics()
+        for stoch in stochs.node:
+            self.assertEqual(len(stoch.trace[:]), 50*4)

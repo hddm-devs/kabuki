@@ -2,6 +2,7 @@ from __future__ import division
 import pickle
 import sys
 import string
+import copy
 
 import numpy as np
 import pandas as pd
@@ -143,6 +144,27 @@ def set_proposal_sd(mc, tau=.1):
 def stochastic_from_dist(*args, **kwargs):
     return pm.stochastic_from_dist(*args, dtype=np.dtype('O'),
                                    mv=True, **kwargs)
+
+def concat_models(models, concat_traces=True):
+    """Concatenate traces of multiple identical models into a new
+    model containing all traces of the individual models.
+
+    """
+    # copy first model
+    target_model = copy.deepcopy(models[0])
+    target_stochs = target_model.get_stochastics()
+    # append traces
+    for i, model in enumerate(models[1:]):
+        stochs = model.get_stochastics()
+        for node, target_node in zip(stochs.node, target_stochs.node):
+            assert node.__name__ == target_node.__name__, "Node names do not match. You have to pass identical models."
+            if concat_traces:
+                target_node.trace._trace[0] = np.concatenate([target_node.trace[:], node.trace[:]])
+            else:
+                target_node.trace._trace[i+1] = node.trace[:]
+
+    return target_model
+
 
 ###########################################################################
 # The following code is directly copied from Twisted:
