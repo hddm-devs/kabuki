@@ -186,3 +186,7 @@ class TestConcatenate(unittest.TestCase):
         stochs = super_model.get_stochastics()
         for stoch in stochs.node:
             self.assertEqual(len(stoch.trace[:]), 50*4)
+
+        for i in range(4):
+            os.remove('test_%d'%i)
+
