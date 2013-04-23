@@ -839,3 +839,4 @@ class Hierarchical(object):
             # Some values can be series which we'll just ignore
             except (AttributeError, ValueError):
                 pass
+
