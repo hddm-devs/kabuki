@@ -163,6 +163,8 @@ def concat_models(models, concat_traces=True):
             else:
                 target_node.trace._trace[i+1] = node.trace[:]
 
+    target_model.gen_stats()
+
     return target_model
 
 
