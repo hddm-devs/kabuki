@@ -137,6 +137,9 @@ class Knode(object):
                     kwargs.pop(name)
                 kwargs['parents'] = parents_dict
 
+                if self.observed:
+                    kwargs['parents']['value'] = kwargs['value']
+
 
             # Deterministic nodes require a doc kwarg, we don't really
             # need that so if its not supplied, just use the name
