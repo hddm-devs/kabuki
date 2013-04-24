@@ -16,7 +16,8 @@ from kabuki.utils import flatten
 
 
 class Knode(object):
-    def __init__(self, pymc_node, name, depends=(), col_name='', subj=False, hidden=False, **kwargs):
+    def __init__(self, pymc_node, name, depends=(), col_name='',
+                 subj=False, hidden=False, pass_dataframe=True, **kwargs):
         self.pymc_node = pymc_node
         self.name = name
         self.kwargs = kwargs
@@ -27,6 +28,8 @@ class Knode(object):
         self.col_name = col_name
         self.nodes = OrderedDict()
         self.hidden = hidden
+
+        self.pass_dataframe = pass_dataframe
 
         #create self.parents
         self.parents = {}
@@ -116,7 +119,10 @@ class Knode(object):
 
             #get value for observed node
             if self.observed:
-                kwargs['value'] = grouped_data[self.col_name] #.to_records(index=False)
+                if self.pass_dataframe:
+                    kwargs['value'] = grouped_data[self.col_name] #.to_records(index=False)
+                else:
+                    kwargs['value'] = grouped_data[self.col_name].values #.to_records(index=False)
 
             # Deterministic nodes require a parent argument that is a
             # dict mapping parent names to parent nodes. Knode wraps
