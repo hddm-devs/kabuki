@@ -783,7 +783,7 @@ class Hierarchical(object):
             nodes : iterable
                 list nodes to optimize.
         """
-        non_observeds = filter(lambda x: x.observed, optimize_nodes)
+        non_observeds = filter(lambda x: not x.observed, optimize_nodes)
 
         init_vals = [node.value for node in non_observeds]
 
