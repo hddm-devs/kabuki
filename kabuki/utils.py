@@ -292,3 +292,26 @@ HalfCauchy = pm.stochastic_from_dist(name="Half Cauchy",
 if __name__ == "__main__":
     import doctest
     doctest.testmod()
+
+def concat_models(models):
+    n_models = len(models)
+	model = models[0]
+	# get group and subject nodes of first model
+	gnodes = models[0].get_group_nodes().index
+	snodes = models[0].get_subj_nodes().index
+	#check if nodes are consistent across models
+	for m in np.arange(n_models-1)+1:
+		tmp_gnodes =  models[m].get_group_nodes().index
+		tmp_snodes =  models[m].get_subj_nodes().index
+		if sum(gnodes == tmp_gnodes) != len(gnodes):
+			print 'ERROR: Group nodes are not consistent across models!'
+			break
+		if sum(snodes == tmp_snodes) != len(snodes):
+			print 'ERROR: Subject nodes are not consistent across models!'
+			break
+	# concatenate traces
+	nodes = np.concatenate((gnodes,snodes))
+	for n in nodes:
+		for m  in np.arange(n_models-1)+1:
+			model.mc.trace(n)._trace[0] = np.concatenate((model.mc.trace(n)._trace[0],models[m].mc.trace(n)._trace[0]))
+	return model
