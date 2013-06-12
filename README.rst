@@ -7,7 +7,7 @@ Introduction
 :Web site: http://github.com/hddm-dev/kabuki
 :Copyright: This document has been placed in the public domain.
 :License: Simplified BSD (see LICENSE)
-:Version: 0.5.1
+:Version: 0.5.1.dev
 
 Purpose
 =======
@@ -169,7 +169,7 @@ An example data file in csv might looks this:
     1,        0.3,  'low'
     1,        -0.25,'low'
     1,        1.3,  'high'
-    1,        0.5.1,  'high'
+    1,        0.5,  'high'
     [...]
     24,       0.8,  'low'
     24,       0.1,  'high'
