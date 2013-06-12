@@ -355,6 +355,7 @@ class Hierarchical(object):
         self._setup_model()
         self.create_model()
         self.load_db(d['dbname'], db=d['db'])
+        self.gen_stats()
 
     def save(self, fname):
         """Save model to file.
