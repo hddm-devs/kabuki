@@ -234,15 +234,15 @@ def _evaluate_post_pred(sampled_stats, data_stats, evals=None):
         # Generate some default evals
         evals = OrderedDict()
         evals['observed'] = lambda x, y: y
-        evals['credible'] = lambda x, y: (scoreatpercentile(x, 97.5) > y) and (scoreatpercentile(x, 2.5) < y)
-        evals['quantile'] = percentileofscore
-        evals['SEM'] = lambda x, y: (np.mean(x) - y)**2
-        evals['mahalanobis'] = lambda x, y: np.abs(np.mean(x) - y)/np.std(x)
         evals['mean'] = lambda x,y: np.mean(x)
         evals['std'] = lambda x,y: np.std(x)
-        for q in [2.5, 25, 50, 75, 97.5]:
-            key = str(q) + 'q'
-            evals[key] = lambda x, y, q=q: scoreatpercentile(x, q)
+        evals['SEM'] = lambda x, y: (np.mean(x) - y)**2
+        evals['credible'] = lambda x, y: (scoreatpercentile(x, 97.5) > y) and (scoreatpercentile(x, 2.5) < y)
+        evals['quantile'] = percentileofscore
+        evals['mahalanobis'] = lambda x, y: np.abs(np.mean(x) - y)/np.std(x)
+        #for q in [2.5, 25, 50, 75, 97.5]:
+        #    key = str(q) + 'q'
+        #    evals[key] = lambda x, y, q=q: scoreatpercentile(x, q)
 
     # Evaluate all eval-functions
     results = pd.DataFrame(index=sampled_stats.keys(), columns=evals.keys() + ['NaN'])
@@ -262,7 +262,7 @@ def _evaluate_post_pred(sampled_stats, data_stats, evals=None):
     return results
 
 
-def _post_pred_summary_bottom_node(bottom_node, samples=500, stats=None, plot=False, bins=100, evals=None):
+def _post_pred_summary_bottom_node(bottom_node, samples=500, stats=None, plot=False, bins=100, evals=None, data=None):
     """Create posterior predictive check for a single bottom node."""
     def _calc_stats(data, stats):
         out = {}
@@ -275,7 +275,9 @@ def _post_pred_summary_bottom_node(bottom_node, samples=500, stats=None, plot=Fa
 
     ############################
     # Compute stats over data
-    data = bottom_node.value
+    if data is None:
+        data = bottom_node.value
+
     data_stats = _calc_stats(data, stats)
 
     ###############################################
@@ -290,7 +292,7 @@ def _post_pred_summary_bottom_node(bottom_node, samples=500, stats=None, plot=Fa
         _parents_to_random_posterior_sample(bottom_node)
         # Generate data from bottom node
         sampled = bottom_node.random()
-        sampled_stat = _calc_stats(sampled, stats)
+        sampled_stat = _calc_stats(sampled['rt'].values, stats)
 
         # Add it the results container
         for name, value in sampled_stat.iteritems():
@@ -305,7 +307,7 @@ def _post_pred_summary_bottom_node(bottom_node, samples=500, stats=None, plot=Fa
 
     return result
 
-def post_pred_check(model, samples=500, bins=100, stats=None, evals=None, plot=False, progress_bar=False):
+def post_pred_check(model, groupby=None, samples=500, bins=100, stats=None, evals=None, plot=False, progress_bar=False):
     """Run posterior predictive check on a model.
 
     :Arguments:
@@ -356,6 +358,62 @@ def post_pred_check(model, samples=500, bins=100, stats=None, evals=None, plot=F
             continue # Skip
 
         results[name] = _post_pred_summary_bottom_node(node, samples=samples, bins=bins, evals=evals, stats=stats, plot=plot)
+        if progress_bar:
+            bar.animate(n_iter)
+
+    return pd.concat(results, names=['node'])
+
+def post_pred_check_groupby(model, groupby, field, samples=500, bins=100, stats=None, evals=None, plot=False, progress_bar=False):
+    """Run posterior predictive check on a model.
+
+    :Arguments:
+        model : kabuki.Hierarchical
+            Kabuki model over which to compute the ppc on.
+
+    :Optional:
+        samples : int
+            How many samples to generate for each node.
+        bins : int
+            How many bins to use for computing the histogram.
+        stats : dict
+            User-defined statistics to compute (by default mean and std are computed)
+            and evaluate over the samples.
+            :Example: {'mean': np.mean, 'median': np.median}
+        evals : dict
+            User-defined evaluations of the statistics (by default 95 percentile and SEM).
+            :Example: {'percentile': scoreatpercentile}
+        plot : bool
+            Whether to plot the posterior predictive distributions.
+        progress_bar : bool
+            Display progress bar while sampling.
+
+
+    :Returns:
+        Hierarchical pandas.DataFrame with the different statistics.
+
+    """
+    import pandas as pd
+    results = {}
+
+    # Progress bar
+    if progress_bar:
+        n_iter = len(model.get_observeds()) * model.num_subjs
+        bar = pbar.ProgressBar(n_iter)
+        bar_iter = 0
+    else:
+        print "Sampling..."
+
+    for name, data in model.data.groupby(groupby):
+        node = model.get_data_nodes(data.index)
+
+        if progress_bar:
+            bar_iter += 1
+            bar.update(bar_iter)
+
+        if node is None or not hasattr(node, 'random'):
+            continue # Skip
+
+        results[name] = _post_pred_summary_bottom_node(node, samples=samples, bins=bins, evals=evals, stats=stats, plot=plot, data=data[field].values)
         if progress_bar:
             bar.animate(n_iter)
 

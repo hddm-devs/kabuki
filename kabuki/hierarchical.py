@@ -764,6 +764,18 @@ class Hierarchical(object):
         """
         return pd.DataFrame({i.__name__: i.trace() for i in self.get_stochastics().node})
 
+    def get_data_nodes(self, idx):
+        data_nodes = []
+        for name, node_descr in self.iter_observeds():
+            node = node_descr['node']
+            if set(idx).issubset(set(node.value.index)):
+                data_nodes.append(node)
+
+        if len(data_nodes) != 1:
+            raise NotImplementedError("Supply a grouping so that at most 1 observed node codes for each group.")
+
+        return data_nodes[0]
+
     @property
     def values(self):
         return {name: node['node'].value[()] for (name, node) in self.iter_non_observeds()}
@@ -848,4 +860,3 @@ class Hierarchical(object):
             # Some values can be series which we'll just ignore
             except (AttributeError, ValueError):
                 pass
-
