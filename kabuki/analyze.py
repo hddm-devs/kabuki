@@ -262,7 +262,7 @@ def _evaluate_post_pred(sampled_stats, data_stats, evals=None):
     return results
 
 
-def _post_pred_generate(bottom_node, samples=500):
+def _post_pred_generate(bottom_node, samples=500, data=None, append_data=False):
     """Generate posterior predictive data from a single observed node."""
     datasets = []
 
@@ -271,7 +271,10 @@ def _post_pred_generate(bottom_node, samples=500):
     for sample in range(samples):
         _parents_to_random_posterior_sample(bottom_node)
         # Generate data from bottom node
-        datasets.append(bottom_node.random())
+        sampled_data = bottom_node.random()
+        if append_data and data is not None:
+            sampled_data = sampled_data.join(data, lsuffix='_sampled')
+        datasets.append(sampled_data)
 
     return datasets
 
@@ -312,7 +315,7 @@ def _post_pred_summary_bottom_node(data, sim_datasets, stats=None, plot=False, b
 
     return result
 
-def post_pred_check(model, groupby=None, compute_stats=True, samples=500, bins=100, stats=None, evals=None, plot=False, progress_bar=False, field=None):
+def post_pred_check(model, groupby=None, compute_stats=True, samples=500, bins=100, stats=None, evals=None, plot=False, progress_bar=False, field=None, append_data=False):
     """Run posterior predictive check on a model.
 
     :Arguments:
@@ -322,6 +325,9 @@ def post_pred_check(model, groupby=None, compute_stats=True, samples=500, bins=1
     :Optional:
         samples : int
             How many samples to generate for each node.
+        groupby : list
+            Alternative grouping of the data. If not supplied, uses splitting
+            of the model (as provided by depends_on).
         bins : int
             How many bins to use for computing the histogram.
         stats : dict
@@ -335,6 +341,10 @@ def post_pred_check(model, groupby=None, compute_stats=True, samples=500, bins=1
             Whether to plot the posterior predictive distributions.
         progress_bar : bool
             Display progress bar while sampling.
+        field : string
+            Which column name to run the stats on
+        append_data : bool (default=False)
+            Whether to append the observed data of each node to the replicatons.
 
 
     :Returns:
@@ -353,7 +363,7 @@ def post_pred_check(model, groupby=None, compute_stats=True, samples=500, bins=1
         print "Sampling..."
 
     if groupby is None:
-        iter_data = ((name, obs['node'].value) for name, obs in model.iter_observeds())
+        iter_data = ((name, model.data.ix[obs['node'].value.index]) for name, obs in model.iter_observeds())
     else:
         iter_data = model.data.groupby(groupby)
 
@@ -369,7 +379,7 @@ def post_pred_check(model, groupby=None, compute_stats=True, samples=500, bins=1
 
         ##############################
         # Sample and generate stats
-        datasets = _post_pred_generate(node, samples=samples)
+        datasets = _post_pred_generate(node, samples=samples, data=data, append_data=append_data)
         if compute_stats:
             results[name] = _post_pred_summary_bottom_node(data, datasets, bins=bins, evals=evals, stats=stats, plot=plot, field=field)
         else:
@@ -380,61 +390,6 @@ def post_pred_check(model, groupby=None, compute_stats=True, samples=500, bins=1
 
     return pd.concat(results, names=['node'])
 
-def post_pred_check_groupby(model, groupby, field, samples=500, bins=100, stats=None, evals=None, plot=False, progress_bar=False):
-    """Run posterior predictive check on a model.
-
-    :Arguments:
-        model : kabuki.Hierarchical
-            Kabuki model over which to compute the ppc on.
-
-    :Optional:
-        samples : int
-            How many samples to generate for each node.
-        bins : int
-            How many bins to use for computing the histogram.
-        stats : dict
-            User-defined statistics to compute (by default mean and std are computed)
-            and evaluate over the samples.
-            :Example: {'mean': np.mean, 'median': np.median}
-        evals : dict
-            User-defined evaluations of the statistics (by default 95 percentile and SEM).
-            :Example: {'percentile': scoreatpercentile}
-        plot : bool
-            Whether to plot the posterior predictive distributions.
-        progress_bar : bool
-            Display progress bar while sampling.
-
-
-    :Returns:
-        Hierarchical pandas.DataFrame with the different statistics.
-
-    """
-    import pandas as pd
-    results = {}
-
-    # Progress bar
-    if progress_bar:
-        n_iter = len(model.get_observeds()) * model.num_subjs
-        bar = pbar.ProgressBar(n_iter)
-        bar_iter = 0
-    else:
-        print "Sampling..."
-
-    for name, data in model.data.groupby(groupby):
-        node = model.get_data_nodes(data.index)
-
-        if progress_bar:
-            bar_iter += 1
-            bar.update(bar_iter)
-
-        if node is None or not hasattr(node, 'random'):
-            continue # Skip
-
-        results[name] = _post_pred_summary_bottom_node(node, samples=samples, bins=bins, evals=evals, stats=stats, plot=plot, data=data[field].values)
-        if progress_bar:
-            bar.animate(n_iter)
-
-    return pd.concat(results, names=['node'])
 
 def _parents_to_random_posterior_sample(bottom_node, pos=None):
     """Walks through parents and sets them to pos sample."""
