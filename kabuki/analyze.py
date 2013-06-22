@@ -262,7 +262,21 @@ def _evaluate_post_pred(sampled_stats, data_stats, evals=None):
     return results
 
 
-def _post_pred_summary_bottom_node(bottom_node, samples=500, stats=None, plot=False, bins=100, evals=None, data=None):
+def _post_pred_generate(bottom_node, samples=500):
+    """Generate posterior predictive data from a single observed node."""
+    datasets = []
+
+    ##############################
+    # Sample and generate stats
+    for sample in range(samples):
+        _parents_to_random_posterior_sample(bottom_node)
+        # Generate data from bottom node
+        datasets.append(bottom_node.random())
+
+    return datasets
+
+
+def _post_pred_summary_bottom_node(data, sim_datasets, stats=None, plot=False, bins=100, evals=None, field=None):
     """Create posterior predictive check for a single bottom node."""
     def _calc_stats(data, stats):
         out = {}
@@ -273,30 +287,21 @@ def _post_pred_summary_bottom_node(bottom_node, samples=500, stats=None, plot=Fa
     if stats is None:
         stats = OrderedDict((('mean', np.mean), ('std', np.std)))
 
-    ############################
-    # Compute stats over data
-    if data is None:
-        data = bottom_node.value
-
-    data_stats = _calc_stats(data, stats)
+    data_stats = _calc_stats(data[field].values, stats)
 
     ###############################################
     # Initialize posterior sample stats container
+    samples = len(sim_datasets)
     sampled_stats = {}
     for name in stats.iterkeys():
         sampled_stats[name] = np.empty(samples)
 
-    ##############################
-    # Sample and generate stats
-    for sample in range(samples):
-        _parents_to_random_posterior_sample(bottom_node)
-        # Generate data from bottom node
-        sampled = bottom_node.random()
-        sampled_stat = _calc_stats(sampled['rt'].values, stats)
+    for i, sim_dataset in enumerate(sim_datasets):
+        sampled_stat = _calc_stats(sim_dataset[field].values, stats)
 
-        # Add it the results container
+        # Add it to the results container
         for name, value in sampled_stat.iteritems():
-            sampled_stats[name][sample] = value
+            sampled_stats[name][i] = value
 
     if plot:
         from pymc.Matplot import gof_plot
@@ -307,7 +312,7 @@ def _post_pred_summary_bottom_node(bottom_node, samples=500, stats=None, plot=Fa
 
     return result
 
-def post_pred_check(model, groupby=None, samples=500, bins=100, stats=None, evals=None, plot=False, progress_bar=False):
+def post_pred_check(model, groupby=None, compute_stats=True, samples=500, bins=100, stats=None, evals=None, plot=False, progress_bar=False, field=None):
     """Run posterior predictive check on a model.
 
     :Arguments:
@@ -347,8 +352,13 @@ def post_pred_check(model, groupby=None, samples=500, bins=100, stats=None, eval
     else:
         print "Sampling..."
 
-    for name, obs_descr in model.iter_observeds():
-        node = obs_descr['node']
+    if groupby is None:
+        iter_data = ((name, obs['node'].value) for name, obs in model.iter_observeds())
+    else:
+        iter_data = model.data.groupby(groupby)
+
+    for name, data in iter_data:
+        node = model.get_data_nodes(data.index)
 
         if progress_bar:
             bar_iter += 1
@@ -357,7 +367,14 @@ def post_pred_check(model, groupby=None, samples=500, bins=100, stats=None, eval
         if node is None or not hasattr(node, 'random'):
             continue # Skip
 
-        results[name] = _post_pred_summary_bottom_node(node, samples=samples, bins=bins, evals=evals, stats=stats, plot=plot)
+        ##############################
+        # Sample and generate stats
+        datasets = _post_pred_generate(node, samples=samples)
+        if compute_stats:
+            results[name] = _post_pred_summary_bottom_node(data, datasets, bins=bins, evals=evals, stats=stats, plot=plot, field=field)
+        else:
+            results[name] = pd.concat(datasets, names=['sample'], keys=range(len(datasets)))
+
         if progress_bar:
             bar.animate(n_iter)
 
