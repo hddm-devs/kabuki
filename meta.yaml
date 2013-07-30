@@ -1,0 +1,35 @@
+package:
+  name: kabuki     # lower case name of package, may contain '-' but no spaces
+  version: 0.5.1.dev    # version of package
+
+source:
+  git_url: git@github.com:hddm-devs/kabuki.git
+  git_tag: develop
+
+# the build and runtime requirements:
+requirements:     # (optional)
+  build:
+    - python
+    - numpy
+    - pymc
+    - pandas
+    - matplotlib
+  run:
+    - python
+    - numpy
+    - pymc
+    - pandas
+    - matplotlib
+test:             # (optional)
+# in addition to the run-time requirements, we can specify requirements
+# needed during testing
+  requires:
+    - nose
+# Python imports
+  imports:
+    - kabuki
+# The script run_test.py will be run automatically if it is part of the recipe
+
+about:            # (optional)
+  home: https://github.com/hddm-devs/kabuki
+  license: BSD
