@@ -381,6 +381,9 @@ def post_pred_check(model, groupby=None, compute_stats=True, samples=500, bins=1
         # Sample and generate stats
         datasets = _post_pred_generate(node, samples=samples, data=data, append_data=append_data)
         if compute_stats:
+            if field is None:
+                raise ValueError("If compute_stats=True you have to supply a field argument (i.e. the column name you want to use for computing the stats over.)")
+
             results[name] = _post_pred_summary_bottom_node(data, datasets, bins=bins, evals=evals, stats=stats, plot=plot, field=field)
         else:
             results[name] = pd.concat(datasets, names=['sample'], keys=range(len(datasets)))
