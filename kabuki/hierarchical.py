@@ -776,9 +776,12 @@ class Hierarchical(object):
 
         return data_nodes[0]
 
+    def __getitem__(self, name):
+        return self.nodes_db.ix[name]['node']
+
     @property
     def values(self):
-        return {name: node['node'].value[()] for (name, node) in self.iter_non_observeds()}
+        return {name: node['node'].value[()] for (name, node) in self.iter_non_observeds() if node['node'].value.shape == ()}
 
     def set_values(self, new_values):
         """
