@@ -237,6 +237,7 @@ def _evaluate_post_pred(sampled_stats, data_stats, evals=None):
         evals['mean'] = lambda x,y: np.mean(x)
         evals['std'] = lambda x,y: np.std(x)
         evals['SEM'] = lambda x, y: (np.mean(x) - y)**2
+        evals['MSE'] = lambda x, y: np.mean((x - y)**2)
         evals['credible'] = lambda x, y: (scoreatpercentile(x, 97.5) > y) and (scoreatpercentile(x, 2.5) < y)
         evals['quantile'] = percentileofscore
         evals['mahalanobis'] = lambda x, y: np.abs(np.mean(x) - y)/np.std(x)

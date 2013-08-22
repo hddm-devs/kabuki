@@ -12,7 +12,7 @@ def flatten(l):
     return reduce(lambda x, y: list(x)+list(y), l)
 
 def pretty_tag(tag):
-    return tag[0] if len(tag) == 1 else string.join(tag, ', ')
+    return tag[0] if len(tag) == 1 else string.join(str(tag), ', ')
 
 def load(fname):
     """Load a hierarchical model saved to file via
