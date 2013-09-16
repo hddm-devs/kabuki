@@ -5,7 +5,7 @@ import analyze
 import step_methods as steps
 import generate
 
-__version__ = '0.5.1.dev'
+__version__ = '0.5.2.beta.dev'
 
 try:
     from IPython.core.debugger import Tracer; debug_here = Tracer()
