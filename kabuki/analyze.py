@@ -1,5 +1,6 @@
 from __future__ import division
 import sys, os
+from types import FunctionType
 
 import numpy as np
 from matplotlib.pylab import figure
@@ -215,7 +216,7 @@ def group_cond_diff(hm, node, cond1, cond2, threshold=0):
 
     return pooled_mean, pooled_var, mass_under
 
-def _evaluate_post_pred(sampled_stats, data_stats, evals=None):
+def post_pred_compare_stats(sampled_stats, data_stats, evals=None):
     """Evaluate summary statistics of sampled sets.
 
     :Arguments:
@@ -246,12 +247,14 @@ def _evaluate_post_pred(sampled_stats, data_stats, evals=None):
         #    evals[key] = lambda x, y, q=q: scoreatpercentile(x, q)
 
     # Evaluate all eval-functions
-    results = pd.DataFrame(index=sampled_stats.keys(), columns=evals.keys() + ['NaN'])
+    results = pd.DataFrame(index=sampled_stats.keys(), columns=evals.keys() + ['NaN'],
+                           dtype=np.float32)
+
     results.index.names = ['stat']
-    for stat_name in sampled_stats.iterkeys():
+    for stat_name in sampled_stats:
         #update NaN column with the no. of NaNs and remove them
         s = sampled_stats[stat_name]
-        results.ix[stat_name]['NaN'] = sum(np.isnan(s))
+        results.ix[stat_name]['NaN'] = sum(pd.isnull(s))
         s = s[np.isfinite(s)]
         if len(s) == 0:
             continue
@@ -260,7 +263,7 @@ def _evaluate_post_pred(sampled_stats, data_stats, evals=None):
             value = func(s, data_stats[stat_name])
             results.ix[stat_name][eval_name] = value
 
-    return results
+    return results.drop('NaN', axis=1)
 
 
 def _post_pred_generate(bottom_node, samples=500, data=None, append_data=False):
@@ -279,44 +282,7 @@ def _post_pred_generate(bottom_node, samples=500, data=None, append_data=False):
 
     return datasets
 
-
-def _post_pred_summary_bottom_node(data, sim_datasets, stats=None, plot=False, bins=100, evals=None, field=None):
-    """Create posterior predictive check for a single bottom node."""
-    def _calc_stats(data, stats):
-        out = {}
-        for name, func in stats.iteritems():
-            out[name] = func(data)
-        return out
-
-    if stats is None:
-        stats = OrderedDict((('mean', np.mean), ('std', np.std)))
-
-    data_stats = _calc_stats(data[field].values, stats)
-
-    ###############################################
-    # Initialize posterior sample stats container
-    samples = len(sim_datasets)
-    sampled_stats = {}
-    for name in stats.iterkeys():
-        sampled_stats[name] = np.empty(samples)
-
-    for i, sim_dataset in enumerate(sim_datasets):
-        sampled_stat = _calc_stats(sim_dataset[field].values, stats)
-
-        # Add it to the results container
-        for name, value in sampled_stat.iteritems():
-            sampled_stats[name][i] = value
-
-    if plot:
-        from pymc.Matplot import gof_plot
-        for name, value in sampled_stats.iteritems():
-            gof_plot(value, data_stats[name], nbins=bins, name=name, verbose=0)
-
-    result = _evaluate_post_pred(sampled_stats, data_stats, evals=evals)
-
-    return result
-
-def post_pred_check(model, groupby=None, compute_stats=True, samples=500, bins=100, stats=None, evals=None, plot=False, progress_bar=False, field=None, append_data=False):
+def post_pred_gen(model, groupby=None, samples=500, append_data=False, progress_bar=True):
     """Run posterior predictive check on a model.
 
     :Arguments:
@@ -329,35 +295,25 @@ def post_pred_check(model, groupby=None, compute_stats=True, samples=500, bins=1
         groupby : list
             Alternative grouping of the data. If not supplied, uses splitting
             of the model (as provided by depends_on).
-        bins : int
-            How many bins to use for computing the histogram.
-        stats : dict
-            User-defined statistics to compute (by default mean and std are computed)
-            and evaluate over the samples.
-            :Example: {'mean': np.mean, 'median': np.median}
-        evals : dict
-            User-defined evaluations of the statistics (by default 95 percentile and SEM).
-            :Example: {'percentile': scoreatpercentile}
-        plot : bool
-            Whether to plot the posterior predictive distributions.
-        progress_bar : bool
-            Display progress bar while sampling.
-        field : string
-            Which column name to run the stats on
         append_data : bool (default=False)
             Whether to append the observed data of each node to the replicatons.
-
+        progress_bar : bool (default=True)
+            Display progress bar
 
     :Returns:
-        Hierarchical pandas.DataFrame with the different statistics.
+        Hierarchical pandas.DataFrame with multiple sampled RT data sets.
+        1st level: wfpt node
+        2nd level: posterior predictive sample
+        3rd level: original data index
 
+    :See also:
+        post_pred_stats
     """
-    import pandas as pd
     results = {}
 
     # Progress bar
     if progress_bar:
-        n_iter = len(model.get_observeds()) * model.num_subjs
+        n_iter = len(model.get_observeds())
         bar = pbar.ProgressBar(n_iter)
         bar_iter = 0
     else:
@@ -373,7 +329,7 @@ def post_pred_check(model, groupby=None, compute_stats=True, samples=500, bins=1
 
         if progress_bar:
             bar_iter += 1
-            bar.update(bar_iter)
+            bar.animate(bar_iter)
 
         if node is None or not hasattr(node, 'random'):
             continue # Skip
@@ -381,18 +337,81 @@ def post_pred_check(model, groupby=None, compute_stats=True, samples=500, bins=1
         ##############################
         # Sample and generate stats
         datasets = _post_pred_generate(node, samples=samples, data=data, append_data=append_data)
-        if compute_stats:
-            if field is None:
-                raise ValueError("If compute_stats=True you have to supply a field argument (i.e. the column name you want to use for computing the stats over.)")
-
-            results[name] = _post_pred_summary_bottom_node(data, datasets, bins=bins, evals=evals, stats=stats, plot=plot, field=field)
-        else:
-            results[name] = pd.concat(datasets, names=['sample'], keys=range(len(datasets)))
+        results[name] = pd.concat(datasets, names=['sample'], keys=range(len(datasets)))
 
         if progress_bar:
             bar.animate(n_iter)
 
     return pd.concat(results, names=['node'])
+
+
+def post_pred_stats(data, sim_datasets, stats=None, plot=False, bins=100, evals=None, call_compare=True):
+    """Calculate a set of summary statistics over posterior predictives.
+
+    :Arguments:
+        data : pandas.Series
+
+        sim_data : pandas.Series
+
+    :Optional:
+        bins : int
+            How many bins to use for computing the histogram.
+        stats : dict or function
+            User-defined statistics to compute (by default mean and std are computed)
+            and evaluate over the samples.
+            :Example:
+              * {'mean': np.mean, 'median': np.median}
+              * lambda x: np.mean(x)
+        evals : dict
+            User-defined evaluations of the statistics (by default 95 percentile and SEM).
+            :Example: {'percentile': scoreatpercentile}
+        plot : bool
+            Whether to plot the posterior predictive distributions.
+        progress_bar : bool
+            Display progress bar while sampling.
+        field : string
+            Which column name to run the stats on
+        call_com,pare : bool (default=True)
+            Whether to call post_pred_compare_stats. If False, return stats directly.
+    """
+
+    def _calc_stats(data, stats):
+        out = {}
+        for name, func in stats.iteritems():
+            out[name] = func(data)
+        return out
+
+    if stats is None:
+        stats = OrderedDict((('mean', np.mean), ('std', np.std)))
+    if isinstance(stats, FunctionType):
+        stats = OrderedDict((('stat', stats),))
+
+    data_stats = _calc_stats(data, stats)
+
+    ###############################################
+    # Initialize posterior sample stats container
+    samples = len(sim_datasets)
+    sampled_stats = {}
+    sampled_stats = pd.DataFrame(index=sim_datasets.index.droplevel(2).unique(),
+                                 columns=stats.keys(),
+                                 dtype=np.float32)
+
+    for i, sim_dataset in sim_datasets.groupby(level=(0, 1)):
+        sampled_stat = _calc_stats(sim_dataset.values, stats)
+
+        # Add it to the results container
+        for name, value in sampled_stat.iteritems():
+            sampled_stats[name][i] = value
+
+    if plot:
+        from pymc.Matplot import gof_plot
+        for name, value in sampled_stats.iteritems():
+            gof_plot(value, data_stats[name], nbins=bins, name=name, verbose=0)
+
+    if call_compare:
+        return post_pred_compare_stats(sampled_stats, data_stats, evals=evals)
+    else:
+        return sampled_stats
 
 
 def _parents_to_random_posterior_sample(bottom_node, pos=None):
