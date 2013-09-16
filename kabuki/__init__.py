@@ -4,7 +4,6 @@ import utils
 import analyze
 import step_methods as steps
 import generate
-import distributions
 
 __version__ = '0.5.1.dev'
 
