@@ -313,7 +313,7 @@ def post_pred_gen(model, groupby=None, samples=500, append_data=False, progress_
 
     # Progress bar
     if progress_bar:
-        n_iter = len(model.get_observeds()) * self.num_subjs
+        n_iter = len(model.get_observeds())
         bar = pbar.ProgressBar(n_iter)
         bar_iter = 0
     else:
@@ -339,8 +339,9 @@ def post_pred_gen(model, groupby=None, samples=500, append_data=False, progress_
         datasets = _post_pred_generate(node, samples=samples, data=data, append_data=append_data)
         results[name] = pd.concat(datasets, names=['sample'], keys=range(len(datasets)))
 
-        if progress_bar:
-            bar.animate(n_iter)
+    if progress_bar:
+        bar_iter += 1
+        bar.animate(bar_iter)
 
     return pd.concat(results, names=['node'])
 
