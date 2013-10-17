@@ -30,10 +30,15 @@ class TestHierarchicalBreakDown(unittest.TestCase):
     def test_map(self):
         np.random.seed(123)
         for model in self.models:
-            if model.is_group_model:
-                model.approximate_map()
-            else:
-                model.map(runs=2)
+            model.find_starting_values()
+
+    def test_emcee(self):
+        self.models, self.params = create_test_models()
+        np.random.seed(123)
+        for model in self.models:
+            model.find_starting_values()
+            model.sample_emcee()
+
 
     def test_dic_info(self):
         for model in self.models:

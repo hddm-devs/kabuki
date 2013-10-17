@@ -495,6 +495,46 @@ class Hierarchical(object):
     def pre_sample(self):
         pass
 
+    def sample_emcee(self, nwalkers=500, samples=10, dispersion=.1):
+        import emcee
+
+        # This is the likelihood function for emcee
+        def lnprob(vals): # vals is a vector of parameter values to try
+            # Set each random variable of the pymc model to the value
+            # suggested by emcee
+
+            try:
+                for val, (name, node) in zip(vals, self.iter_stochastics()):
+                    node.value = val
+                return self.mc.logp
+            except pm.ZeroProbability:
+                return -np.inf
+
+        # init
+        self.mcmc()
+
+        # get current values
+        stochs = self.get_stochastics()
+        start = [stoch['node'].value for name, stoch in stochs.iterrows()]
+        ndim = len(start)
+
+        p0 = np.random.randn(ndim * nwalkers).reshape((nwalkers, ndim)) * dispersion + start
+
+        # instantiate sampler passing in the pymc likelihood function
+        sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob)
+
+        # burn-in
+        pos, prob, state = sampler.run_mcmc(p0, samples)
+        sampler.reset()
+
+        # sample 10 * 500 = 5000
+        sampler.run_mcmc(pos, samples)
+
+        # Save samples back to pymc model
+        self.mc.sample(1) # This call is to set up the chains
+        for pos, (name, node) in enumerate(stochs.iterrows()):
+            node['node'].trace._trace[0] = sampler.flatchain[:, pos]
+
     def sample(self, *args, **kwargs):
         """Sample from posterior.
 
