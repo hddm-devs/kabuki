@@ -504,8 +504,8 @@ class Hierarchical(object):
             # suggested by emcee
 
             try:
-                for val, (name, node) in zip(vals, self.iter_stochastics()):
-                    node.value = val
+                for val, (name, stoch) in zip(vals, self.iter_stochastics()):
+                    stoch['node'].value = val
                 return self.mc.logp
             except pm.ZeroProbability:
                 return -np.inf
