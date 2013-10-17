@@ -67,7 +67,7 @@ class TestAnalyzeBreakdown(unittest.TestCase):
 
     def test_post_pred_check(self):
         for model in self.models:
-            ka.post_pred_check(model, samples=20, bins=100, plot=True, progress_bar=False)
+            ka.post_pred_gen(model, samples=20, bins=100, plot=True, progress_bar=False)
             close('all')
 
     def test_plot_posterior_predictive(self):

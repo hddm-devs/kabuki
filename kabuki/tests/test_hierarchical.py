@@ -22,7 +22,7 @@ class TestHierarchicalBreakDown(unittest.TestCase):
         self.models, self.params = create_test_models()
 
         #run models
-        sample_from_models(self.models, n_iter=200)
+        sample_from_models(self.models, n_iter=500)
 
     def runTest(self):
         pass
@@ -42,7 +42,7 @@ class TestHierarchicalBreakDown(unittest.TestCase):
 
     def test_dic_info(self):
         for model in self.models:
-            model.dic_info()
+            model.dic_info
 
     def test_print_stats(self):
         for model in self.models:
@@ -184,14 +184,13 @@ class TestConcatenate(unittest.TestCase):
         models = []
         for i in range(4):
             m = HNodeSimple(data)
-            m.sample(50, burn=0, db='pickle', dbname='test_%d'%i)
+            m.sample(100, burn=0, db='pickle', dbname='test_%d'%i)
             models.append(m)
 
         super_model = kabuki.utils.concat_models(models)
         stochs = super_model.get_stochastics()
         for stoch in stochs.node:
-            self.assertEqual(len(stoch.trace[:]), 50*4)
+            self.assertEqual(len(stoch.trace[:]), 100*4)
 
         for i in range(4):
             os.remove('test_%d'%i)
-

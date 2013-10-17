@@ -425,4 +425,3 @@ class SliceStep(pm.Gibbs):
             return self.logp_plus_loglike
         except pm.ZeroProbability:
             return -np.inf
-
