@@ -495,7 +495,7 @@ class Hierarchical(object):
     def pre_sample(self):
         pass
 
-    def sample_emcee(self, nwalkers=500, samples=10, dispersion=.1):
+    def sample_emcee(self, nwalkers=500, samples=10, dispersion=.1, burn=5):
         import emcee
 
         # This is the likelihood function for emcee
@@ -524,7 +524,7 @@ class Hierarchical(object):
         sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob)
 
         # burn-in
-        pos, prob, state = sampler.run_mcmc(p0, samples)
+        pos, prob, state = sampler.run_mcmc(p0, burn)
         sampler.reset()
 
         # sample 10 * 500 = 5000
