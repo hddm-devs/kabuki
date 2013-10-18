@@ -527,7 +527,7 @@ class Hierarchical(object):
         pos, prob, state = sampler.run_mcmc(p0, burn)
         sampler.reset()
 
-        # sample 10 * 500 = 5000
+        # sample
         sampler.run_mcmc(pos, samples)
 
         # Save samples back to pymc model

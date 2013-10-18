@@ -11,6 +11,7 @@ from numpy import array, sqrt
 from nose import SkipTest
 from pandas import DataFrame
 from time import time
+import unittest
 
 from kabuki.utils import stochastic_from_dist
 
@@ -50,6 +51,8 @@ class TestStepMethods(unittest.TestCase):
                 the true_mean and the sampled mean
             std_tol - same as mean_tol but for checking the std
         """
+
+
 
         pprint(node.stats())
         lb = node.stats()['quantiles'][2.5]
@@ -385,6 +388,7 @@ class TestStepMethods(unittest.TestCase):
         raise SkipTest("The HCauchy gibbs step method does not work.")
         self.half_cauchy_bundle(use_metropolis=False)
 
+    @unittest.skip("Takes forever to complete.")
     def run_SPXcentered(self, sigma_x, n_subjs, size, mu_value, mu_step_method, seed):
         """ run a single Spxcentered test"""
 
@@ -463,6 +467,7 @@ class TestStepMethods(unittest.TestCase):
         assert (i_try < max_tries), "could not replicate values using different mcmc samplers"
 
 
+    @unittest.skip("Takes forever to complete.")
     def test_SPX(self):
         """test a bundle of SPXcentered tests"""
         print "*************** Test 1 ***************"
