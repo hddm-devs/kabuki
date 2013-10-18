@@ -8,6 +8,7 @@ install:
   - pip install scipy
   - pip install matplotlib
   - pip install pandas
+  - pip install emcee
   - pip install --no-deps pymc
   - python setup.py build_ext --inplace
 script: nosetests
