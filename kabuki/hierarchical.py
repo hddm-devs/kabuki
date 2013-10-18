@@ -14,6 +14,22 @@ import warnings
 
 from kabuki.utils import flatten
 
+class LnProb(object):
+    def __init__(self, model):
+        self.model = model
+
+    def lnprob(self, vals): # vals is a vector of parameter values to try
+        # Set each random variable of the pymc model to the value
+        # suggested by emcee
+        try:
+            for val, (name, stoch) in zip(vals, self.model.iter_stochastics()):
+                stoch['node'].value = val
+            return self.model.mc.logp
+        except pm.ZeroProbability:
+            return -np.inf
+
+    def __call__(self, *args, **kwargs):
+        return self.lnprob(*args, **kwargs)
 
 class Knode(object):
     def __init__(self, pymc_node, name, depends=(), col_name='',
@@ -322,6 +338,9 @@ class Hierarchical(object):
             self._num_subjs = 1
 
         self.num_subjs = self._num_subjs
+        self.sampled = False
+        self.dbname = 'ram'
+        self.db = None
 
         self._setup_model()
 
@@ -342,17 +361,19 @@ class Hierarchical(object):
         d['nodes_db'] = deepcopy(d['nodes_db'].drop('node', axis=1))
         d['depends'] = dict(d['depends'])
         #d['model_type'] = self.__class__
-        d['db'] = self.mc.db.__name__
 
-        dbname = d['mc'].db.__name__
-        if (dbname == 'ram'):
-                raise ValueError("db is 'ram'. Saving a model requires a database on disk.")
-        elif (dbname == 'pickle'):
-                d['dbname'] = d['mc'].db.filename
-        elif (dbname == 'txt'):
-                d['dbname'] = d['mc'].db._directory
-        else: # hdf5, sqlite
-                d['dbname'] = d['mc'].db.dbname
+        if self.sampled:
+            d['db'] = self.mc.db.__name__
+
+            dbname = d['mc'].db.__name__
+            if (dbname == 'ram'):
+                    raise ValueError("db is 'ram'. Saving a model requires a database on disk.")
+            elif (dbname == 'pickle'):
+                    d['dbname'] = d['mc'].db.filename
+            elif (dbname == 'txt'):
+                    d['dbname'] = d['mc'].db._directory
+            else: # hdf5, sqlite
+                    d['dbname'] = d['mc'].db.dbname
 
         del d['mc']
         del d['knodes']
@@ -363,8 +384,12 @@ class Hierarchical(object):
         self.__dict__.update(d)
         self._setup_model()
         self.create_model()
-        self.load_db(d['dbname'], db=d['db'])
-        self.gen_stats()
+
+        if self.sampled:
+            self.load_db(d['dbname'], db=d['db'])
+            self.gen_stats()
+        else:
+            self.mcmc()
 
     def save(self, fname):
         """Save model to file.
@@ -495,20 +520,11 @@ class Hierarchical(object):
     def pre_sample(self):
         pass
 
-    def sample_emcee(self, nwalkers=500, samples=10, dispersion=.1, burn=5):
+    def sample_emcee(self, nwalkers=500, samples=10, dispersion=.1, burn=5, pool=None):
         import emcee
 
         # This is the likelihood function for emcee
-        def lnprob(vals): # vals is a vector of parameter values to try
-            # Set each random variable of the pymc model to the value
-            # suggested by emcee
-
-            try:
-                for val, (name, stoch) in zip(vals, self.iter_stochastics()):
-                    stoch['node'].value = val
-                return self.mc.logp
-            except pm.ZeroProbability:
-                return -np.inf
+        lnprob = LnProb(self)
 
         # init
         self.mcmc()
@@ -521,7 +537,7 @@ class Hierarchical(object):
         p0 = np.random.randn(ndim * nwalkers).reshape((nwalkers, ndim)) * dispersion + start
 
         # instantiate sampler passing in the pymc likelihood function
-        sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob)
+        sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, pool=pool)
 
         # burn-in
         pos, prob, state = sampler.run_mcmc(p0, burn)
@@ -558,6 +574,8 @@ class Hierarchical(object):
 
         # sample
         self.mc.sample(*args, **kwargs)
+
+        self.sampled = True
 
         return self.mc
 
