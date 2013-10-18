@@ -73,7 +73,6 @@ def create_test_models():
     data['condition2'] = np.random.randint(2, size=len(data))
     models = []
 
-    models.append(HNodeSimple(data['data']))
     models.append(HNodeSimple(data))
     models.append(HNodeSimple(data, depends_on={'mu': 'condition'}))
     models.append(HNodeSimpleVar(data, depends_on={'mu': 'condition'}))

@@ -345,14 +345,14 @@ class Hierarchical(object):
         d['db'] = self.mc.db.__name__
 
         dbname = d['mc'].db.__name__
-	if (dbname == 'ram'):
-            raise ValueError("db is 'ram'. Saving a model requires a database on disk.")
-	elif (dbname == 'pickle'):
-            d['dbname'] = d['mc'].db.filename
-	elif (dbname == 'txt'):
-            d['dbname'] = d['mc'].db._directory
-	else: # hdf5, sqlite
-            d['dbname'] = d['mc'].db.dbname
+        if (dbname == 'ram'):
+                raise ValueError("db is 'ram'. Saving a model requires a database on disk.")
+        elif (dbname == 'pickle'):
+                d['dbname'] = d['mc'].db.filename
+        elif (dbname == 'txt'):
+                d['dbname'] = d['mc'].db._directory
+        else: # hdf5, sqlite
+                d['dbname'] = d['mc'].db.dbname
 
         del d['mc']
         del d['knodes']
