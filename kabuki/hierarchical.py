@@ -23,8 +23,9 @@ class LnProb(object):
         # suggested by emcee
         try:
             for val, (name, stoch) in zip(vals, self.model.iter_stochastics()):
-                stoch['node'].value = val
-            return self.model.mc.logp
+                stoch['node'].set_value(val)
+            logp = self.model.mc.logp
+            return logp
         except pm.ZeroProbability:
             return -np.inf
 
@@ -520,7 +521,7 @@ class Hierarchical(object):
     def pre_sample(self):
         pass
 
-    def sample_emcee(self, nwalkers=500, samples=10, dispersion=.1, burn=5, pool=None):
+    def sample_emcee(self, nwalkers=500, samples=10, dispersion=.1, burn=5, thin=1, pool=None):
         import emcee
 
         # This is the likelihood function for emcee
@@ -531,25 +532,60 @@ class Hierarchical(object):
 
         # get current values
         stochs = self.get_stochastics()
-        start = [stoch['node'].value for name, stoch in stochs.iterrows()]
+        start = [node_descr['node'].value for name, node_descr in stochs.iterrows()]
         ndim = len(start)
 
-        p0 = np.random.randn(ndim * nwalkers).reshape((nwalkers, ndim)) * dispersion + start
+        def init_from_priors():
+            p0 = np.empty((nwalkers, ndim))
+            i = 0
+            while i != nwalkers:
+                self.mc.draw_from_prior()
+                try:
+                    self.mc.logp
+                    p0[i, :] = [node_descr['node'].value for name, node_descr in stochs.iterrows()]
+                    i += 1
+                except pm.ZeroProbability:
+                    continue
+            return p0
+
+        if hasattr(self, 'slice_widths'):
+            scale = np.empty_like(start)
+            for i, (name, node_descr) in enumerate(stochs.iterrows()):
+                knode_name = node_descr['knode_name'].replace('_subj', '')
+                scale[i] = self.slice_widths.get(knode_name, 0.1)
+        else:
+            scale = 0.1
+
+        p0 = np.random.randn(ndim * nwalkers).reshape((nwalkers, ndim)) * scale * dispersion + start
+        #p0 = init_from_priors()
 
         # instantiate sampler passing in the pymc likelihood function
         sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, pool=pool)
 
-        # burn-in
         pos, prob, state = sampler.run_mcmc(p0, burn)
+        print("Mean acceptance fraction during burn-in: {}".format(np.mean(sampler.acceptance_fraction)))
         sampler.reset()
 
         # sample
-        sampler.run_mcmc(pos, samples)
+        try:
+            for p, lnprob, lnlike in sampler.sample(pos,
+                                                    iterations=samples,
+                                                    thin=thin):
+                pass
+        except KeyboardInterrupt:
+            pass
+        finally:
+            print("Mean acceptance fraction during sampling: {}".format(np.mean(sampler.acceptance_fraction)))
+            # restore state
+            for val, (name, node_descr) in zip(start, stochs.iterrows()):
+                node_descr['node'].set_value(val)
 
-        # Save samples back to pymc model
-        self.mc.sample(1) # This call is to set up the chains
-        for pos, (name, node) in enumerate(stochs.iterrows()):
-            node['node'].trace._trace[0] = sampler.flatchain[:, pos]
+            # Save samples back to pymc model
+            self.mc.sample(1) # This call is to set up the chains
+            for pos, (name, node) in enumerate(stochs.iterrows()):
+                node['node'].trace._trace[0] = sampler.flatchain[:, pos]
+
+            return sampler
 
     def sample(self, *args, **kwargs):
         """Sample from posterior.
