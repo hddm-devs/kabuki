@@ -20,7 +20,8 @@ def plot_posterior_nodes(nodes, bins=50, lb=None, ub=None):
 
     :Arguments:
         nodes : list of pymc.Node's
-            List of pymc.Node's to plot the posterior of
+            List of pymc.Node's to plot the posterior of.
+            These can be found in model.nodes_db.node.ix['param_name']
         bins : int (default=50)
             How many bins to use for computing the histogram.
         lb : float (default is to infer from data)
