@@ -441,6 +441,16 @@ class Hierarchical(object):
     def create_nodes_db(self):
         self.nodes_db = pd.concat([knode.nodes_db for knode in self.knodes])
 
+    def draw_from_prior(self):
+        non_zero = False
+        while non_zero:
+            try:
+                self.mc.draw_from_prior()
+                self.mc.logp
+                non_zero = True
+            except pm.ZeroProbability:
+                non_zero = False
+
 
     def map(self, runs=2, warn_crit=5, method='fmin_powell', **kwargs):
         """
@@ -470,16 +480,15 @@ class Hierarchical(object):
             raise NotImplementedError("""Sorry, This method is not yet implemented for group models.
             you might consider using the approximate_map method""")
 
-
         maps = []
 
         for i in range(runs):
             # (re)create nodes to get new initival values.
             #nodes are not created for the first iteration if they already exist
             if i != 0:
-                self.create_model()
+                self.draw_from_prior()
 
-            m = pm.MAP(self.nodes_db.node.values)
+            m = pm.MAP(self.nodes_db.node)
             m.fit(method, **kwargs)
             print m.logp
             maps.append(m)
@@ -497,7 +506,7 @@ class Hierarchical(object):
 
         # Set values of nodes
         for max_node in max_map.stochastics:
-            self.nodes_db.ix[max_node.__name__]['node'].value = max_node.value
+            self.nodes_db.node.ix[max_node.__name__].set_value(max_node.value)
 
         return max_map
 
@@ -884,7 +893,7 @@ class Hierarchical(object):
             new_values <dict> - dictionary of the format {'node_name1': new_value1, ...}
         """
         for (name, value) in new_values.iteritems():
-            self.nodes_db.ix[name]['node'].value = value
+            self.nodes_db.ix[name]['node'].set_value(value)
 
     def find_starting_values(self):
         """Find good starting values for the different parameters by
@@ -909,7 +918,7 @@ class Hierarchical(object):
         # define function to be optimized
         def opt(values):
             for value, node in zip(values, optimize_nodes):
-                node.value = value
+                node.set_value(value)
             try:
                 logp_optimize = [node.logp for node in optimize_nodes]
                 logp_evaluate = [node.logp for node in evaluate_nodes]
