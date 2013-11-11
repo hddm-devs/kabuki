@@ -2,6 +2,7 @@
 from __future__ import division
 from copy import copy
 import pickle
+import sys
 
 import numpy as np
 from scipy.optimize import fmin_powell, fmin
@@ -530,8 +531,9 @@ class Hierarchical(object):
     def pre_sample(self):
         pass
 
-    def sample_emcee(self, nwalkers=500, samples=10, dispersion=.1, burn=5, thin=1, pool=None):
+    def sample_emcee(self, nwalkers=500, samples=10, dispersion=.1, burn=5, thin=1, stretch_width=2., anneal_stretch=True, pool=None):
         import emcee
+        import pymc.progressbar as pbar
 
         # This is the likelihood function for emcee
         lnprob = LnProb(self)
@@ -557,11 +559,11 @@ class Hierarchical(object):
                     continue
             return p0
 
-        if hasattr(self, 'slice_widths'):
+        if hasattr(self, 'emcee_dispersions'):
             scale = np.empty_like(start)
             for i, (name, node_descr) in enumerate(stochs.iterrows()):
                 knode_name = node_descr['knode_name'].replace('_subj', '')
-                scale[i] = self.slice_widths.get(knode_name, 0.1)
+                scale[i] = self.emcee_dispersions.get(knode_name, 0.1)
         else:
             scale = 0.1
 
@@ -569,10 +571,21 @@ class Hierarchical(object):
         #p0 = init_from_priors()
 
         # instantiate sampler passing in the pymc likelihood function
-        sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, pool=pool)
+        sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, a=stretch_width, pool=pool)
 
-        pos, prob, state = sampler.run_mcmc(p0, burn)
-        print("Mean acceptance fraction during burn-in: {}".format(np.mean(sampler.acceptance_fraction)))
+        bar = pbar.progress_bar(burn + samples)
+        i = 0
+
+        annealing = np.linspace(stretch_width, 2, burn)
+        sys.stdout.flush()
+
+        for pos, prob, state in sampler.sample(p0, iterations=burn):
+            if anneal_stretch:
+                sampler.a = annealing[i]
+            i += 1
+            bar.update(i)
+
+        #print("\nMean acceptance fraction during burn-in: {}".format(np.mean(sampler.acceptance_fraction)))
         sampler.reset()
 
         # sample
@@ -580,17 +593,18 @@ class Hierarchical(object):
             for p, lnprob, lnlike in sampler.sample(pos,
                                                     iterations=samples,
                                                     thin=thin):
-                pass
+                i += 1
+                bar.update(i)
         except KeyboardInterrupt:
             pass
         finally:
-            print("Mean acceptance fraction during sampling: {}".format(np.mean(sampler.acceptance_fraction)))
+            print("\nMean acceptance fraction during sampling: {}".format(np.mean(sampler.acceptance_fraction)))
             # restore state
             for val, (name, node_descr) in zip(start, stochs.iterrows()):
                 node_descr['node'].set_value(val)
 
             # Save samples back to pymc model
-            self.mc.sample(1) # This call is to set up the chains
+            self.mc.sample(1, progress_bar=False) # This call is to set up the chains
             for pos, (name, node) in enumerate(stochs.iterrows()):
                 node['node'].trace._trace[0] = sampler.flatchain[:, pos]
 
