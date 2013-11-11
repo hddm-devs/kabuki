@@ -330,7 +330,7 @@ def post_pred_gen(model, groupby=None, samples=500, append_data=False, progress_
 
         if progress_bar:
             bar_iter += 1
-            bar.animate(bar_iter)
+            bar.update(bar_iter)
 
         if node is None or not hasattr(node, 'random'):
             continue # Skip
@@ -342,7 +342,7 @@ def post_pred_gen(model, groupby=None, samples=500, append_data=False, progress_
 
     if progress_bar:
         bar_iter += 1
-        bar.animate(bar_iter)
+        bar.update(bar_iter)
 
     return pd.concat(results, names=['node'])
 
