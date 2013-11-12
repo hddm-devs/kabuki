@@ -315,7 +315,7 @@ def post_pred_gen(model, groupby=None, samples=500, append_data=False, progress_
     # Progress bar
     if progress_bar:
         n_iter = len(model.get_observeds())
-        bar = pbar.ProgressBar(n_iter)
+        bar = pbar.progress_bar(n_iter)
         bar_iter = 0
     else:
         print "Sampling..."
