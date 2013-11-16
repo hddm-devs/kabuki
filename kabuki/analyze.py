@@ -482,7 +482,7 @@ def _plot_posterior_pdf_node(bottom_node, axis, value_range=None, samples=10, bi
     axis.set_ylim(bottom=0) # Likelihood and histogram can only be positive
 
 def plot_posterior_predictive(model, plot_func=None, required_method='pdf', columns=None, save=False, path=None,
-                              figsize=(8,6), format='png', **kwargs):
+                              figsize=(8,6), format='png', num_subjs=None, **kwargs):
     """Plot the posterior predictive distribution of a kabuki hierarchical model.
 
     :Arguments:
@@ -546,7 +546,9 @@ def plot_posterior_predictive(model, plot_func=None, required_method='pdf', colu
         fig.subplots_adjust(top=0.9, hspace=.4, wspace=.3)
 
         # Plot individual subjects (if present)
+        i = 0
         for subj_i, (node_name, bottom_node) in enumerate(nodes.iterrows()):
+            i += 1
             if not hasattr(bottom_node['node'], required_method):
                 continue # skip nodes that do not define the required_method
 
@@ -555,6 +557,9 @@ def plot_posterior_predictive(model, plot_func=None, required_method='pdf', colu
                 ax.set_title(str(bottom_node['subj_idx']))
 
             plot_func(bottom_node['node'], ax, **kwargs)
+
+            if num_subjs is not None and num_subjs >= i:
+                break
 
         # Save figure if necessary
         if save:
