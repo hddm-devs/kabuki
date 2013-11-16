@@ -3,8 +3,8 @@ package:
   version: 0.5.2    # version of package
 
 source:
-  git_url: git@github.com:hddm-devs/kabuki.git
-  git_tag: master
+  fn: v0.5.2.zip
+  url: https://github.com/hddm-devs/kabuki/archive/v0.5.2.zip
 
 # the build and runtime requirements:
 requirements:     # (optional)
