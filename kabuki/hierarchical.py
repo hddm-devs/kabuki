@@ -387,6 +387,10 @@ class Hierarchical(object):
         self._setup_model()
         self.create_model()
 
+        # backwards compat
+        if not hasattr(self, 'sampled'):
+            self.sampled = True
+
         if self.sampled:
             self.load_db(d['dbname'], db=d['db'])
             self.gen_stats()
