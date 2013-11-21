@@ -824,6 +824,19 @@ class Hierarchical(object):
                     pm.Matplot.plot(node['node'], last=save, **kwargs)
                     node['node'].plot = plot_value
 
+    def plot_posteriors_conditions(self, *args, **kwargs):
+        """
+        Plot all group posteriors listed in depends_on on individual graphs.
+
+        Forwards arguments to kabuki.analyze.plot_posterior_nodes.
+        """
+        group_nodes = self.get_group_nodes()
+        for dep in m_label.depends_on.iterkeys():
+            nodes = group_nodes.ix[group_nodes.knode_name == dep]
+            if all(nodes.hidden == True):
+                continue
+            kabuki.analyze.plot_posterior_nodes(nodes['node'], *args, **kwargs)
+
     def get_observeds(self):
         return self.nodes_db[self.nodes_db.observed == True]
 
