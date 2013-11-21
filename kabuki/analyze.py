@@ -119,7 +119,7 @@ def plot_all_pairwise(model):
     fig = plt.figure()
     fig.subplots_adjust(wspace=0.4, hspace=0.4)
     # Loop through all pairwise combinations
-    for i, (p0, p1) in enumerate(combinations(model.get_group_nodes(), 2)):
+    for i, (p0, p1) in enumerate(combinations(model.get_group_nodes()['node'], 2)):
         fig.add_subplot(6,6,i+1)
         plt.plot(p0.trace(), p1.trace(), '.')
         (a_s, b_s, r, tt, stderr) = sp.stats.linregress(p0.trace(), p1.trace())
