@@ -831,7 +831,7 @@ class Hierarchical(object):
         Forwards arguments to kabuki.analyze.plot_posterior_nodes.
         """
         group_nodes = self.get_group_nodes()
-        for dep in m_label.depends_on.iterkeys():
+        for dep in self.depends_on.iterkeys():
             nodes = group_nodes.ix[group_nodes.knode_name == dep]
             if all(nodes.hidden == True):
                 continue
