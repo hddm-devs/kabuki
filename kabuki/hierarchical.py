@@ -968,7 +968,14 @@ class Hierarchical(object):
                 raise e
 
 
-    def approximate_map(self, fall_to_simplex = True):
+    def _approximate_map_subj(self, fall_to_simplex=True):
+        # Optimize subj nodes
+        for subj_idx in self.nodes_db.subj_idx.unique():
+            stoch_nodes = self.nodes_db.ix[(self.nodes_db.subj_idx == subj_idx) & (self.nodes_db.stochastic == True)].node
+            obs_nodes = self.nodes_db.ix[(self.nodes_db.subj_idx == subj_idx) & (self.nodes_db.observed == True)].node
+            self._partial_optimize(stoch_nodes, obs_nodes, fall_to_simplex)
+
+    def approximate_map(self, individual_subjs=True, fall_to_simplex=True):
         """Set model to its approximate MAP.
         Input:
             fall_to_simplex <bool>
@@ -986,6 +993,9 @@ class Hierarchical(object):
         generations.append(self.get_observeds().node)
 
         for i in range(len(generations)-1, 0, -1):
+            if individual_subjs and (i == len(generations) - 1):
+                self._approximate_map_subj(fall_to_simplex)
+                continue
             # Optimize the generation at i-1 evaluated over the generation at i
             self._partial_optimize(generations[i-1], generations[i], fall_to_simplex)
 

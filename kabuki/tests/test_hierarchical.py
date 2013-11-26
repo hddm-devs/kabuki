@@ -156,7 +156,7 @@ class TestEstimation(unittest.TestCase):
         model = HNodeSimple(data, depends_on={'mu': 'condition'})
 
         model.approximate_map()
-
+        model.approximate_map(individual_subjs=False)
         counter = 0
         for condition, subj_params in params_true.iteritems():
             nodes = model.nodes_db[model.nodes_db['condition'] == condition]
