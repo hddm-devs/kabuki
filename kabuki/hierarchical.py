@@ -927,14 +927,16 @@ class Hierarchical(object):
         for (name, value) in new_values.iteritems():
             self.nodes_db.ix[name]['node'].set_value(value)
 
-    def find_starting_values(self):
+    def find_starting_values(self, *args, **kwargs):
         """Find good starting values for the different parameters by
         optimization.
+
+        For more options see approximate_map and map. Arguments are forwarded.
         """
         if self.is_group_model:
-            self.approximate_map()
+            self.approximate_map(*args, **kwargs)
         else:
-            self.map()
+            self.map(*args, **kwargs)
 
     def _partial_optimize(self, optimize_nodes, evaluate_nodes, fall_to_simplex):
         """Optimize part of the model.
@@ -976,11 +978,18 @@ class Hierarchical(object):
             obs_nodes = self.nodes_db.ix[(self.nodes_db.subj_idx == subj_idx) & (self.nodes_db.observed == True)].node
             self._partial_optimize(stoch_nodes, obs_nodes, fall_to_simplex)
 
-    def approximate_map(self, individual_subjs=True, fall_to_simplex=True):
+    def approximate_map(self, individual_subjs=True, fall_to_simplex=True, cycles=1):
         """Set model to its approximate MAP.
-        Input:
-            fall_to_simplex <bool>
+
+        :Arguments:
+            individual_subjs : bool <default=True>
+                Optimize each subject individually.
+            fall_to_simplex : bool <default=True>
                 should map try using simplex algorithm if powell method failes
+            cycles : int <default=1>
+                How many times to optimize the model.
+                Since lower level nodes depend on higher level nodes,
+                they might be estimated differently in a second pass.
         """
         ###############################
         # In order to find the MAP of a hierarchical model one needs
@@ -993,12 +1002,13 @@ class Hierarchical(object):
         generations = m.generations
         generations.append(self.get_observeds().node)
 
-        for i in range(len(generations)-1, 0, -1):
-            if individual_subjs and (i == len(generations) - 1):
-                self._approximate_map_subj(fall_to_simplex)
-                continue
-            # Optimize the generation at i-1 evaluated over the generation at i
-            self._partial_optimize(generations[i-1], generations[i], fall_to_simplex)
+        for cyc in range(cycles):
+            for i in range(len(generations)-1, 0, -1):
+                if individual_subjs and (i == len(generations) - 1):
+                    self._approximate_map_subj(fall_to_simplex)
+                    continue
+                # Optimize the generation at i-1 evaluated over the generation at i
+                self._partial_optimize(generations[i-1], generations[i], fall_to_simplex)
 
         #update map in nodes_db
         self.nodes_db['map'] = np.NaN
