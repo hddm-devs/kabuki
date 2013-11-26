@@ -14,6 +14,7 @@ import pymc as pm
 import warnings
 
 from kabuki.utils import flatten
+import analyze
 
 class LnProb(object):
     def __init__(self, model):
@@ -835,7 +836,7 @@ class Hierarchical(object):
             nodes = group_nodes.ix[group_nodes.knode_name == dep]
             if all(nodes.hidden == True):
                 continue
-            kabuki.analyze.plot_posterior_nodes(nodes['node'], *args, **kwargs)
+            analyze.plot_posterior_nodes(nodes['node'], *args, **kwargs)
 
     def get_observeds(self):
         return self.nodes_db[self.nodes_db.observed == True]
