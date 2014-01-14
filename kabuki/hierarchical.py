@@ -938,7 +938,7 @@ class Hierarchical(object):
         else:
             self.map(*args, **kwargs)
 
-    def _partial_optimize(self, optimize_nodes, evaluate_nodes, fall_to_simplex=True, minimizer='Powell', use_basin=False):
+    def _partial_optimize(self, optimize_nodes, evaluate_nodes, fall_to_simplex=True, minimizer='Powell', use_basin=False, **kwargs):
         """Optimize part of the model.
 
         :Arguments:
@@ -963,32 +963,34 @@ class Hierarchical(object):
         # optimize
         if use_basin:
             try:
-                basinhopping(opt, init_vals, minimizer_kwargs={"method": minimizer}, stepsize=.5)
+                minimizer_kwargs = {'method': minimizer, 'options': kwargs}
+                basinhopping(opt, init_vals, minimizer_kwargs=minimizer_kwargs, stepsize=.5)
             except Exception as e:
                 if fall_to_simplex:
                     print("Warning: Powell optimization failed. Falling back to simplex.")
-                    basinhopping(opt, init_vals, minimizer_kwargs={"method": "Nelder-Mead"}, stepsize=.5)
+                    minimizer_kwargs = {"method": 'Nelder-Mead', 'options': kwargs}
+                    basinhopping(opt, init_vals, minimizer_kwargs=minimizer_kwargs, stepsize=.5)
                 else:
                     raise e
         else:
             try:
-                minimize(opt, init_vals, method=minimizer)
+                minimize(opt, init_vals, method=minimizer, options=kwargs)
             except Exception as e:
                 if fall_to_simplex:
                     print("Warning: Powell optimization failed. Falling back to simplex.")
-                    minimize(opt, init_vals, method='Nelder-Mead')
+                    minimize(opt, init_vals, method='Nelder-Mead', options=kwargs)
                 else:
                     raise e
 
 
-    def _approximate_map_subj(self, minimizer='Powell', use_basin=False, fall_to_simplex=True):
+    def _approximate_map_subj(self, minimizer='Powell', use_basin=False, fall_to_simplex=True, **kwargs):
         # Optimize subj nodes
         for subj_idx in self.nodes_db.subj_idx.unique():
             stoch_nodes = self.nodes_db.ix[(self.nodes_db.subj_idx == subj_idx) & (self.nodes_db.stochastic == True)].node
             obs_nodes = self.nodes_db.ix[(self.nodes_db.subj_idx == subj_idx) & (self.nodes_db.observed == True)].node
-            self._partial_optimize(stoch_nodes, obs_nodes, fall_to_simplex=fall_to_simplex, minimizer=minimizer, use_basin=use_basin)
+            self._partial_optimize(stoch_nodes, obs_nodes, fall_to_simplex=fall_to_simplex, minimizer=minimizer, use_basin=use_basin, **kwargs)
 
-    def approximate_map(self, individual_subjs=True, minimizer='Powell', use_basin=False, fall_to_simplex=True, cycles=1):
+    def approximate_map(self, individual_subjs=True, minimizer='Powell', use_basin=False, fall_to_simplex=True, cycles=1, **kwargs):
         """Set model to its approximate MAP.
 
         :Arguments:
@@ -1005,6 +1007,10 @@ class Hierarchical(object):
                 How many times to optimize the model.
                 Since lower level nodes depend on higher level nodes,
                 they might be estimated differently in a second pass.
+
+        :Note:
+           All other keyword arguments are forwarded to scipy.optimize.minimize.
+           E.g. maxiter, ftol
         """
         ###############################
         # In order to find the MAP of a hierarchical model one needs
@@ -1020,10 +1026,10 @@ class Hierarchical(object):
         for cyc in range(cycles):
             for i in range(len(generations)-1, 0, -1):
                 if individual_subjs and (i == len(generations) - 1):
-                    self._approximate_map_subj(fall_to_simplex=fall_to_simplex, minimizer=minimizer, use_basin=use_basin)
+                    self._approximate_map_subj(fall_to_simplex=fall_to_simplex, minimizer=minimizer, use_basin=use_basin, **kwargs)
                     continue
                 # Optimize the generation at i-1 evaluated over the generation at i
-                self._partial_optimize(generations[i-1], generations[i], fall_to_simplex=fall_to_simplex, minimizer=minimizer, use_basin=use_basin)
+                self._partial_optimize(generations[i-1], generations[i], fall_to_simplex=fall_to_simplex, minimizer=minimizer, use_basin=use_basin, **kwargs)
 
         #update map in nodes_db
         self.nodes_db['map'] = np.NaN

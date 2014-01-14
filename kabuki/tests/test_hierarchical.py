@@ -72,17 +72,17 @@ class TestHierarchicalBreakDown(unittest.TestCase):
     def test_map(self):
         for model in self.models:
             model.draw_from_prior()
-            model.approximate_map(minimizer='Powell', use_basin=False, fall_to_simplex=False, individual_subjs=True)
+            model.approximate_map(minimizer='Powell', use_basin=False, fall_to_simplex=False, individual_subjs=True, maxiter=100)
             model.draw_from_prior()
-            model.approximate_map(minimizer='Powell', use_basin=True, fall_to_simplex=False, individual_subjs=False)
+            model.approximate_map(minimizer='Powell', use_basin=True, fall_to_simplex=False, individual_subjs=False, maxiter=100)
             model.draw_from_prior()
-            model.approximate_map(minimizer='Powell', use_basin=False, fall_to_simplex=True, cycles=2)
+            model.approximate_map(minimizer='Powell', use_basin=False, fall_to_simplex=True, cycles=2, maxiter=100)
             model.draw_from_prior()
-            model.approximate_map(minimizer='Powell', use_basin=True, fall_to_simplex=True)
+            model.approximate_map(minimizer='Powell', use_basin=True, fall_to_simplex=True, maxiter=100)
             model.draw_from_prior()
-            model.approximate_map(minimizer='Nelder-Mead', use_basin=False, fall_to_simplex=False)
+            model.approximate_map(minimizer='Nelder-Mead', use_basin=False, fall_to_simplex=False, maxiter=100)
             model.draw_from_prior()
-            model.approximate_map(minimizer='Nelder-Mead', use_basin=True, fall_to_simplex=False)
+            model.approximate_map(minimizer='Nelder-Mead', use_basin=True, fall_to_simplex=False, maxiter=100)
             return
 
 
