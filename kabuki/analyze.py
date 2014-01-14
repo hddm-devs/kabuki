@@ -255,14 +255,14 @@ def post_pred_compare_stats(sampled_stats, data_stats, evals=None):
     for stat_name in sampled_stats:
         #update NaN column with the no. of NaNs and remove them
         s = sampled_stats[stat_name]
-        results.ix[stat_name]['NaN'] = sum(pd.isnull(s))
+        results.ix[stat_name, 'NaN'] = sum(pd.isnull(s))
         s = s[np.isfinite(s)]
         if len(s) == 0:
             continue
         #evaluate
         for eval_name, func in evals.iteritems():
             value = func(s, data_stats[stat_name])
-            results.ix[stat_name][eval_name] = value
+            results.ix[stat_name, eval_name] = value
 
     return results.drop('NaN', axis=1)
 
