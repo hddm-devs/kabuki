@@ -1022,6 +1022,7 @@ class Hierarchical(object):
         m = pm.MCMC(self.nodes_db.node)
         generations = m.generations
         generations.append(self.get_observeds().node)
+        generations = [gen for gen in generations if len(gen) != 0]
 
         for cyc in range(cycles):
             for i in range(len(generations)-1, 0, -1):
