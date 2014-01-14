@@ -985,7 +985,7 @@ class Hierarchical(object):
 
     def _approximate_map_subj(self, minimizer='Powell', use_basin=False, fall_to_simplex=True, **kwargs):
         # Optimize subj nodes
-        for subj_idx in self.nodes_db.subj_idx.unique():
+        for subj_idx in self.nodes_db.subj_idx.dropna().unique():
             stoch_nodes = self.nodes_db.ix[(self.nodes_db.subj_idx == subj_idx) & (self.nodes_db.stochastic == True)].node
             obs_nodes = self.nodes_db.ix[(self.nodes_db.subj_idx == subj_idx) & (self.nodes_db.observed == True)].node
             self._partial_optimize(stoch_nodes, obs_nodes, fall_to_simplex=fall_to_simplex, minimizer=minimizer, use_basin=use_basin, **kwargs)
@@ -1025,7 +1025,7 @@ class Hierarchical(object):
 
         for cyc in range(cycles):
             for i in range(len(generations)-1, 0, -1):
-                if individual_subjs and (i == len(generations) - 1):
+                if self.is_group_model and individual_subjs and (i == len(generations) - 1):
                     self._approximate_map_subj(fall_to_simplex=fall_to_simplex, minimizer=minimizer, use_basin=use_basin, **kwargs)
                     continue
                 # Optimize the generation at i-1 evaluated over the generation at i
