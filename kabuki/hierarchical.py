@@ -5,7 +5,7 @@ import pickle
 import sys
 
 import numpy as np
-from scipy.optimize import fmin_powell, fmin
+from scipy.optimize import minimize, basinhopping
 
 from collections import OrderedDict, defaultdict
 
@@ -938,7 +938,7 @@ class Hierarchical(object):
         else:
             self.map(*args, **kwargs)
 
-    def _partial_optimize(self, optimize_nodes, evaluate_nodes, fall_to_simplex):
+    def _partial_optimize(self, optimize_nodes, evaluate_nodes, fall_to_simplex=True, minimizer='Powell', use_basin=False):
         """Optimize part of the model.
 
         :Arguments:
@@ -960,30 +960,45 @@ class Hierarchical(object):
             except pm.ZeroProbability:
                 return np.inf
 
-        #optimize
-        try:
-            fmin_powell(opt, init_vals)
-        except Exception as e:
-            if fall_to_simplex:
-                print "Warning: Powell optimization failed. Falling back to simplex."
-                fmin(opt, init_vals)
-            else:
-                raise e
+        # optimize
+        if use_basin:
+            try:
+                basinhopping(opt, init_vals, minimizer_kwargs={"method": minimizer}, stepsize=.5)
+            except Exception as e:
+                if fall_to_simplex:
+                    print("Warning: Powell optimization failed. Falling back to simplex.")
+                    basinhopping(opt, init_vals, minimizer_kwargs={"method": "Nelder-Mead"}, stepsize=.5)
+                else:
+                    raise e
+        else:
+            try:
+                minimize(opt, init_vals, method=minimizer)
+            except Exception as e:
+                if fall_to_simplex:
+                    print("Warning: Powell optimization failed. Falling back to simplex.")
+                    minimize(opt, init_vals, method='Nelder-Mead')
+                else:
+                    raise e
 
 
-    def _approximate_map_subj(self, fall_to_simplex=True):
+    def _approximate_map_subj(self, minimizer='Powell', use_basin=False, fall_to_simplex=True):
         # Optimize subj nodes
         for subj_idx in self.nodes_db.subj_idx.unique():
             stoch_nodes = self.nodes_db.ix[(self.nodes_db.subj_idx == subj_idx) & (self.nodes_db.stochastic == True)].node
             obs_nodes = self.nodes_db.ix[(self.nodes_db.subj_idx == subj_idx) & (self.nodes_db.observed == True)].node
-            self._partial_optimize(stoch_nodes, obs_nodes, fall_to_simplex)
+            self._partial_optimize(stoch_nodes, obs_nodes, fall_to_simplex=fall_to_simplex, minimizer=minimizer, use_basin=use_basin)
 
-    def approximate_map(self, individual_subjs=True, fall_to_simplex=True, cycles=1):
+    def approximate_map(self, individual_subjs=True, minimizer='Powell', use_basin=False, fall_to_simplex=True, cycles=1):
         """Set model to its approximate MAP.
 
         :Arguments:
             individual_subjs : bool <default=True>
                 Optimize each subject individually.
+            minimizer : str <default='Powell'>
+                Optimize using Powell. See numpy.optimize.minimize.
+                Other choice might be 'Nelder-Mead'
+            use_basin : bool <default=True>
+                Use basin hopping optimization to avoid local minima.
             fall_to_simplex : bool <default=True>
                 should map try using simplex algorithm if powell method failes
             cycles : int <default=1>
@@ -1005,10 +1020,10 @@ class Hierarchical(object):
         for cyc in range(cycles):
             for i in range(len(generations)-1, 0, -1):
                 if individual_subjs and (i == len(generations) - 1):
-                    self._approximate_map_subj(fall_to_simplex)
+                    self._approximate_map_subj(fall_to_simplex=fall_to_simplex, minimizer=minimizer, use_basin=use_basin)
                     continue
                 # Optimize the generation at i-1 evaluated over the generation at i
-                self._partial_optimize(generations[i-1], generations[i], fall_to_simplex)
+                self._partial_optimize(generations[i-1], generations[i], fall_to_simplex=fall_to_simplex, minimizer=minimizer, use_basin=use_basin)
 
         #update map in nodes_db
         self.nodes_db['map'] = np.NaN

@@ -69,12 +69,21 @@ class TestHierarchicalBreakDown(unittest.TestCase):
     def test_plot_posteriors(self):
         pass
 
-    @unittest.skip("TODO")
-    def test_subj_by_subj_map_init(self):
-        models = create_test_models()
-        for model in models:
-            if model.is_group_model:
-                model.subj_by_subj_map_init(runs=1)
+    def test_map(self):
+        for model in self.models:
+            model.draw_from_prior()
+            model.approximate_map(minimizer='Powell', use_basin=False, fall_to_simplex=False, individual_subjs=True)
+            model.draw_from_prior()
+            model.approximate_map(minimizer='Powell', use_basin=True, fall_to_simplex=False, individual_subjs=False)
+            model.draw_from_prior()
+            model.approximate_map(minimizer='Powell', use_basin=False, fall_to_simplex=True, cycles=2)
+            model.draw_from_prior()
+            model.approximate_map(minimizer='Powell', use_basin=True, fall_to_simplex=True)
+            model.draw_from_prior()
+            model.approximate_map(minimizer='Nelder-Mead', use_basin=False, fall_to_simplex=False)
+            model.draw_from_prior()
+            model.approximate_map(minimizer='Nelder-Mead', use_basin=True, fall_to_simplex=False)
+            return
 
 
 class TestModelCreation(unittest.TestCase):
