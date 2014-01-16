@@ -27,6 +27,10 @@ class TestHierarchicalBreakDown(unittest.TestCase):
     def runTest(self):
         pass
 
+    def test_logp(self):
+        for model in self.models:
+            model.logp
+
     def test_map(self):
         np.random.seed(123)
         for model in self.models:

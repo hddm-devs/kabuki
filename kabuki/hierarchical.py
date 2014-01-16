@@ -1,4 +1,4 @@
- #!/usr/bin/python
+#!/usr/bin/python
 from __future__ import division
 from copy import copy
 import pickle
@@ -641,7 +641,14 @@ class Hierarchical(object):
 
         self.sampled = True
 
+	self.gen_stats()
         return self.mc
+
+    @property
+    def logp(self):
+        if self.mc is None:
+            raise AttributeError('self.mc not set. Call mcmc().')
+        return self.mc.logp
 
     @property
     def dic_info(self):
