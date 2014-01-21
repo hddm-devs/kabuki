@@ -945,7 +945,7 @@ class Hierarchical(object):
         else:
             self.map(*args, **kwargs)
 
-    def _partial_optimize(self, optimize_nodes, evaluate_nodes, fall_to_simplex=True, minimizer='Powell', use_basin=False, **kwargs):
+    def _partial_optimize(self, optimize_nodes, evaluate_nodes, fall_to_simplex=True, minimizer='Powell', use_basin=False, debug=False, **kwargs):
         """Optimize part of the model.
 
         :Arguments:
@@ -958,13 +958,17 @@ class Hierarchical(object):
 
         # define function to be optimized
         def opt(values):
+            if debug: print(values)
             for value, node in zip(values, optimize_nodes):
                 node.set_value(value)
             try:
                 logp_optimize = [node.logp for node in optimize_nodes]
                 logp_evaluate = [node.logp for node in evaluate_nodes]
-                return -np.sum(logp_optimize) - np.sum(logp_evaluate)
+                neglogp = -np.sum(logp_optimize) - np.sum(logp_evaluate)
+                if debug: print(neglogp)
+                return neglogp
             except pm.ZeroProbability:
+                if debug: print('Outside support!')
                 return np.inf
 
         # optimize
@@ -990,14 +994,14 @@ class Hierarchical(object):
                     raise e
 
 
-    def _approximate_map_subj(self, minimizer='Powell', use_basin=False, fall_to_simplex=True, **kwargs):
+    def _approximate_map_subj(self, minimizer='Powell', use_basin=False, fall_to_simplex=True, debug=False, **kwargs):
         # Optimize subj nodes
         for subj_idx in self.nodes_db.subj_idx.dropna().unique():
             stoch_nodes = self.nodes_db.ix[(self.nodes_db.subj_idx == subj_idx) & (self.nodes_db.stochastic == True)].node
             obs_nodes = self.nodes_db.ix[(self.nodes_db.subj_idx == subj_idx) & (self.nodes_db.observed == True)].node
-            self._partial_optimize(stoch_nodes, obs_nodes, fall_to_simplex=fall_to_simplex, minimizer=minimizer, use_basin=use_basin, **kwargs)
+            self._partial_optimize(stoch_nodes, obs_nodes, fall_to_simplex=fall_to_simplex, minimizer=minimizer, use_basin=use_basin, debug=debug, **kwargs)
 
-    def approximate_map(self, individual_subjs=True, minimizer='Powell', use_basin=False, fall_to_simplex=True, cycles=1, **kwargs):
+    def approximate_map(self, individual_subjs=True, minimizer='Powell', use_basin=False, fall_to_simplex=True, cycles=1, debug=False, **kwargs):
         """Set model to its approximate MAP.
 
         :Arguments:
@@ -1014,6 +1018,9 @@ class Hierarchical(object):
                 How many times to optimize the model.
                 Since lower level nodes depend on higher level nodes,
                 they might be estimated differently in a second pass.
+            debug : bool <default=False>
+	        Whether to print current values and neg logp at each
+		iteration.
 
         :Note:
            All other keyword arguments are forwarded to scipy.optimize.minimize.
@@ -1034,10 +1041,10 @@ class Hierarchical(object):
         for cyc in range(cycles):
             for i in range(len(generations)-1, 0, -1):
                 if self.is_group_model and individual_subjs and (i == len(generations) - 1):
-                    self._approximate_map_subj(fall_to_simplex=fall_to_simplex, minimizer=minimizer, use_basin=use_basin, **kwargs)
+                    self._approximate_map_subj(fall_to_simplex=fall_to_simplex, minimizer=minimizer, use_basin=use_basin, debug=debug, **kwargs)
                     continue
                 # Optimize the generation at i-1 evaluated over the generation at i
-                self._partial_optimize(generations[i-1], generations[i], fall_to_simplex=fall_to_simplex, minimizer=minimizer, use_basin=use_basin, **kwargs)
+                self._partial_optimize(generations[i-1], generations[i], fall_to_simplex=fall_to_simplex, minimizer=minimizer, use_basin=use_basin, debug=debug, **kwargs)
 
         #update map in nodes_db
         self.nodes_db['map'] = np.NaN
