@@ -451,15 +451,15 @@ class Hierarchical(object):
 	if not update:
 	    values = self.values
 
-        non_zero = False
+        non_zero = True
         while non_zero:
             try:
                 self.mc.draw_from_prior()
                 self.mc.logp
 		draw = copy(self.values)
-                non_zero = True
-            except pm.ZeroProbability:
                 non_zero = False
+            except pm.ZeroProbability:
+                non_zero = True
 
 	if not update:
 	    # restore original values
