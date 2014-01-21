@@ -932,7 +932,12 @@ class Hierarchical(object):
 
     @property
     def values(self):
-        return {name: node['node'].value[()] for (name, node) in self.iter_non_observeds() if node['node'].value.shape == ()}
+	values = OrderedDict()
+	for (name, node) in self.iter_non_observeds():
+	    if node['node'].value.shape == ():
+		values[name] = node['node'].value[()]
+
+	return values
 
     def set_values(self, new_values):
         """
