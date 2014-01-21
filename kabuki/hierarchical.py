@@ -500,13 +500,15 @@ class Hierarchical(object):
         for i in range(runs):
             # (re)create nodes to get new initival values.
             #nodes are not created for the first iteration if they already exist
+            self.mc = pm.MAP(self.nodes_db.node)
             if i != 0:
                 self.draw_from_prior()
 
-            m = pm.MAP(self.nodes_db.node)
-            m.fit(method, **kwargs)
-            print m.logp
-            maps.append(m)
+            self.mc.fit(method, **kwargs)
+            print self.mc.logp
+            maps.append(self.mc)
+
+        self.mc = None
 
         # We want to use values of the best fitting model
         sorted_maps = sorted(maps, key=attrgetter('logp'))
