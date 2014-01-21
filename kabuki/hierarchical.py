@@ -447,16 +447,25 @@ class Hierarchical(object):
     def create_nodes_db(self):
         self.nodes_db = pd.concat([knode.nodes_db for knode in self.knodes])
 
-    def draw_from_prior(self):
+    def draw_from_prior(self, update=False):
+	if not update:
+	    values = self.values
+
         non_zero = False
         while non_zero:
             try:
                 self.mc.draw_from_prior()
                 self.mc.logp
+		draw = copy(self.values)
                 non_zero = True
             except pm.ZeroProbability:
                 non_zero = False
 
+	if not update:
+	    # restore original values
+	    self.set_values(values)
+
+	return draw
 
     def map(self, runs=2, warn_crit=5, method='fmin_powell', **kwargs):
         """
