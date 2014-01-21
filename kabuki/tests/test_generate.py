@@ -102,7 +102,7 @@ class TestGenerate(unittest.TestCase):
             self.assertEqual(params_subjs[i], new_params)
 
 
-    def test_mulltiple_cond_no_subj(self):
+    def test_multiple_cond_no_subj(self):
         size = 100
         params = OrderedDict([('cond1', {'loc': 0, 'scale': 1}), ('cond2', {'loc': 100, 'scale': 10})])
 
@@ -110,7 +110,7 @@ class TestGenerate(unittest.TestCase):
         data, subj_params = gen_rand_data(gen_func_df, params, size=size, seed=seed)
 
         # test whether conditions are present
-        np.testing.assert_array_equal(np.unique(data['condition']).values, ['cond1', 'cond2'])
+        np.testing.assert_array_equal(np.unique(data['condition'].values), ['cond1', 'cond2'])
         self.assertEqual(subj_params.keys(), ['cond1', 'cond2'])
 
         # test for correct length
