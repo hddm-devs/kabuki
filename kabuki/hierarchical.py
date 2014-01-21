@@ -448,24 +448,24 @@ class Hierarchical(object):
         self.nodes_db = pd.concat([knode.nodes_db for knode in self.knodes])
 
     def draw_from_prior(self, update=False):
-	if not update:
-	    values = self.values
+        if not update:
+            values = self.values
 
         non_zero = True
         while non_zero:
             try:
                 self.mc.draw_from_prior()
                 self.mc.logp
-		draw = copy(self.values)
+                draw = copy(self.values)
                 non_zero = False
             except pm.ZeroProbability:
                 non_zero = True
 
-	if not update:
-	    # restore original values
-	    self.set_values(values)
+        if not update:
+            # restore original values
+            self.set_values(values)
 
-	return draw
+        return draw
 
     def map(self, runs=2, warn_crit=5, method='fmin_powell', **kwargs):
         """
@@ -650,7 +650,7 @@ class Hierarchical(object):
 
         self.sampled = True
 
-	self.gen_stats()
+        self.gen_stats()
         return self.mc
 
     @property
@@ -823,20 +823,20 @@ class Hierarchical(object):
         which will change the plot attribute in the relevant nodes
         """
 
-        #should we save the figures
+        # should we save the figures
         kwargs.pop('last', None)
 
         if isinstance(params, str):
              params = [params]
 
-        #loop over nodes and for each node if it
+        # loop over nodes and for each node if it
         for (name, node) in self.iter_non_observeds():
-            if (params is None) or (node['knode_name'] in params): #plot params if its name was mentioned
-                if not node['hidden']: #plot it if it is not hidden
+            if (params is None) or (node['knode_name'] in params): # plot params if its name was mentioned
+                if not node['hidden']: # plot it if it is not hidden
                     plot_value = node['node'].plot
-                    if (plot_subjs and node['subj']): #plot if it is a subj node and plot_subjs==True
+                    if (plot_subjs and node['subj']): # plot if it is a subj node and plot_subjs==True
                         node['node'].plot = True
-                    if (params is not None) and  (node['knode_name'] in params): #plot if it was sepecficily mentioned
+                    if (params is not None) and  (node['knode_name'] in params): # plot if it was sepecficily mentioned
                         node['node'].plot = True
                     pm.Matplot.plot(node['node'], last=save, **kwargs)
                     node['node'].plot = plot_value
@@ -932,12 +932,12 @@ class Hierarchical(object):
 
     @property
     def values(self):
-	values = OrderedDict()
-	for (name, node) in self.iter_non_observeds():
-	    if node['node'].value.shape == ():
-		values[name] = node['node'].value[()]
+        values = OrderedDict()
+        for (name, node) in self.iter_non_observeds():
+            if node['node'].value.shape == ():
+                values[name] = node['node'].value[()]
 
-	return values
+        return values
 
     def set_values(self, new_values):
         """
@@ -1033,8 +1033,8 @@ class Hierarchical(object):
                 Since lower level nodes depend on higher level nodes,
                 they might be estimated differently in a second pass.
             debug : bool <default=False>
-	        Whether to print current values and neg logp at each
-		iteration.
+                Whether to print current values and neg logp at each
+                iteration.
 
         :Note:
            All other keyword arguments are forwarded to scipy.optimize.minimize.
@@ -1048,9 +1048,15 @@ class Hierarchical(object):
         # only need this to get at the generations
         # TODO: Find out how to get this from pymc.utils.find_generations()
         m = pm.MCMC(self.nodes_db.node)
-        generations = m.generations
-        generations.append(self.get_observeds().node)
-        generations = [gen for gen in generations if len(gen) != 0]
+        generations_unsorted = m.generations
+        generations_unsorted.append(self.get_observeds().node)
+        # Filter out empty generations
+        generations_unsorted = [gen for gen in generations_unsorted if len(gen) != 0]
+        # Sort generations according to order of nodes_db
+        generations = []
+        for gen in generations_unsorted:
+            generations.append([row.node for name, row in self.nodes_db.iterrows()
+                                if name in [node.__name__ for node in gen]])
 
         for cyc in range(cycles):
             for i in range(len(generations)-1, 0, -1):
