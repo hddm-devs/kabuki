@@ -961,13 +961,18 @@ class Hierarchical(object):
         else:
             self.map(*args, **kwargs)
 
-    def _partial_optimize(self, optimize_nodes, evaluate_nodes, fall_to_simplex=True, minimizer='Powell', use_basin=False, debug=False, **kwargs):
+    def _partial_optimize(self, optimize_nodes, evaluate_nodes, fall_to_simplex=True, minimizer='Powell', use_basin=False, debug=False, minimizer_kwargs=None, basin_kwargs=None):
         """Optimize part of the model.
 
         :Arguments:
             nodes : iterable
                 list nodes to optimize.
         """
+        if minimizer_kwargs is None:
+            minimizer_kwargs = {}
+        if basin_kwargs is None:
+            basin_kwargs = {}
+
         non_observeds = filter(lambda x: not x.observed, optimize_nodes)
 
         init_vals = [node.value for node in non_observeds]
@@ -990,34 +995,34 @@ class Hierarchical(object):
         # optimize
         if use_basin:
             try:
-                minimizer_kwargs = {'method': minimizer, 'options': kwargs}
-                basinhopping(opt, init_vals, minimizer_kwargs=minimizer_kwargs, stepsize=.5)
-            except Exception as e:
+                minimizer_kwargs_passed = {'method': minimizer, 'options': minimizer_kwargs}
+                basinhopping(opt, init_vals, minimizer_kwargs=minimizer_kwargs_passed, **basin_kwargs)
+            except:
                 if fall_to_simplex:
                     print("Warning: Powell optimization failed. Falling back to simplex.")
-                    minimizer_kwargs = {"method": 'Nelder-Mead', 'options': kwargs}
-                    basinhopping(opt, init_vals, minimizer_kwargs=minimizer_kwargs, stepsize=.5)
+                    minimizer_kwargs_passed = {'method': minimizer, 'options': minimizer_kwargs}
+                    basinhopping(opt, init_vals, minimizer_kwargs=minimizer_kwargs_passed, **basin_kwargs)
                 else:
-                    raise e
+                    raise
         else:
             try:
-                minimize(opt, init_vals, method=minimizer, options=kwargs)
-            except Exception as e:
+                minimize(opt, init_vals, method=minimizer, options=minimizer_kwargs)
+            except:
                 if fall_to_simplex:
                     print("Warning: Powell optimization failed. Falling back to simplex.")
-                    minimize(opt, init_vals, method='Nelder-Mead', options=kwargs)
+                    minimize(opt, init_vals, method='Nelder-Mead', options=minimizer_kwargs)
                 else:
-                    raise e
+                    raise
 
 
-    def _approximate_map_subj(self, minimizer='Powell', use_basin=False, fall_to_simplex=True, debug=False, **kwargs):
+    def _approximate_map_subj(self, minimizer='Powell', use_basin=False, fall_to_simplex=True, debug=False, minimizer_kwargs=None, basin_kwargs=None):
         # Optimize subj nodes
         for subj_idx in self.nodes_db.subj_idx.dropna().unique():
             stoch_nodes = self.nodes_db.ix[(self.nodes_db.subj_idx == subj_idx) & (self.nodes_db.stochastic == True)].node
             obs_nodes = self.nodes_db.ix[(self.nodes_db.subj_idx == subj_idx) & (self.nodes_db.observed == True)].node
-            self._partial_optimize(stoch_nodes, obs_nodes, fall_to_simplex=fall_to_simplex, minimizer=minimizer, use_basin=use_basin, debug=debug, **kwargs)
+            self._partial_optimize(stoch_nodes, obs_nodes, fall_to_simplex=fall_to_simplex, minimizer=minimizer, use_basin=use_basin, debug=debug, minimizer_kwargs=minimizer_kwargs, basin_kwargs=basin_kwargs)
 
-    def approximate_map(self, individual_subjs=True, minimizer='Powell', use_basin=False, fall_to_simplex=True, cycles=1, debug=False, **kwargs):
+    def approximate_map(self, individual_subjs=True, minimizer='Powell', use_basin=False, fall_to_simplex=True, cycles=1, debug=False, minimizer_kwargs=None, basin_kwargs=None):
         """Set model to its approximate MAP.
 
         :Arguments:
@@ -1034,13 +1039,16 @@ class Hierarchical(object):
                 How many times to optimize the model.
                 Since lower level nodes depend on higher level nodes,
                 they might be estimated differently in a second pass.
+            minimizer_kwargs : dict <default={}>
+                Keyword arguments passed to minimizer.
+                See scipy.optimize.minimize for options.
+            basin_kwargs : dict <default={}>
+                Keyword arguments passed to basinhopping.
+                See scipy.optimize.basinhopping for options.
             debug : bool <default=False>
                 Whether to print current values and neg logp at each
                 iteration.
 
-        :Note:
-           All other keyword arguments are forwarded to scipy.optimize.minimize.
-           E.g. maxiter, ftol
         """
         ###############################
         # In order to find the MAP of a hierarchical model one needs
@@ -1063,10 +1071,10 @@ class Hierarchical(object):
         for cyc in range(cycles):
             for i in range(len(generations)-1, 0, -1):
                 if self.is_group_model and individual_subjs and (i == len(generations) - 1):
-                    self._approximate_map_subj(fall_to_simplex=fall_to_simplex, minimizer=minimizer, use_basin=use_basin, debug=debug, **kwargs)
+                    self._approximate_map_subj(fall_to_simplex=fall_to_simplex, minimizer=minimizer, use_basin=use_basin, debug=debug, minimizer_kwargs=minimizer_kwargs, basin_kwargs=basin_kwargs)
                     continue
                 # Optimize the generation at i-1 evaluated over the generation at i
-                self._partial_optimize(generations[i-1], generations[i], fall_to_simplex=fall_to_simplex, minimizer=minimizer, use_basin=use_basin, debug=debug, **kwargs)
+                self._partial_optimize(generations[i-1], generations[i], fall_to_simplex=fall_to_simplex, minimizer=minimizer, use_basin=use_basin, debug=debug, minimizer_kwargs=minimizer_kwargs, basin_kwargs=basin_kwargs)
 
         #update map in nodes_db
         self.nodes_db['map'] = np.NaN
