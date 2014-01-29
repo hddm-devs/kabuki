@@ -750,29 +750,22 @@ class Hierarchical(object):
         else:
             i_chain = nchains
 
-        #see if stats have been cached for this chain
-        try:
-            if self._stats_chain == i_chain:
-                return
-        except AttributeError:
-            pass
-
         #update self._stats
         self._stats = self.mc.stats(*args, **kwargs)
         self._stats_chain = i_chain
 
         #add/overwrite stats to nodes_db
         for name, i_stats in self._stats.iteritems():
-            if self.nodes_db['hidden'][name]:
+            if self.nodes_db.loc[name, 'hidden']:
                 continue
-            self.nodes_db['mean'][name]   = i_stats['mean']
-            self.nodes_db['std'][name]    = i_stats['standard deviation']
-            self.nodes_db['2.5q'][name]   = i_stats['quantiles'][2.5]
-            self.nodes_db['25q'][name]    = i_stats['quantiles'][25]
-            self.nodes_db['50q'][name]    = i_stats['quantiles'][50]
-            self.nodes_db['75q'][name]    = i_stats['quantiles'][75]
-            self.nodes_db['97.5q'][name]  = i_stats['quantiles'][97.5]
-            self.nodes_db['mc err'][name] = i_stats['mc error']
+            self.nodes_db.loc[name, 'mean']   = i_stats['mean']
+            self.nodes_db.loc[name, 'std']    = i_stats['standard deviation']
+            self.nodes_db.loc[name, '2.5q']   = i_stats['quantiles'][2.5]
+            self.nodes_db.loc[name, '25q']    = i_stats['quantiles'][25]
+            self.nodes_db.loc[name, '50q']    = i_stats['quantiles'][50]
+            self.nodes_db.loc[name, '75q']    = i_stats['quantiles'][75]
+            self.nodes_db.loc[name, '97.5q']  = i_stats['quantiles'][97.5]
+            self.nodes_db.loc[name, 'mc err'] = i_stats['mc error']
 
 
     def load_db(self, dbname, verbose=0, db='sqlite'):
