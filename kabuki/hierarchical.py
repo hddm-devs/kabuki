@@ -750,13 +750,6 @@ class Hierarchical(object):
         else:
             i_chain = nchains
 
-        #see if stats have been cached for this chain
-        try:
-            if self._stats_chain == i_chain:
-                return
-        except AttributeError:
-            pass
-
         #update self._stats
         self._stats = self.mc.stats(*args, **kwargs)
         self._stats_chain = i_chain
