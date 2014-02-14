@@ -4,6 +4,12 @@
 Release Notes
 =============
 
+kabuki 0.6.3 (02/14/14)
+=======================
+
+* Bugfixes
+* Compatibility with pandas 0.13.x.
+
 kabuki 0.6
 ==========
 
