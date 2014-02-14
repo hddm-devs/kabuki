@@ -278,7 +278,7 @@ def _post_pred_generate(bottom_node, samples=500, data=None, append_data=False):
         # Generate data from bottom node
         sampled_data = bottom_node.random()
         if append_data and data is not None:
-            sampled_data = sampled_data.join(data, lsuffix='_sampled')
+            sampled_data = sampled_data.join(data.reset_index(), lsuffix='_sampled')
         datasets.append(sampled_data)
 
     return datasets
