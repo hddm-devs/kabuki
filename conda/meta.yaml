@@ -1,10 +1,10 @@
 package:
   name: kabuki     # lower case name of package, may contain '-' but no spaces
-  version: 0.5.2    # version of package
+  version: 0.5.3    # version of package
 
 source:
-  fn: v0.5.2.zip
-  url: https://github.com/hddm-devs/kabuki/archive/v0.5.2.zip
+  fn: v0.5.3.zip
+  url: https://github.com/hddm-devs/kabuki/archive/v0.5.3.zip
 
 # the build and runtime requirements:
 requirements:     # (optional)
