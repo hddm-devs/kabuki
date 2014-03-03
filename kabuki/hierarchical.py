@@ -1015,7 +1015,7 @@ class Hierarchical(object):
             obs_nodes = self.nodes_db.ix[(self.nodes_db.subj_idx == subj_idx) & (self.nodes_db.observed == True)].node
             self._partial_optimize(stoch_nodes, obs_nodes, fall_to_simplex=fall_to_simplex, minimizer=minimizer, use_basin=use_basin, debug=debug, minimizer_kwargs=minimizer_kwargs, basin_kwargs=basin_kwargs)
 
-    def approximate_map(self, individual_subjs=True, minimizer='Powell', use_basin=False, fall_to_simplex=True, cycles=1, debug=False, minimizer_kwargs=None, basin_kwargs=None):
+    def approximate_map(self, individual_subjs=True, minimizer='Powell', use_basin=False, fall_to_simplex=True, cycles=1, debug=False, minimizer_kwargs=None, basin_kwargs=None, skip_generations=0):
         """Set model to its approximate MAP.
 
         :Arguments:
@@ -1062,7 +1062,7 @@ class Hierarchical(object):
                                 if name in [node.__name__ for node in gen]])
 
         for cyc in range(cycles):
-            for i in range(len(generations)-1, 0, -1):
+            for i in range(len(generations)-1 - skip_generations, 0, -1):
                 if self.is_group_model and individual_subjs and (i == len(generations) - 1):
                     self._approximate_map_subj(fall_to_simplex=fall_to_simplex, minimizer=minimizer, use_basin=use_basin, debug=debug, minimizer_kwargs=minimizer_kwargs, basin_kwargs=basin_kwargs)
                     continue
