@@ -679,7 +679,30 @@ class Hierarchical(object):
 
     @property
     def dic(self):
+        """Deviance Information Criterion.
+        """
         return self.dic_info['DIC']
+
+    @property
+    def aic(self):
+        """Akaike Information Criterion.
+        """
+        if self.is_group_model:
+            raise NotImplementedError('AIC can only be computed for non-hierarchical models. See dic.')
+        k = len(self.get_stochastics())
+        logp = sum([x.logp for x in self.get_observeds()['node']])
+        return 2 * k - 2 * logp
+
+    @property
+    def bic(self):
+        """Bayesian Information Criterion.
+        """
+        if self.is_group_model:
+            raise NotImplementedError('BIC can only be computed for non-hierarchical models. See dic.')
+        k = len(self.get_stochastics())
+        n = len(self.data)
+        logp = sum([x.logp for x in self.get_observeds()['node']])
+        return -2 * logp + k * np.log(n)
 
     def _output_stats(self, stats_str, fname=None):
         """
