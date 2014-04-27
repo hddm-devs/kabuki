@@ -408,7 +408,7 @@ def post_pred_stats(data, sim_datasets, stats=None, plot=False, bins=100, evals=
     if plot:
         from pymc.Matplot import gof_plot
         for name, value in sampled_stats.iteritems():
-            gof_plot(value, data_stats[name], nbins=bins, name=name, verbose=0)
+            gof_plot(value, data_stats[name], bins=bins, name=name, verbose=0)
 
     if call_compare:
         return post_pred_compare_stats(sampled_stats, data_stats, evals=evals)
