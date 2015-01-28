@@ -97,7 +97,7 @@ want to estimate the mean and variance:
         # expected to return a list of knodes.
         def create_knodes(self):
 
-	    mu_group = Knode(pymc.Uniform, 'mu_g', lower=-5, upper=5, depends=self.depends['mu'])
+	    mu_g = Knode(pymc.Uniform, 'mu_g', lower=-5, upper=5, depends=self.depends['mu'])
 
             mu_subj = Knode(pymc.Normal, 'mu_subj', mu=mu_g, tau=1, depends=('subj_idx',), subj=True)
 
