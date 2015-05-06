@@ -1096,7 +1096,7 @@ class Hierarchical(object):
         self.nodes_db['map'] = np.NaN
         for name, value in self.values.iteritems():
             try:
-                self.nodes_db['map'].ix[name] = value
+                self.nodes_db.loc[name, 'map'] = value
             # Some values can be series which we'll just ignore
             except (AttributeError, ValueError):
                 pass
