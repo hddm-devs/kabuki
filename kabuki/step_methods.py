@@ -355,8 +355,8 @@ class SliceStep(pm.Gibbs):
         z = self.logp_plus_loglike - np.random.exponential()
 
         if self.verbose>2:
-            print self._id + ' current value: %.3f' % value
-            print self._id + ' sampled vertical level ' + `z`
+            print(self._id + ' current value: %.3f' % value)
+            print(self._id + ' sampled vertical level ' + repr(z))
 
 
         #position an interval at random starting position around the current value
@@ -369,7 +369,7 @@ class SliceStep(pm.Gibbs):
 
 
         if self.verbose>2:
-            print 'initial interval [%.3f, %.3f]' % (xl, xr)
+            print('initial interval [%.3f, %.3f]' % (xl, xr))
 
         if self.left is None:
             #step out to the left
@@ -384,7 +384,7 @@ class SliceStep(pm.Gibbs):
             self.neval += iter
 
             if self.verbose>2:
-                print 'after %d iteration interval is [%.3f, %.3f]' % (iter, xl, xr)
+                print('after %d iteration interval is [%.3f, %.3f]' % (iter, xl, xr))
 
         #step out to the right
         iter = 0
@@ -397,7 +397,7 @@ class SliceStep(pm.Gibbs):
         assert iter < self.maxiter, "Step-out procedure failed"
         self.neval += iter
         if self.verbose>2:
-            print 'after %d iteration interval is [%.3f, %.3f]' % (iter, xl, xr)
+            print('after %d iteration interval is [%.3f, %.3f]' % (iter, xl, xr))
 
         #draw a new point from the interval [xl, xr].
         xp = rand()*(xr-xl) + xl
@@ -417,7 +417,7 @@ class SliceStep(pm.Gibbs):
         assert iter < self.maxiter, "Shrink-in procedure failed."
         self.neval += iter
         if self.verbose>2:
-            print 'after %d iteration found new value: %.3f' % (iter, xp)
+            print('after %d iteration found new value: %.3f' % (iter, xp))
 
 
     def get_logp(self):

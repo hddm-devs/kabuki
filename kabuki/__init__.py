@@ -1,9 +1,9 @@
-from hierarchical import *
+from .hierarchical import *
 
-import utils
-import analyze
-import step_methods as steps
-import generate
+from . import utils
+from . import analyze
+from . import step_methods as steps
+from . import generate
 
 __version__ = '0.5.5'
 

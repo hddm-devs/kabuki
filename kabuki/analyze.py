@@ -1,4 +1,4 @@
-from __future__ import division
+
 import sys, os
 from types import FunctionType
 
@@ -9,9 +9,9 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import pymc as pm
 import pymc.progressbar as pbar
-import utils
+from . import utils
 
-from utils import interpolate_trace
+from .utils import interpolate_trace
 
 from collections import OrderedDict
 
@@ -70,7 +70,7 @@ def group_plot(model, params_to_plot=(), bins=50, samples=5000, save_to=None):
 
         # plot interpolated subject histograms
         #create figure
-        print "plotting %s: %s" % (knode_name, tag)
+        print("plotting %s: %s" % (knode_name, tag))
         sys.stdout.flush()
 
         plt.figure()
@@ -88,7 +88,7 @@ def group_plot(model, params_to_plot=(), bins=50, samples=5000, save_to=None):
         # plot group distribution
         node = subj_descr['node']
         group_trace = np.empty(samples, dtype=np.float32)
-        for sample in xrange(samples):
+        for sample in range(samples):
             # set parents to random value from their trace
             trace_pos = np.random.randint(0, len(node.trace()))
             for parent in node.extended_parents:
@@ -162,7 +162,7 @@ def check_geweke(model, assert_=True):
             if assert_:
                 raise AssertionError(msg)
             else:
-                print msg
+                print(msg)
             return False
 
     return True
@@ -248,7 +248,7 @@ def post_pred_compare_stats(sampled_stats, data_stats, evals=None):
         #    evals[key] = lambda x, y, q=q: scoreatpercentile(x, q)
 
     # Evaluate all eval-functions
-    results = pd.DataFrame(index=sampled_stats.keys(), columns=evals.keys() + ['NaN'],
+    results = pd.DataFrame(index=list(sampled_stats.keys()), columns=list(evals.keys()) + ['NaN'],
                            dtype=np.float32)
 
     results.index.names = ['stat']
@@ -260,7 +260,7 @@ def post_pred_compare_stats(sampled_stats, data_stats, evals=None):
         if len(s) == 0:
             continue
         #evaluate
-        for eval_name, func in evals.iteritems():
+        for eval_name, func in evals.items():
             value = func(s, data_stats[stat_name])
             results.ix[stat_name, eval_name] = value
 
@@ -318,7 +318,7 @@ def post_pred_gen(model, groupby=None, samples=500, append_data=False, progress_
         bar = pbar.progress_bar(n_iter)
         bar_iter = 0
     else:
-        print "Sampling..."
+        print("Sampling...")
 
     if groupby is None:
         iter_data = ((name, model.data.ix[obs['node'].value.index]) for name, obs in model.iter_observeds())
@@ -338,7 +338,7 @@ def post_pred_gen(model, groupby=None, samples=500, append_data=False, progress_
         ##############################
         # Sample and generate stats
         datasets = _post_pred_generate(node, samples=samples, data=data, append_data=append_data)
-        results[name] = pd.concat(datasets, names=['sample'], keys=range(len(datasets)))
+        results[name] = pd.concat(datasets, names=['sample'], keys=list(range(len(datasets))))
 
     if progress_bar:
         bar_iter += 1
@@ -379,7 +379,7 @@ def post_pred_stats(data, sim_datasets, stats=None, plot=False, bins=100, evals=
 
     def _calc_stats(data, stats):
         out = {}
-        for name, func in stats.iteritems():
+        for name, func in stats.items():
             out[name] = func(data)
         return out
 
@@ -395,19 +395,19 @@ def post_pred_stats(data, sim_datasets, stats=None, plot=False, bins=100, evals=
     samples = len(sim_datasets)
     sampled_stats = {}
     sampled_stats = pd.DataFrame(index=sim_datasets.index.droplevel(2).unique(),
-                                 columns=stats.keys(),
+                                 columns=list(stats.keys()),
                                  dtype=np.float32)
 
     for i, sim_dataset in sim_datasets.groupby(level=(0, 1)):
         sampled_stat = _calc_stats(sim_dataset.values, stats)
 
         # Add it to the results container
-        for name, value in sampled_stat.iteritems():
+        for name, value in sampled_stat.items():
             sampled_stats[name][i] = value
 
     if plot:
         from pymc.Matplot import gof_plot
-        for name, value in sampled_stats.iteritems():
+        for name, value in sampled_stats.items():
             gof_plot(value, data_stats[name], bins=bins, name=name, verbose=0)
 
     if call_compare:
@@ -454,7 +454,7 @@ def _plot_posterior_pdf_node(bottom_node, axis, value_range=None, samples=10, bi
 
     if value_range is None:
         # Infer from data by finding the min and max from the nodes
-        raise NotImplementedError, "value_range keyword argument must be supplied."
+        raise NotImplementedError("value_range keyword argument must be supplied.")
 
     like = np.empty((samples, len(value_range)), dtype=np.float32)
     for sample in range(samples):
@@ -466,7 +466,7 @@ def _plot_posterior_pdf_node(bottom_node, axis, value_range=None, samples=10, bi
     try:
         y_std = like.std(axis=0)
     except FloatingPointError:
-        print "WARNING! %s threw FloatingPointError over std computation. Setting to 0 and continuing." % bottom_node.__name__
+        print("WARNING! %s threw FloatingPointError over std computation. Setting to 0 and continuing." % bottom_node.__name__)
         y_std = np.zeros_like(y)
 
     # Plot pp
@@ -536,7 +536,7 @@ def plot_posterior_predictive(model, plot_func=None, required_method='pdf', colu
         # If there are less than 3 items to plot per figure,
         # only use as many columns as there are items.
         max_items = max([len(i[1]) for i in
-                         observeds.groupby('tag').groups.iteritems()])
+                         observeds.groupby('tag').groups.items()])
         columns = min(3, max_items)
 
     # Plot different conditions (new figure for each)
@@ -582,7 +582,7 @@ def geweke_problems(model, fname=None, **kwargs):
     #search for geweke problems
     g = pm.geweke(model.mc)
     problems = []
-    for node, output in g.iteritems():
+    for node, output in g.items():
         values = np.array(output)[:,1]
         if np.any(np.abs(values) > 2):
             problems.append(node)

@@ -1,4 +1,4 @@
-from __future__ import division
+
 
 from copy import deepcopy
 
@@ -70,10 +70,10 @@ def _add_noise(params, check_valid_func=None, bounds=None, noise=.1, exclude_par
         params = deepcopy(original_params)
 
         # sample params only if not excluded and make sure they are shaared across condition if necessary
-        for (i_cond, (cond, cond_params)) in enumerate(original_params.iteritems()):
+        for (i_cond, (cond, cond_params)) in enumerate(original_params.items()):
             if i_cond == 0:
                 cond0 = cond
-            for param, value in cond_params.iteritems():
+            for param, value in cond_params.items():
                 if param not in exclude_params:
                     if (i_cond == 0) or (param not in share_noise):
                         new_value = sample_value(param, value)
@@ -84,7 +84,7 @@ def _add_noise(params, check_valid_func=None, bounds=None, noise=.1, exclude_par
 
         # check if params are valid
         valid = True
-        for cond_params in params.itervalues():
+        for cond_params in params.values():
             valid = check_valid_func(**cond_params)
             if not valid:
                 break
@@ -148,13 +148,13 @@ def gen_rand_data(gen_func, params, size=50, subjs=1, subj_noise=.1, exclude_par
     generate_data = True
 
     # Check if only dict of params was passed, i.e. no conditions
-    if not isinstance(params[params.keys()[0]], dict):
+    if not isinstance(params[list(params.keys())[0]], dict):
         params = {'none': params}
     if seed is not None:
         np.random.seed(seed)
 
     final_params_set = {}
-    for condition in params.iterkeys():
+    for condition in params.keys():
         final_params_set[condition] = []
 
     data = []
@@ -170,7 +170,7 @@ def gen_rand_data(gen_func, params, size=50, subjs=1, subj_noise=.1, exclude_par
             subj_params = params.copy()
 
         #sample for each condition
-        for condition, params_cur in subj_params.iteritems():
+        for condition, params_cur in subj_params.items():
             final_params_set[condition].append(params_cur)
             if generate_data:
                 samples_from_dist = gen_func(size=size, **params_cur)
@@ -185,11 +185,11 @@ def gen_rand_data(gen_func, params, size=50, subjs=1, subj_noise=.1, exclude_par
 
     # Remove list around final_params_set if there is only 1 subject
     if subjs == 1:
-        for key, val in final_params_set.iteritems():
+        for key, val in final_params_set.items():
             final_params_set[key] = val[0]
 
     # Remove dict around final_params_set if there is only 1 condition
     if len(final_params_set) == 1:
-        final_params_set = final_params_set[final_params_set.keys()[0]]
+        final_params_set = final_params_set[list(final_params_set.keys())[0]]
 
     return pd.concat(data, ignore_index=True), final_params_set

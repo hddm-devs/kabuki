@@ -1,4 +1,4 @@
-from __future__ import division
+
 import pickle
 import sys
 import string
@@ -7,6 +7,7 @@ import copy
 import numpy as np
 import pandas as pd
 import pymc as pm
+from functools import reduce
 
 def flatten(l):
     return reduce(lambda x, y: list(x)+list(y), l)
@@ -60,7 +61,7 @@ def logp_trace(model):
     logp = np.empty(n_samples, np.double)
 
     #loop over all samples
-    for i_sample in xrange(n_samples):
+    for i_sample in range(n_samples):
         #set the value of all stochastic to their 'i_sample' value
         for stochastic in model.mc.stochastics:
             try:
@@ -68,7 +69,7 @@ def logp_trace(model):
                 stochastic.value = value
 
             except KeyError:
-                print "No trace available for %s. " % stochastic.__name__
+                print("No trace available for %s. " % stochastic.__name__)
 
         #get logp
         logp[i_sample] = model.mc.logp
@@ -223,7 +224,7 @@ def _importAndCheckStack(importName):
                 execName = excTraceback.tb_frame.f_globals["__name__"]
                 if (execName is None or # python 2.4+, post-cleanup
                     execName == importName): # python 2.3, no cleanup
-                    raise excType, excValue, excTraceback
+                    raise excType(excValue).with_traceback(excTraceback)
                 excTraceback = excTraceback.tb_next
             raise _NoModuleFound()
     except:

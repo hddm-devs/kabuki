@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 
 def sort_dict(d):
     from operator import itemgetter
-    return sorted(d.iteritems(), key=itemgetter(1))
+    return sorted(iter(d.items()), key=itemgetter(1))
 
 
 def _model_type_to_class(model_type):
@@ -168,7 +168,7 @@ def load_ppcs(experiments):
         post_preds.append(ppc)
 
     model_names = [_parse_experiment(experiment)[-1] for experiment in experiments]
-    print model_names
+    print(model_names)
     return (model_names, post_preds)
     #return pd.concat(post_preds, keys=model_names, names=['model'])
 
@@ -201,7 +201,7 @@ def analyze_experiment(experiment, plot_groups=True, plot_traces=True, plot_post
     else: # Load it
         model = load_model(experiment)
 
-    print "Analyzing model: %s" % name
+    print("Analyzing model: %s" % name)
     if plot_groups:
         kabuki.analyze.group_plot(model, save_to=name)
 
@@ -209,12 +209,12 @@ def analyze_experiment(experiment, plot_groups=True, plot_traces=True, plot_post
         model.plot_posteriors(path=name)
 
     if plot_post_pred:
-        print "Plotting posterior predictive"
+        print("Plotting posterior predictive")
         kabuki.analyze.plot_posterior_predictive(model, np.linspace(-1.2, 1.2, 80), savefig=True, path=name, columns=7, figsize=(18,18))
 
     if ppc:
         ppc = kabuki.analyze.post_pred_check(model, stats=stats)
-        print ppc
+        print(ppc)
         ppc.to_csv(os.path.join(name, 'post_pred.csv'))
 
 
@@ -257,7 +257,7 @@ def analyze_experiments(experiments, mpi=False, plot_dic=True, **kwargs):
         names = [_parse_experiment(experiment)[-1] for experiment in experiments]
 
         fig = plt.figure()
-        x = range(len(names))
+        x = list(range(len(names)))
         ax = plt.bar(x, dics, align='center')
         plt.xticks(x, names)
         plt.ylabel('DIC')
@@ -286,12 +286,12 @@ if __name__=='__main__':
                    {'name': 'condition_influences_drift', 'data': data, 'model_type': 'hddm.HDDM', 'kwargs': {'depends_on': {'v': 'condition'}}},
                    {'name': 'condition_influences_threshold', 'data': data, 'model_type': 'hddm.HDDM', 'kwargs': {'depends_on': {'a': 'condition'}}}]
 
-    print "Running experiments..."
+    print("Running experiments...")
     run_experiments(experiments)
 
-    print "Analyzing experiments..."
+    print("Analyzing experiments...")
     analyze_experiments(experiments, ppc=False)
 
-    print "Done! Check the newly created subdirectories."
+    print("Done! Check the newly created subdirectories.")
 
 

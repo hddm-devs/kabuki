@@ -15,7 +15,7 @@ def debug_wrapper(func, name):
 
     def wrapper(*args, **kwargs):
 
-        print('Debugging inside %s:' % name)
+        print(('Debugging inside %s:' % name))
         print('\tPress \'s\' to step into function for debugging')
         print('\tCall \'args\' to list function arguments')
 
@@ -81,11 +81,11 @@ def new_dist_class(*new_class_args):
                 arg_keys.pop(4)
                 arg_vals.pop(4)
 
-            arg_dict_out = dict(zip(arg_keys, arg_vals))
+            arg_dict_out = dict(list(zip(arg_keys, arg_vals)))
             args_needed = ['name'] + parent_names + arg_keys[2:]
 
             # Sort positional arguments
-            for i in xrange(len(args)):
+            for i in range(len(args)):
                 try:
                     k = args_needed.pop(0)
                     if k in parent_names:
@@ -106,7 +106,7 @@ def new_dist_class(*new_class_args):
                             parents[k] = parents_default[k]
                         else:
                             raise ValueError('No value given for parent ' + k)
-                elif k in arg_dict_out.keys():
+                elif k in list(arg_dict_out.keys()):
                     try:
                         arg_dict_out[k] = kwds.pop(k)
                     except:
@@ -114,7 +114,7 @@ def new_dist_class(*new_class_args):
 
             # Remaining unrecognized arguments raise an error.
             if len(kwds) > 0:
-                raise TypeError('Keywords '+ str(kwds.keys()) + ' not recognized. Arguments recognized are ' + str(args_needed))
+                raise TypeError('Keywords '+ str(list(kwds.keys())) + ' not recognized. Arguments recognized are ' + str(args_needed))
 
         # Determine size desired for scalar variables.
         # Notes
@@ -143,7 +143,7 @@ def new_dist_class(*new_class_args):
                 init_val_shape = None if init_val is None else np.shape(init_val)
 
                 if len(parents) > 0:
-                    pv = [np.shape(utils.value(v)) for v in parents.values()]
+                    pv = [np.shape(utils.value(v)) for v in list(parents.values())]
                     biggest_parent = np.argmax([(np.prod(v) if v else 0) for v in pv])
                     parents_shape = pv[biggest_parent]
 
@@ -175,7 +175,7 @@ def new_dist_class(*new_class_args):
                     random = bind_size(random, bindshape)
 
 
-            elif 'size' in kwds.keys():
+            elif 'size' in list(kwds.keys()):
                 raise ValueError('No size argument allowed for multivariate stochastic variables.')
 
 
@@ -239,7 +239,7 @@ def scipy_stochastic(scipy_dist, **kwargs):
     else:
         return None
 
-    parents_default = dict(zip(parent_names, defaults))
+    parents_default = dict(list(zip(parent_names, defaults)))
 
     def random(shape=None, **kwds):
         args, kwds = separate_shape_args(kwds, shape_args)

@@ -1,5 +1,5 @@
 #!/usr/bin/python
-from __future__ import division
+
 from copy import copy
 import pickle
 import sys
@@ -14,7 +14,7 @@ import pymc as pm
 import warnings
 
 from kabuki.utils import flatten
-import analyze
+from . import analyze
 
 class LnProb(object):
     def __init__(self, model):
@@ -41,7 +41,7 @@ class Knode(object):
         self.name = name
         self.kwargs = kwargs
         self.subj = subj
-        if isinstance(col_name, basestring):
+        if isinstance(col_name, str):
             col_name = [col_name]
 
         self.col_name = col_name
@@ -52,7 +52,7 @@ class Knode(object):
 
         #create self.parents
         self.parents = {}
-        for (name, value) in self.kwargs.iteritems():
+        for (name, value) in self.kwargs.items():
             if isinstance(value, Knode):
                 self.parents[name] = value
 
@@ -75,7 +75,7 @@ class Knode(object):
     def get_parent_depends(self):
         """returns the depends of the parents"""
         union_parent_depends = set()
-        for name, parent in self.parents.iteritems():
+        for name, parent in self.parents.items():
             union_parent_depends.update(set(parent.depends))
         return union_parent_depends
 
@@ -129,7 +129,7 @@ class Knode(object):
             kwargs = self.kwargs.copy()
 
             # update kwarg with the right parent
-            for name, parent in self.parents.iteritems():
+            for name, parent in self.parents.items():
                 kwargs[name] = parent.get_node(self.depends, uniq_elem)
 
             #get node name
@@ -151,7 +151,7 @@ class Knode(object):
             # parent dict as an argument.
             if self.pymc_node is pm.Deterministic:
                 parents_dict = {}
-                for name, parent in self.parents.iteritems():
+                for name, parent in self.parents.items():
                     parents_dict[name] = parent.get_node(self.depends, uniq_elem)
                     kwargs.pop(name)
                 kwargs['parents'] = parents_dict
@@ -305,14 +305,14 @@ class Hierarchical(object):
                 if isinstance(depends_on[key], str):
                     depends_on[key] = [depends_on[key]]
             # Check if column names exist in data
-            for depend_on in depends_on.itervalues():
+            for depend_on in depends_on.values():
                 for elem in depend_on:
                     if elem not in self.data.columns:
-                        raise KeyError, "Column named %s not found in data." % elem
+                        raise KeyError("Column named %s not found in data." % elem)
 
 
         self.depends = defaultdict(lambda: ())
-        for key, value in depends_on.iteritems():
+        for key, value in depends_on.items():
             self.depends[key] = value
 
 
@@ -435,14 +435,14 @@ class Hierarchical(object):
                 continue
             break
         else:
-            print "After %f retries, still no good fit found." %(tries)
+            print("After %f retries, still no good fit found." %(tries))
             _create()
 
         # create node container
         self.create_nodes_db()
 
         # Check whether all user specified column names (via depends_on) where used by the depends_on.
-        assert set(flatten(self.depends.values())).issubset(set(flatten(self.nodes_db.depends))), "One of the column names specified via depends_on was not picked up. Check whether you specified the correct parameter value."
+        assert set(flatten(list(self.depends.values()))).issubset(set(flatten(self.nodes_db.depends))), "One of the column names specified via depends_on was not picked up. Check whether you specified the correct parameter value."
 
     def create_nodes_db(self):
         self.nodes_db = pd.concat([knode.nodes_db for knode in self.knodes])
@@ -505,7 +505,7 @@ class Hierarchical(object):
                 self.draw_from_prior()
 
             self.mc.fit(method, **kwargs)
-            print self.mc.logp
+            print(self.mc.logp)
             maps.append(self.mc)
 
         self.mc = None
@@ -519,7 +519,7 @@ class Hierarchical(object):
         if runs >= 2:
             abs_err = np.abs(sorted_maps[-1].logp - sorted_maps[-2].logp)
             if abs_err > warn_crit:
-                print "Warning! Two best fitting MAP estimates are %f apart. Consider using more runs to avoid local minima." % abs_err
+                print("Warning! Two best fitting MAP estimates are %f apart. Consider using more runs to avoid local minima." % abs_err)
 
         # Set values of nodes
         for max_node in max_map.stochastics:
@@ -614,7 +614,7 @@ class Hierarchical(object):
         except KeyboardInterrupt:
             pass
         finally:
-            print("\nMean acceptance fraction during sampling: {}".format(np.mean(sampler.acceptance_fraction)))
+            print(("\nMean acceptance fraction during sampling: {}".format(np.mean(sampler.acceptance_fraction))))
             # restore state
             for val, (name, node_descr) in zip(start, stochs.iterrows()):
                 node_descr['node'].set_value(val)
@@ -711,10 +711,10 @@ class Hierarchical(object):
         """
         info = self.dic_info
         if fname is None:
-            print stats_str
-            print "DIC: %f" % info['DIC']
-            print "deviance: %f" % info['deviance']
-            print "pD: %f" % info['pD']
+            print(stats_str)
+            print("DIC: %f" % info['DIC'])
+            print("deviance: %f" % info['deviance'])
+            print("pD: %f" % info['pD'])
         else:
             with open(fname, 'w') as fd:
                 fd.write(stats_str)
@@ -741,7 +741,7 @@ class Hierarchical(object):
 
         stat_cols  = ['mean', 'std', '2.5q', '25q', '50q', '75q', '97.5q', 'mc err']
 
-        for node_property, value in kwargs.iteritems():
+        for node_property, value in kwargs.items():
             sliced_db = sliced_db[sliced_db[node_property] == value]
 
         sliced_db = sliced_db[stat_cols]
@@ -778,7 +778,7 @@ class Hierarchical(object):
         self._stats_chain = i_chain
 
         #add/overwrite stats to nodes_db
-        for name, i_stats in self._stats.iteritems():
+        for name, i_stats in self._stats.items():
             if self.nodes_db.loc[name, 'hidden']:
                 continue
             self.nodes_db.loc[name, 'mean']   = i_stats['mean']
@@ -866,7 +866,7 @@ class Hierarchical(object):
         Forwards arguments to kabuki.analyze.plot_posterior_nodes.
         """
         group_nodes = self.get_group_nodes()
-        for dep in self.depends_on.iterkeys():
+        for dep in self.depends_on.keys():
             nodes = group_nodes.ix[group_nodes.knode_name == dep]
             if all(nodes.hidden == True):
                 continue
@@ -963,7 +963,7 @@ class Hierarchical(object):
         Input:
             new_values <dict> - dictionary of the format {'node_name1': new_value1, ...}
         """
-        for (name, value) in new_values.iteritems():
+        for (name, value) in new_values.items():
             self.nodes_db.ix[name]['node'].set_value(value)
 
     def find_starting_values(self, *args, **kwargs):
@@ -989,7 +989,7 @@ class Hierarchical(object):
         if basin_kwargs is None:
             basin_kwargs = {}
 
-        non_observeds = filter(lambda x: not x.observed, optimize_nodes)
+        non_observeds = [x for x in optimize_nodes if not x.observed]
 
         init_vals = [node.value for node in non_observeds]
 
@@ -1094,7 +1094,7 @@ class Hierarchical(object):
 
         #update map in nodes_db
         self.nodes_db['map'] = np.NaN
-        for name, value in self.values.iteritems():
+        for name, value in self.values.items():
             try:
                 self.nodes_db.loc[name, 'map'] = value
             # Some values can be series which we'll just ignore
