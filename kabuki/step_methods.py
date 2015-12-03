@@ -333,7 +333,7 @@ class SliceStep(pm.Gibbs):
     simple slice sampler
     """
     def __init__(self, stochastic, width = 2, maxiter = 200, left = None,
-                 verbose = None, *args, **kwargs):
+                 verbose = -1, *args, **kwargs):
         """
         Input:
             stochastic - stochastic node

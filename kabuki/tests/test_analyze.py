@@ -3,7 +3,7 @@ import numpy as np
 import unittest
 import kabuki.analyze as ka
 from matplotlib.pyplot import close
-import utils
+from . import utils
 
 class TestAnalyzeBreakdown(unittest.TestCase):
     """
@@ -61,8 +61,8 @@ class TestAnalyzeBreakdown(unittest.TestCase):
         for model in self.models:
             if model.is_group_model:
                 if model.depends:
-                    (name, cond) = model.depends.items()[0]
-                    tags = model.nodes_db[name].group_nodes.keys()[:2]
+                    (name, cond) = list(model.depends.items())[0]
+                    tags = list(model.nodes_db[name].group_nodes.keys())[:2]
                 ka.group_cond_diff(model,name, *tags)
 
     @unittest.skip("Fails because of pymc likelihoods converting DataFrames to numpy arrays.")

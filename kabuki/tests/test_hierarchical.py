@@ -4,10 +4,10 @@ import numpy as np
 import unittest
 from nose.tools import raises
 import pymc as pm
-from utils import HNodeSimple, HNodeSimpleVar, sample_from_models, create_test_models
+from .utils import HNodeSimple, HNodeSimpleVar, sample_from_models, create_test_models
 import pandas as pd
 
-from utils import gen_func_df
+from .utils import gen_func_df
 
 class TestHierarchicalBreakDown(unittest.TestCase):
     """
@@ -58,7 +58,7 @@ class TestHierarchicalBreakDown(unittest.TestCase):
     def test_load_db(self):
         new_models, params = create_test_models()
         for i, model in enumerate(new_models):
-            print "sample model", i
+            print("sample model", i)
             model.sample(100, dbname='unittest.db', db='pickle')
             model.load_db(dbname='unittest.db', db='pickle')
             model.gen_stats()
@@ -171,11 +171,11 @@ class TestEstimation(unittest.TestCase):
         model.approximate_map()
         model.approximate_map(individual_subjs=False)
         counter = 0
-        for condition, subj_params in params_true.iteritems():
+        for condition, subj_params in params_true.items():
             nodes = model.nodes_db[model.nodes_db['condition'] == condition]
             for idx, params in enumerate(subj_params):
                 nodes_subj = nodes[nodes['subj_idx'] == idx]
-                for param_name, value in params.iteritems():
+                for param_name, value in params.items():
                     if param_name != 'loc':
                         continue
                     node = nodes_subj[nodes_subj.knode_name == 'mu_subj']

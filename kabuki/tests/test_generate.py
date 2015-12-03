@@ -63,7 +63,7 @@ class TestGenerate(unittest.TestCase):
         data, params_subjs = gen_rand_data(gen_func_df, params, size=size, subjs=subjs, seed=seed)
 
         # test subj present
-        np.testing.assert_array_equal(np.unique(data['subj_idx']), range(subjs))
+        np.testing.assert_array_equal(np.unique(data['subj_idx']), list(range(subjs)))
 
         # test for correct length
         np.testing.assert_array_equal(len(data), subjs*size)
@@ -72,7 +72,7 @@ class TestGenerate(unittest.TestCase):
         np.random.seed(seed)
         for i in range(subjs):
             new_params = _add_noise({'test': params})['test']
-            print "check", new_params
+            print("check", new_params)
             truth = gen_func_df(size=size, **new_params)
             np.testing.assert_array_equal(data[data['subj_idx'] == i]['data'], truth['data'])
             self.assertEqual(params_subjs[i], new_params)
@@ -88,7 +88,7 @@ class TestGenerate(unittest.TestCase):
                                            exclude_params=('scale',), seed=seed)
 
         # test subj present
-        np.testing.assert_array_equal(np.unique(data['subj_idx']), range(subjs))
+        np.testing.assert_array_equal(np.unique(data['subj_idx']), list(range(subjs)))
 
         # test for correct length
         np.testing.assert_array_equal(len(data), subjs*size)
@@ -111,7 +111,7 @@ class TestGenerate(unittest.TestCase):
 
         # test whether conditions are present
         np.testing.assert_array_equal(np.unique(data['condition'].values), ['cond1', 'cond2'])
-        self.assertEqual(subj_params.keys(), ['cond1', 'cond2'])
+        self.assertEqual(list(subj_params.keys()), ['cond1', 'cond2'])
 
         # test for correct length
         np.testing.assert_array_equal(len(data), 2*size)

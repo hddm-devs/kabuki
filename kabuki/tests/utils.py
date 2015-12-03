@@ -87,5 +87,5 @@ def create_test_models():
 def sample_from_models(models, n_iter = 200):
     """sample from all models"""
     for i, model in enumerate(models):
-        print "sample model", i
+        print("sample model", i)
         model.sample(n_iter)

@@ -18,7 +18,7 @@ from kabuki.utils import stochastic_from_dist
 def multi_normal_like(values, vec_mu, tau):
     """logp for multi normal"""
     logp = 0
-    for i in xrange(len(vec_mu)):
+    for i in range(len(vec_mu)):
         logp += pm.normal_like(values[i,:], vec_mu[i], tau)
 
     return logp
@@ -58,16 +58,16 @@ class TestStepMethods(unittest.TestCase):
         lb = node.stats()['quantiles'][2.5]
         ub = node.stats()['quantiles'][97.5]
         if not (lb <  true_value < ub):
-            print "Warnnig!!!!, sigma was not found in the credible set"
+            print("Warnnig!!!!, sigma was not found in the credible set")
 
 
-        print "true value:     ", true_value
-        print "sampled median: ", node.stats()['quantiles'][50]
-        print "sampled mean:   ", node.stats()['mean']
-        print "true mean:      ", true_mean
+        print("true value:     ", true_value)
+        print("sampled median: ", node.stats()['quantiles'][50])
+        print("sampled mean:   ", node.stats()['mean'])
+        print("true mean:      ", true_mean)
         if true_std is not None:
-            print "true std:       ", true_std
-            print "sampled std:    ", node.stats()['standard deviation']
+            print("true std:       ", true_std)
+            print("sampled std:    ", node.stats()['standard deviation'])
 
         np.testing.assert_allclose(node.stats()['mean'], true_mean, rtol=mean_tol)
         if true_std is not None:
@@ -427,29 +427,29 @@ class TestStepMethods(unittest.TestCase):
         #run all the models until they converge to the same values
         i_try = 0
         while i_try < max_tries:
-            print "~~~~~ trying for the %d time ~~~~~~" % (i_try + 1)
+            print("~~~~~ trying for the %d time ~~~~~~" % (i_try + 1))
 
             #run spx mcmc
             i_t = time()
             mcmc_spx.sample(iter,burnin)
-            print "spx sampling took %.2f seconds" % (time() - i_t)
+            print("spx sampling took %.2f seconds" % (time() - i_t))
             stats = dict([('mu%d spx' %x, mcmc_spx.mu[x].stats()) for x in range(n_conds)])
 
             #run vpx mcmc
             i_t = time()
             mcmc_vpx.sample(iter,burnin)
-            print "vpx sampling took %.2f seconds" % (time() - i_t)
+            print("vpx sampling took %.2f seconds" % (time() - i_t))
             stats.update(dict([('mu%d vpx' %x, mcmc_vpx.mu[x].stats()) for x in range(n_conds)]))
 
             #run basic mcmc
             i_t = time()
             mcmc.sample(iter,burnin)
-            print "basic sampling took %.2f seconds" % (time() - i_t)
+            print("basic sampling took %.2f seconds" % (time() - i_t))
             stats.update(dict([('mu%d basic' %x, mcmc.mu[x].stats()) for x in range(n_conds)]))
 
             df = DataFrame(stats, index=['mean', 'standard deviation']).T
             df = df.rename(columns = {'mean':'mean', 'standard deviation': 'std'})
-            print df
+            print(df)
 
             #check if all the results are close enough
             try:
@@ -461,7 +461,7 @@ class TestStepMethods(unittest.TestCase):
                 break
             #if not add more runs
             except AssertionError:
-                print "Failed to reach agreement. trying again"
+                print("Failed to reach agreement. trying again")
                 i_try += 1
 
         assert (i_try < max_tries), "could not replicate values using different mcmc samplers"
@@ -470,23 +470,23 @@ class TestStepMethods(unittest.TestCase):
     @unittest.skip("Takes forever to complete.")
     def test_SPX(self):
         """test a bundle of SPXcentered tests"""
-        print "*************** Test 1 ***************"
+        print("*************** Test 1 ***************")
         self.run_SPXcentered(sigma_x=1, n_subjs=5, size=100, mu_value=4,
                              mu_step_method=kabuki.steps.kNormalNormal, seed=1)
-        print "*************** Test 2 ***************"
+        print("*************** Test 2 ***************")
         self.run_SPXcentered(sigma_x=1, n_subjs=5, size=10, mu_value=(4,3,2,1,0,4,3,2,1,0),
                              mu_step_method=kabuki.steps.kNormalNormal, seed=1)
-        print "*************** Test 3 ***************"
+        print("*************** Test 3 ***************")
         self.run_SPXcentered(sigma_x=0.5, n_subjs=5, size=10, mu_value=(4,3),
                              mu_step_method=kabuki.steps.kNormalNormal, seed=1)
-        print "*************** Test 4 ***************"
+        print("*************** Test 4 ***************")
         self.run_SPXcentered(sigma_x=0.1, n_subjs=5, size=10, mu_value=(4,3),
                              mu_step_method=kabuki.steps.kNormalNormal, seed=1)
-        print "*************** Test 5 ***************"
-        self.run_SPXcentered(sigma_x=1, n_subjs=5, size=10, mu_value=range(20),
+        print("*************** Test 5 ***************")
+        self.run_SPXcentered(sigma_x=1, n_subjs=5, size=10, mu_value=list(range(20)),
                              mu_step_method=kabuki.steps.kNormalNormal, seed=1)
-        print "*************** Test 6 ***************"
-        self.run_SPXcentered(sigma_x=0.1, n_subjs=5, size=10, mu_value=range(20),
+        print("*************** Test 6 ***************")
+        self.run_SPXcentered(sigma_x=0.1, n_subjs=5, size=10, mu_value=list(range(20)),
                              mu_step_method=kabuki.steps.kNormalNormal, seed=1)
 
     def create_hierarchical_model(self, sigma_x=1, n_subjs=5, size=100, mu_value=4, seed=1, vec=False):
@@ -526,7 +526,7 @@ class TestStepMethods(unittest.TestCase):
             true_x = randn(n_subjs)*sigma_x + mu_value[i_cond]
             value = np.random.randn(n_subjs, size).T + true_x
             value = value.T
-            print true_x
+            print(true_x)
 
             #init mu and sigma
             mu[i_cond] = pm.Normal('mu%d' % i_cond, 0, 100.**-2, value=0)
@@ -584,23 +584,23 @@ class TestStepMethods(unittest.TestCase):
         i_try = 0
         stats = {}
         while i_try < max_tries:
-            print "~~~~~ trying for the %d time ~~~~~~" % (i_try + 1)
+            print("~~~~~ trying for the %d time ~~~~~~" % (i_try + 1))
 
             #run slice mcmc
             i_t = time()
             mcmc_s.sample(iter,burnin)
-            print "slice sampling took %.2f seconds" % (time() - i_t)
+            print("slice sampling took %.2f seconds" % (time() - i_t))
             stats.update(dict([('mu%d S' %x, mcmc_s.mu[x].stats()) for x in range(n_conds)]))
 
             #run basic mcmc
             i_t = time()
             mcmc.sample(iter,burnin)
-            print "basic sampling took %.2f seconds" % (time() - i_t)
+            print("basic sampling took %.2f seconds" % (time() - i_t))
             stats.update(dict([('mu%d basic' %x, mcmc.mu[x].stats()) for x in range(n_conds)]))
 
             df = DataFrame(stats, index=['mean', 'standard deviation']).T
             df = df.rename(columns = {'mean':'mean', 'standard deviation': 'std'})
-            print df
+            print(df)
 
             #check if all the results are close enough
             try:
@@ -609,9 +609,9 @@ class TestStepMethods(unittest.TestCase):
                 break
             #if not add more runs
             except AssertionError:
-                print "Failed to reach agreement In:"
-                print df[(2*i):(2*(i+1))]
-                print "trying again"
+                print("Failed to reach agreement In:")
+                print(df[(2*i):(2*(i+1))])
+                print("trying again")
 
             i_try += 1
 
@@ -621,10 +621,10 @@ class TestStepMethods(unittest.TestCase):
 
     def test_SliceStep(self):
         """test a bundle of SPXcentered tests"""
-        print "*************** Test 1 ***************"
+        print("*************** Test 1 ***************")
         self.run_SliceStep(sigma_x=1, n_subjs=5, size=100, mu_value=4, seed=1)
-        print "*************** Test 2 ***************"
-        self.run_SliceStep(sigma_x=1, n_subjs=5, size=10, mu_value=range(10), seed=1)
+        print("*************** Test 2 ***************")
+        self.run_SliceStep(sigma_x=1, n_subjs=5, size=10, mu_value=list(range(10)), seed=1)
         # Very slow, causes travis to choke.
         # print "*************** Test 3 ***************"
         # self.run_SliceStep(sigma_x=0.5, n_subjs=5, size=10, mu_value=(4,3), seed=1)
