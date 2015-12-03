@@ -667,7 +667,7 @@ class Hierarchical(object):
 
         info = {}
         try:
-            info['DIC'] = self.mc.dic
+            info['DIC'] = self.mc.DIC
             info['deviance'] = np.mean(self.mc.db.trace('deviance')(), axis=0)
             info['pD'] = info['DIC'] - info['deviance']
         except pm.ZeroProbability:
