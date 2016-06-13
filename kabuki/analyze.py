@@ -515,7 +515,7 @@ def plot_posterior_predictive(model, plot_func=None, required_method='pdf', colu
 
         format : str or list of strings
             Save figure to a image file of type 'format'. If more then one format is
-            givven them multiple files are created
+            given, multiple files are created
 
         plot_func : function (default=_plot_posterior_pdf_node)
             Plotting function to use for each observed node
