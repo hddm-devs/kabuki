@@ -20,7 +20,7 @@ def load(fname):
     model.save(fname)
 
     """
-    model = pickle.load(open(fname, 'r'))
+    model = pickle.load(open(fname, 'rb'))
     return model
 
 def get_traces(model):

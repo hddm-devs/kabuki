@@ -409,7 +409,7 @@ class Hierarchical(object):
             * You have to save traces to db, not RAM.
             * Uses the pickle protocol internally.
         """
-        pickle.dump(self, open(fname, 'w'))
+        pickle.dump(self, open(fname, 'wb'))
 
     def create_knodes(self):
         raise NotImplementedError("create_knodes has to be overwritten")
