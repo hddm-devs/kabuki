@@ -380,7 +380,7 @@ class SliceStep(pm.Gibbs):
                 stoch.value = xl
                 iter += 1
 
-            assert iter < self.maxiter, "Step-out procedure failed"
+            assert iter <= self.maxiter, "Step-out procedure failed"
             self.neval += iter
 
             if self.verbose>2:
@@ -394,7 +394,7 @@ class SliceStep(pm.Gibbs):
                 stoch.value = xr
                 iter += 1
 
-        assert iter < self.maxiter, "Step-out procedure failed"
+        assert iter <= self.maxiter, "Step-out procedure failed"
         self.neval += iter
         if self.verbose>2:
             print('after %d iteration interval is [%.3f, %.3f]' % (iter, xl, xr))
