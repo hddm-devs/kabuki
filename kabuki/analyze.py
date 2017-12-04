@@ -552,13 +552,14 @@ def plot_posterior_predictive(model, plot_func=None, required_method='pdf', colu
             if not hasattr(bottom_node['node'], required_method):
                 continue # skip nodes that do not define the required_method
 
-            ax = fig.add_subplot(np.ceil(len(nodes)/columns), columns, subj_i+1)
+            nrows = num_subjs or len(nodes)/columns     
+            ax = fig.add_subplot(np.ceil(nrows), columns, subj_i+1)
             if 'subj_idx' in bottom_node:
                 ax.set_title(str(bottom_node['subj_idx']))
 
             plot_func(bottom_node['node'], ax, **kwargs)
 
-            if num_subjs is not None and num_subjs >= i:
+            if num_subjs is not None and i >= num_subjs:
                 break
 
         # Save figure if necessary
