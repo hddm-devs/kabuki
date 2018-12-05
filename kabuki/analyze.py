@@ -15,6 +15,19 @@ from .utils import interpolate_trace
 
 from collections import OrderedDict
 
+#Midhun's edits
+from pylab import *
+params = {
+   'axes.labelsize': 8,
+   'text.fontsize': 8,
+   'legend.fontsize': 10,
+   'xtick.labelsize': 10,
+   'ytick.labelsize': 10,
+   'text.usetex': False,
+   'figure.figsize': [4.5, 4.5]
+   }
+rcParams.update(params)
+#Midhun's edits
 def plot_posterior_nodes(nodes, bins=50, lb=None, ub=None):
     """Plot interpolated posterior of a list of nodes.
 
