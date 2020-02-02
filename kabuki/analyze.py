@@ -145,7 +145,7 @@ def gelman_rubin(models):
         # Calculate mean for each chain
         samples = np.empty((num_chains, num_samples))
         for i,model in enumerate(models):
-            samples[i,:] = model.nodes_db.ix[name, 'node'].trace()
+            samples[i,:] = model.nodes_db.loc[name, 'node'].trace()
 
         R_hat_dict[name] = pm.diagnostics.gelman_rubin(samples)
 
@@ -255,14 +255,14 @@ def post_pred_compare_stats(sampled_stats, data_stats, evals=None):
     for stat_name in sampled_stats:
         #update NaN column with the no. of NaNs and remove them
         s = sampled_stats[stat_name]
-        results.ix[stat_name, 'NaN'] = sum(pd.isnull(s))
+        results.loc[stat_name, 'NaN'] = sum(pd.isnull(s))
         s = s[np.isfinite(s)]
         if len(s) == 0:
             continue
         #evaluate
         for eval_name, func in evals.items():
             value = func(s, data_stats[stat_name])
-            results.ix[stat_name, eval_name] = value
+            results.loc[stat_name, eval_name] = value
 
     return results.drop('NaN', axis=1)
 
@@ -321,7 +321,7 @@ def post_pred_gen(model, groupby=None, samples=500, append_data=False, progress_
         print("Sampling...")
 
     if groupby is None:
-        iter_data = ((name, model.data.ix[obs['node'].value.index]) for name, obs in model.iter_observeds())
+        iter_data = ((name, model.data.iloc[obs['node'].value.index]) for name, obs in model.iter_observeds())
     else:
         iter_data = model.data.groupby(groupby)
 

@@ -523,7 +523,7 @@ class Hierarchical(object):
 
         # Set values of nodes
         for max_node in max_map.stochastics:
-            self.nodes_db.node.ix[max_node.__name__].set_value(max_node.value)
+            self.nodes_db.node.loc[max_node.__name__].set_value(max_node.value)
 
         return max_map
 
@@ -867,7 +867,7 @@ class Hierarchical(object):
         """
         group_nodes = self.get_group_nodes()
         for dep in self.depends_on.keys():
-            nodes = group_nodes.ix[group_nodes.knode_name == dep]
+            nodes = group_nodes.loc[group_nodes.knode_name == dep]
             if all(nodes.hidden == True):
                 continue
             analyze.plot_posterior_nodes(nodes['node'], *args, **kwargs)
@@ -946,7 +946,7 @@ class Hierarchical(object):
         return data_nodes[0]
 
     def __getitem__(self, name):
-        return self.nodes_db.ix[name]['node']
+        return self.nodes_db.loc[name]['node']
 
     @property
     def values(self):
@@ -964,7 +964,7 @@ class Hierarchical(object):
             new_values <dict> - dictionary of the format {'node_name1': new_value1, ...}
         """
         for (name, value) in new_values.items():
-            self.nodes_db.ix[name]['node'].set_value(value)
+            self.nodes_db.loc[name]['node'].set_value(value)
 
     def find_starting_values(self, *args, **kwargs):
         """Find good starting values for the different parameters by
@@ -1034,8 +1034,8 @@ class Hierarchical(object):
     def _approximate_map_subj(self, minimizer='Powell', use_basin=False, fall_to_simplex=True, debug=False, minimizer_kwargs=None, basin_kwargs=None):
         # Optimize subj nodes
         for subj_idx in self.nodes_db.subj_idx.dropna().unique():
-            stoch_nodes = self.nodes_db.ix[(self.nodes_db.subj_idx == subj_idx) & (self.nodes_db.stochastic == True)].node
-            obs_nodes = self.nodes_db.ix[(self.nodes_db.subj_idx == subj_idx) & (self.nodes_db.observed == True)].node
+            stoch_nodes = self.nodes_db.loc[(self.nodes_db.subj_idx == subj_idx) & (self.nodes_db.stochastic == True)].node
+            obs_nodes = self.nodes_db.loc[(self.nodes_db.subj_idx == subj_idx) & (self.nodes_db.observed == True)].node
             self._partial_optimize(stoch_nodes, obs_nodes, fall_to_simplex=fall_to_simplex, minimizer=minimizer, use_basin=use_basin, debug=debug, minimizer_kwargs=minimizer_kwargs, basin_kwargs=basin_kwargs)
 
     def approximate_map(self, individual_subjs=True, minimizer='Powell', use_basin=False, fall_to_simplex=True, cycles=1, debug=False, minimizer_kwargs=None, basin_kwargs=None):
