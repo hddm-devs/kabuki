@@ -1,5 +1,6 @@
 
 import sys, os
+import warnings
 from types import FunctionType
 
 import numpy as np
@@ -538,12 +539,17 @@ def plot_posterior_predictive(model, plot_func=None, required_method='pdf', colu
         max_items = max([len(i[1]) for i in
                          observeds.groupby('tag').groups.items()])
         columns = min(3, max_items)
-
+   
     # Plot different conditions (new figure for each)
     for tag, nodes in observeds.groupby('tag'):
         fig = plt.figure(figsize=figsize)
         fig.suptitle(utils.pretty_tag(tag), fontsize=12)
         fig.subplots_adjust(top=0.9, hspace=.4, wspace=.3)
+
+        nrows = num_subjs or len(nodes)/columns
+
+        if len(nodes) - int(nrows * columns) > 0:
+            nrows += 1
 
         # Plot individual subjects (if present)
         i = 0
@@ -552,12 +558,15 @@ def plot_posterior_predictive(model, plot_func=None, required_method='pdf', colu
             if not hasattr(bottom_node['node'], required_method):
                 continue # skip nodes that do not define the required_method
 
-            nrows = num_subjs or len(nodes)/columns     
             ax = fig.add_subplot(np.ceil(nrows), columns, subj_i+1)
             if 'subj_idx' in bottom_node:
                 ax.set_title(str(bottom_node['subj_idx']))
 
             plot_func(bottom_node['node'], ax, **kwargs)
+
+            if i >= np.ceil(nrows) * columns:
+                warnings.warn('Too many nodes. Consider increasing number of columns.')
+                break
 
             if num_subjs is not None and i >= num_subjs:
                 break
