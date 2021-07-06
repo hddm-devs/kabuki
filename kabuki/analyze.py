@@ -479,6 +479,7 @@ def _plot_posterior_pdf_node(bottom_node, axis, value_range=None, samples=10, bi
         data_processor = kwargs.pop('data_preprocessor', None)
         
         if data_processor == None:
+            print('No data_processor kwarg specified.\n If the plot fails, try to supply a data_processor function. This plot expects node data (coming from your original dataset DataFrame), \n to be supplied as a one dimensional array in a given range. If you supplied data as a two dimension array (reaction times and choices separately for example), \n use the data_processors to bring reshape if meaninfully (e.g. reaction times * choices if choices options are -1 and 1')
             processed_data = bottom_node.value.values
         else:
             processed_data = data_processor(bottom_node.value.values)
