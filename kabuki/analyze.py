@@ -476,9 +476,23 @@ def _plot_posterior_pdf_node(bottom_node, axis, value_range=None, samples=10, bi
 
     # Plot data
     if len(bottom_node.value) != 0:
-        axis.hist(bottom_node.value.values, density=True, color='r',
-                  range=(value_range[0], value_range[-1]), label='data',
-                  bins=bins, histtype='step', lw=2.)
+        data_processor = kwargs.pop('data_preprocessor', None)
+        
+        if data_processor == None:
+            processed_data = bottom_node.value.values
+        else:
+            processed_data = data_processor(bottom_node.value.values)
+            
+        axis.hist(processed_data,
+                  density=True, 
+                  color='blue', #range=(value_range[0], value_range[-1]), 
+                  label='data',
+                  bins=bins, 
+                  histtype='step', 
+                  lw = 1.)
+        # axis.hist(bottom_node.value.values, density=True, color='r',
+        #           range=(value_range[0], value_range[-1]), label='data',
+        #           bins=bins, histtype='step', lw=2.)
 
     axis.set_ylim(bottom=0) # Likelihood and histogram can only be positive
 
