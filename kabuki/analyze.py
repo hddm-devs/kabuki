@@ -491,9 +491,6 @@ def _plot_posterior_pdf_node(bottom_node, axis, value_range=None, samples=10, bi
                   bins=bins, 
                   histtype='step', 
                   lw = 1.)
-        # axis.hist(bottom_node.value.values, density=True, color='r',
-        #           range=(value_range[0], value_range[-1]), label='data',
-        #           bins=bins, histtype='step', lw=2.)
 
     axis.set_ylim(bottom=0) # Likelihood and histogram can only be positive
 
