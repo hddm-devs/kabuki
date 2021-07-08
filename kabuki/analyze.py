@@ -479,7 +479,7 @@ def _plot_posterior_pdf_node(bottom_node, axis, value_range=None, samples=10, bi
         data_processor = kwargs.pop('data_preprocessor', None)
         
         if data_processor == None:
-            print('No data_processor kwarg specified.\n If the plot fails, try to supply a data_processor function. This plot expects node data (coming from your original dataset DataFrame), \n to be supplied as a one dimensional array in a given range. If you supplied data as a two dimension array (reaction times and choices separately for example), \n use the data_processors to bring reshape if meaninfully (e.g. reaction times * choices if choices options are -1 and 1')
+            #print('No data_processor kwarg specified.\n If the plot fails, try to supply a data_processor function. This plot expects node data (coming from your original dataset DataFrame), \n to be supplied as a one dimensional array in a given range. If you supplied data as a two dimension array (reaction times and choices separately for example), \n use the data_processors to bring reshape if meaninfully (e.g. reaction times * choices if choices options are -1 and 1')
             processed_data = bottom_node.value.values
         else:
             processed_data = data_processor(bottom_node.value.values)
@@ -533,6 +533,11 @@ def plot_posterior_predictive(model, plot_func=None, required_method='pdf', colu
         plot_func : function (default=_plot_posterior_pdf_node)
             Plotting function to use for each observed node
             (see default function for an example).
+        
+        data_processor: function (default=None)
+            Inside plot_posterior_predictive the standard plotting function (histogram) assumes that your data is supplied as a 1-dimensional array (e.g. outcome variable in range (-x,x)). 
+            If your original data does not have this format, but can be transformed into it (meaningfully), you can supply the data_processor function to perform this transformation and plot_posterior_predictive will operate 
+            on the transformed data.
 
     :Note:
 
