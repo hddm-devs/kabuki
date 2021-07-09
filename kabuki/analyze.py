@@ -478,7 +478,7 @@ def _plot_posterior_pdf_node(bottom_node, axis, value_range=None, samples=10, bi
     if len(bottom_node.value) != 0:
         data_processor = kwargs.pop('data_preprocessor', None)
         
-        if data_processor == None:
+        if data_processor is None:
             processed_data = bottom_node.value.values
         else:
             processed_data = data_processor(bottom_node.value.values)
