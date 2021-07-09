@@ -476,9 +476,20 @@ def _plot_posterior_pdf_node(bottom_node, axis, value_range=None, samples=10, bi
 
     # Plot data
     if len(bottom_node.value) != 0:
-        axis.hist(bottom_node.value.values, density=True, color='r',
-                  range=(value_range[0], value_range[-1]), label='data',
-                  bins=bins, histtype='step', lw=2.)
+        data_processor = kwargs.pop('data_preprocessor', None)
+        
+        if data_processor is None:
+            processed_data = bottom_node.value.values
+        else:
+            processed_data = data_processor(bottom_node.value.values)
+            
+        axis.hist(processed_data,
+                  density=True, 
+                  color='blue',
+                  label='data',
+                  bins=bins, 
+                  histtype='step', 
+                  lw = 1.)
 
     axis.set_ylim(bottom=0) # Likelihood and histogram can only be positive
 
@@ -521,6 +532,14 @@ def plot_posterior_predictive(model, plot_func=None, required_method='pdf', colu
         plot_func : function (default=_plot_posterior_pdf_node)
             Plotting function to use for each observed node
             (see default function for an example).
+        
+        data_processor: function (default=None)
+            Inside plot_posterior_predictive the standard plotting function (histogram)
+            assumes that your data is supplied as a 1-dimensional 
+            array (e.g. outcome variable in range (-x,x)). If your original data does 
+            not have this format, but can be transformed into it (meaningfully), you 
+            can supply the data_processor function to perform this transformation 
+            and plot_posterior_predictive will operate on the transformed data.
 
     :Note:
 

@@ -4,3 +4,6 @@
 build/
 dist/
 docs/build
+.eggs/
+.egg-info/
+KABUKI.egg-info/
