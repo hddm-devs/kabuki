@@ -175,7 +175,7 @@ class Knode(object):
         #actually create the node
         print('passed through create_node from Knode, printing kwargs')
         print(kwargs)
-        print(pymc_node)
+        print(self.pymc_node)
         return self.pymc_node(name=node_name, **kwargs)
 
     def create_tag_and_subj_idx(self, cols, uniq_elem):
