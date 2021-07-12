@@ -178,7 +178,8 @@ class Knode(object):
         print(kwargs)
         print(self.pymc_node)
         print(node_name)
-        ipdb.set_trace(context = 5)
+        if 'wftp' in node_name:
+            ipdb.set_trace(context = 5)
         return self.pymc_node(name=node_name, **kwargs)
 
     def create_tag_and_subj_idx(self, cols, uniq_elem):
