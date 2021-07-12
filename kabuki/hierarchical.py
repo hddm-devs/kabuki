@@ -173,6 +173,8 @@ class Knode(object):
 
     def create_node(self, node_name, kwargs, data):
         #actually create the node
+        print('passed through create_node from Knode, printing kwargs')
+        print(kwargs)
         return self.pymc_node(name=node_name, **kwargs)
 
     def create_tag_and_subj_idx(self, cols, uniq_elem):
@@ -385,6 +387,8 @@ class Hierarchical(object):
 
     def __setstate__(self, d):
         self.__dict__.update(d)
+        print('paased through kabuki __setstate__ and now printing the available dict')
+        print(self.__dict__)
         self._setup_model()
         self.create_model()
 
@@ -426,6 +430,8 @@ class Hierarchical(object):
 
         def _create():
             for knode in self.knodes:
+                print('passed through _create function in kabuki and printing knode')
+                print(knode)
                 knode.create()
 
         for tries in range(max_retries):
