@@ -178,7 +178,7 @@ class Knode(object):
         print(kwargs)
         print(self.pymc_node)
         print(node_name)
-        if 'wftp' in node_name:
+        if 'wfpt.0' in node_name:
             ipdb.set_trace(context = 5)
         return self.pymc_node(name=node_name, **kwargs)
 
