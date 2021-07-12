@@ -1,5 +1,6 @@
 #!/usr/bin/python
 
+import ipdb
 from copy import copy
 import pickle
 import sys
@@ -176,6 +177,8 @@ class Knode(object):
         print('passed through create_node from Knode, printing kwargs')
         print(kwargs)
         print(self.pymc_node)
+        print(node_name)
+        ipdb.set_trace(context = 5)
         return self.pymc_node(name=node_name, **kwargs)
 
     def create_tag_and_subj_idx(self, cols, uniq_elem):
