@@ -174,11 +174,11 @@ class Knode(object):
 
     def create_node(self, node_name, kwargs, data):
         #actually create the node
-        print('passed through --> create_node in kabuki')
-        print(node_name)
-        print(kwargs)
-        if 'wfpt' in node_name:
-            ipdb.set_trace()
+        #print('passed through --> create_node in kabuki')
+        #print(node_name)
+        #print(kwargs)
+        #if 'wfpt' in node_name:
+        #    ipdb.set_trace()
         return self.pymc_node(name=node_name, **kwargs)
 
     def create_tag_and_subj_idx(self, cols, uniq_elem):
