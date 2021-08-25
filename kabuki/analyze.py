@@ -431,7 +431,7 @@ def _parents_to_random_posterior_sample(bottom_node, pos=None):
         parent.value = parent.trace()[pos]
 
 
-def _plot_posterior_pdf_node(bottom_node, axis, value_range=None, samples=10, bins=100):
+def _plot_posterior_pdf_node(bottom_node, axis, value_range=None, samples=10, bins=100, **kwargs):
     """Calculate posterior predictive for a certain bottom node.
 
     :Arguments:
@@ -476,12 +476,12 @@ def _plot_posterior_pdf_node(bottom_node, axis, value_range=None, samples=10, bi
 
     # Plot data
     if len(bottom_node.value) != 0:
-        data_processor = kwargs.pop('data_preprocessor', None)
+        data_preprocessor = kwargs.pop('data_preprocessor', None)
         
-        if data_processor is None:
+        if data_preprocessor is None:
             processed_data = bottom_node.value.values
         else:
-            processed_data = data_processor(bottom_node.value.values)
+            processed_data = data_preprocessor(bottom_node.value.values)
             
         axis.hist(processed_data,
                   density=True, 
@@ -533,12 +533,12 @@ def plot_posterior_predictive(model, plot_func=None, required_method='pdf', colu
             Plotting function to use for each observed node
             (see default function for an example).
         
-        data_processor: function (default=None)
+        data_preprocessor: function (default=None)
             Inside plot_posterior_predictive the standard plotting function (histogram)
             assumes that your data is supplied as a 1-dimensional 
             array (e.g. outcome variable in range (-x,x)). If your original data does 
             not have this format, but can be transformed into it (meaningfully), you 
-            can supply the data_processor function to perform this transformation 
+            can supply the data_preprocessor function to perform this transformation 
             and plot_posterior_predictive will operate on the transformed data.
 
     :Note:
