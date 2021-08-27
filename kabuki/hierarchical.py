@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-import ipdb
+#import ipdb
 from copy import copy
 import pickle
 import sys
@@ -391,8 +391,8 @@ class Hierarchical(object):
 
     def __setstate__(self, d):
         self.__dict__.update(d)
-        print('paased through kabuki __setstate__ and now printing the available dict')
-        print(self.__dict__)
+        #print('passed through kabuki __setstate__ and now printing the available dict')
+        #print(self.__dict__)
         self._setup_model()
         self.create_model()
 

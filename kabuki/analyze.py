@@ -431,7 +431,7 @@ def _parents_to_random_posterior_sample(bottom_node, pos=None):
         parent.value = parent.trace()[pos]
 
 
-def _plot_posterior_pdf_node(bottom_node, axis, value_range=None, samples=10, bins=100):
+def _plot_posterior_pdf_node(bottom_node, axis, value_range=None, samples=10, bins=100, **kwargs):
     """Calculate posterior predictive for a certain bottom node.
 
     :Arguments:
@@ -476,7 +476,7 @@ def _plot_posterior_pdf_node(bottom_node, axis, value_range=None, samples=10, bi
 
     # Plot data
     if len(bottom_node.value) != 0:
-        data_processor = kwargs.pop('data_preprocessor', None)
+        data_processor = kwargs.pop('data_processor', None)
         
         if data_processor is None:
             processed_data = bottom_node.value.values
