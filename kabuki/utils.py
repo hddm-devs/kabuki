@@ -15,6 +15,17 @@ def flatten(l):
 def pretty_tag(tag):
     return tag[0] if len(tag) == 1 else ', '.join(str(tag))
 
+# COMMENT: ALEX --> Observed strange behavior of the pretty_tag() function that leads to excess commas in plot titles
+# Use this as alternative in some cases ?
+
+# def prettier_tag(tag):
+#     if len(tag) == 1:
+#         return tag[0]
+#     else:
+#         for tag_tmp in tag:
+#             tag_list.append(str(tag_tmp))
+#         return '(' + ', '.join(tag_list) + ')'
+
 def load(fname):
     """Load a hierarchical model saved to file via
     model.save(fname)

@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 #import ipdb
+import cloudpickle
 from copy import copy
 import pickle
 import sys
@@ -412,7 +413,8 @@ class Hierarchical(object):
             * You have to save traces to db, not RAM.
             * Uses the pickle protocol internally.
         """
-        pickle.dump(self, open(fname, 'wb'))
+        cloudpickle.dump(self, open(fname, 'wb'))
+        #pickle.dump(self, open(fname, 'wb'))
 
     def create_knodes(self):
         raise NotImplementedError("create_knodes has to be overwritten")
