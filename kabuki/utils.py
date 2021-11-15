@@ -1,4 +1,5 @@
 
+
 import pickle
 import sys
 import string
@@ -31,7 +32,9 @@ def load(fname):
     model.save(fname)
 
     """
-    model = pickle.load(open(fname, 'rb'))
+    with open(fname, 'rb') as f:
+        model = pickle.load(f)
+        
     return model
 
 def get_traces(model):

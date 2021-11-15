@@ -341,9 +341,9 @@ def post_pred_gen(model, groupby=None, samples=500, append_data=False, progress_
         datasets = _post_pred_generate(node, samples=samples, data=data, append_data=append_data)
         results[name] = pd.concat(datasets, names=['sample'], keys=list(range(len(datasets))))
 
-    if progress_bar:
-        bar_iter += 1
-        bar.update(bar_iter)
+    # if progress_bar:
+    #     bar_iter += 1
+    #     bar.update(bar_iter)
 
     return pd.concat(results, names=['node'])
 
