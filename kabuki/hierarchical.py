@@ -413,7 +413,8 @@ class Hierarchical(object):
             * You have to save traces to db, not RAM.
             * Uses the pickle protocol internally.
         """
-        cloudpickle.dump(self, open(fname, 'wb'))
+        with open(fname, 'wb') as f:
+            cloudpickle.dump(self, f)
         #pickle.dump(self, open(fname, 'wb'))
 
     def create_knodes(self):
@@ -492,7 +493,7 @@ class Hierarchical(object):
 
         from operator import attrgetter
 
-        # I.S: when using MAP with Hierarchical model the subjects nodes should be
+        # I.S: when using [MAP with Hierarchical model the subjects nodes should be
         # integrated out before the computation of the MAP (see Pinheiro JC, Bates DM., 1995, 2000).
         # since we are not integrating we get a point estimation for each
         # subject which is not what we want.
