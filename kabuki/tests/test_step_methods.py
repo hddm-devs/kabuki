@@ -58,7 +58,7 @@ class TestStepMethods(unittest.TestCase):
         lb = node.stats()['quantiles'][2.5]
         ub = node.stats()['quantiles'][97.5]
         if not (lb <  true_value < ub):
-            print("Warnnig!!!!, sigma was not found in the credible set")
+            print("Warning!!!!, sigma was not found in the credible set")
 
 
         print("true value:     ", true_value)

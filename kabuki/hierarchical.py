@@ -1,5 +1,7 @@
 #!/usr/bin/python
 
+#import ipdb
+import cloudpickle
 from copy import copy
 import pickle
 import sys
@@ -385,6 +387,8 @@ class Hierarchical(object):
 
     def __setstate__(self, d):
         self.__dict__.update(d)
+        #print('passed through kabuki __setstate__ and now printing the available dict')
+        #print(self.__dict__)
         self._setup_model()
         self.create_model()
 
@@ -409,7 +413,9 @@ class Hierarchical(object):
             * You have to save traces to db, not RAM.
             * Uses the pickle protocol internally.
         """
-        pickle.dump(self, open(fname, 'wb'))
+        with open(fname, 'wb') as f:
+            cloudpickle.dump(self, f)
+        #pickle.dump(self, open(fname, 'wb'))
 
     def create_knodes(self):
         raise NotImplementedError("create_knodes has to be overwritten")
@@ -487,7 +493,7 @@ class Hierarchical(object):
 
         from operator import attrgetter
 
-        # I.S: when using MAP with Hierarchical model the subjects nodes should be
+        # I.S: when using [MAP with Hierarchical model the subjects nodes should be
         # integrated out before the computation of the MAP (see Pinheiro JC, Bates DM., 1995, 2000).
         # since we are not integrating we get a point estimation for each
         # subject which is not what we want.
