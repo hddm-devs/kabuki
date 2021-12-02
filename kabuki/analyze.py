@@ -330,21 +330,22 @@ def post_pred_gen(model, groupby=None, samples=500, append_data=False, progress_
         node = model.get_data_nodes(data.index)
 
         if progress_bar:
-            bar_iter += 1
             bar.update(bar_iter)
-
+            bar_iter += 1
+            
         if node is None or not hasattr(node, 'random'):
             continue # Skip
 
-        ##############################
+        # If we used data grouping --> name is a tuple which doesn't play well with pd.concat later on
+        # We exchange the name for the name of the observed node we currently process
+        if groupby is not None:
+            new_name = node.__str__()
+        else: # if groupby was None --> keep name as is
+            new_name = name
+
         # Sample and generate stats
         datasets = _post_pred_generate(node, samples=samples, data=data, append_data=append_data)
-        results[name] = pd.concat(datasets, names=['sample'], keys=list(range(len(datasets))))
-
-    # if progress_bar:
-    #     bar_iter += 1
-    #     bar.update(bar_iter)
-
+        results[new_name] = pd.concat(datasets, names=['sample'], keys=list(range(len(datasets))))
     return pd.concat(results, names=['node'])
 
 
