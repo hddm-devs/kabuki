@@ -6,6 +6,7 @@ from types import FunctionType
 import numpy as np
 from matplotlib.pylab import figure
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 
 import pandas as pd
 import pymc as pm
@@ -268,7 +269,7 @@ def post_pred_compare_stats(sampled_stats, data_stats, evals=None):
     return results.drop('NaN', axis=1)
 
 
-def _post_pred_generate(bottom_node, samples=500, data=None, append_data=False):
+def _post_pred_generate(bottom_node, samples=500, data=None, append_data=False, add_model_parameters=False):
     """Generate posterior predictive data from a single observed node."""
     datasets = []
 
@@ -277,14 +278,14 @@ def _post_pred_generate(bottom_node, samples=500, data=None, append_data=False):
     for sample in range(samples):
         _parents_to_random_posterior_sample(bottom_node)
         # Generate data from bottom node
-        sampled_data = bottom_node.random()
+        sampled_data = bottom_node.random(add_model_parameters = add_model_parameters)
         if append_data and data is not None:
             sampled_data = sampled_data.join(data.reset_index(), lsuffix='_sampled')
         datasets.append(sampled_data)
 
     return datasets
 
-def post_pred_gen(model, groupby=None, samples=500, append_data=False, progress_bar=True):
+def post_pred_gen(model, groupby=None, samples=500, append_data=False, add_model_parameters=False, progress_bar=True):
     """Run posterior predictive check on a model.
 
     :Arguments:
@@ -344,7 +345,7 @@ def post_pred_gen(model, groupby=None, samples=500, append_data=False, progress_
             new_name = name
 
         # Sample and generate stats
-        datasets = _post_pred_generate(node, samples=samples, data=data, append_data=append_data)
+        datasets = _post_pred_generate(node, samples=samples, data=data, append_data=append_data, add_model_parameters = add_model_parameters)
         results[new_name] = pd.concat(datasets, names=['sample'], keys=list(range(len(datasets))))
     return pd.concat(results, names=['node'])
 
