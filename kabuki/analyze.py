@@ -6,7 +6,6 @@ from types import FunctionType
 import numpy as np
 from matplotlib.pylab import figure
 import matplotlib.pyplot as plt
-from matplotlib.lines import Line2D
 
 import pandas as pd
 import pymc as pm
