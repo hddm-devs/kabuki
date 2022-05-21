@@ -180,6 +180,8 @@ class Knode(object):
     def create_tag_and_subj_idx(self, cols, uniq_elem):
         print(uniq_elem)
         print(type(uniq_elem))
+        print(cols)
+
         uniq_elem = pd.Series(uniq_elem, index=cols)
 
         if 'subj_idx' in cols:
@@ -189,6 +191,8 @@ class Knode(object):
             tag = uniq_elem.values
             subj_idx = None
 
+        print('tag: ')
+        print(tag)
         return tuple(tag), subj_idx
 
 
