@@ -178,8 +178,8 @@ class Knode(object):
         return self.pymc_node(name=node_name, **kwargs)
 
     def create_tag_and_subj_idx(self, cols, uniq_elem):
-        print(unique_elem)
-        print(type(unique_elem))
+        print(uniq_elem)
+        print(type(uniq_elem))
         uniq_elem = pd.Series(uniq_elem, index=cols)
 
         if 'subj_idx' in cols:
