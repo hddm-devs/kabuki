@@ -108,7 +108,8 @@ class Knode(object):
         for dep, elem in zip(self.depends, uniq_elem):
             row[dep] = elem
 
-        self.nodes_db = self.nodes_db.append(row)
+        #self.nodes_db = self.nodes_db.append(row)
+        self.nodes_db = pd.concat([self.nodes_db, row])
 
     def create(self):
         """create the pymc nodes"""
@@ -174,10 +175,11 @@ class Knode(object):
                 self.append_node_to_db(node, uniq_elem)
 
     def create_node(self, node_name, kwargs, data):
-        #actually create the node
         return self.pymc_node(name=node_name, **kwargs)
 
     def create_tag_and_subj_idx(self, cols, uniq_elem):
+        print(unique_elem)
+        print(type(unique_elem))
         uniq_elem = pd.Series(uniq_elem, index=cols)
 
         if 'subj_idx' in cols:
@@ -387,8 +389,6 @@ class Hierarchical(object):
 
     def __setstate__(self, d):
         self.__dict__.update(d)
-        #print('passed through kabuki __setstate__ and now printing the available dict')
-        #print(self.__dict__)
         self._setup_model()
         self.create_model()
 
@@ -735,6 +735,7 @@ class Hierarchical(object):
             fname <string> - the output will be written to a file named fname
             print_hidden <bool>  - print statistics of hidden nodes
         """
+        
         self.append_stats_to_nodes_db()
 
         sliced_db = self.nodes_db.copy()

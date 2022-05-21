@@ -274,6 +274,7 @@ def _post_pred_generate(bottom_node, samples=500, data=None, append_data=False, 
 
     ##############################
     # Sample and generate stats
+    # Potentially parallelize this one !
     for sample in range(samples):
         _parents_to_random_posterior_sample(bottom_node)
         # Generate data from bottom node
