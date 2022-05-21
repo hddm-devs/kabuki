@@ -178,16 +178,12 @@ class Knode(object):
         return self.pymc_node(name=node_name, **kwargs)
 
     def create_tag_and_subj_idx(self, cols, uniq_elem):
-        print('unique elem: ')
-        print(uniq_elem)
-        print(type(uniq_elem))
-        print('cols: ')
-        print(cols)
+        
+        if len(uniq_elem) > 0:
+            uniq_elem = pd.Series(uniq_elem, index=cols)
+        else:
+            uniq_elem = pd.Series(uniq_elem, index=cols, dtype = np.float64)
 
-        uniq_elem = pd.Series(uniq_elem, index=cols)
-
-        print('series uniq_elem: ')
-        print(uniq_elem)
         if 'subj_idx' in cols:
             subj_idx = uniq_elem['subj_idx']
             tag = uniq_elem.drop(['subj_idx']).values
@@ -195,8 +191,6 @@ class Knode(object):
             tag = uniq_elem.values
             subj_idx = None
 
-        print('tag: ')
-        print(tag)
         return tuple(tag), subj_idx
 
 
