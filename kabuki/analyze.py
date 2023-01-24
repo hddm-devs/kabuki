@@ -563,6 +563,8 @@ def plot_posterior_predictive(model, plot_func=None, required_method='pdf', colu
    
     # Plot different conditions (new figure for each)
     for tag, nodes in observeds.groupby('tag'):
+        print('tag early')
+        print(tag)
         fig = plt.figure(figsize=figsize)
         fig.suptitle(utils.pretty_tag(tag), fontsize=12)
         fig.subplots_adjust(top=0.9, hspace=.4, wspace=.3)
@@ -594,6 +596,8 @@ def plot_posterior_predictive(model, plot_func=None, required_method='pdf', colu
 
         # Save figure if necessary
         if save:
+            print('tag late')
+            print(tag)
             fname = 'ppq_' + '.'.join([str(t) for t in tag] if type(tag) == list else str(tag))
             if path is None:
                 path = '.'
