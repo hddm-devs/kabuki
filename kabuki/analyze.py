@@ -594,7 +594,7 @@ def plot_posterior_predictive(model, plot_func=None, required_method='pdf', colu
 
         # Save figure if necessary
         if save:
-            fname = 'ppq_' + '.'.join([str(t) for t in tag] if type(tag) == list else tag)
+            fname = 'ppq_' + '.'.join([str(t) for t in tag] if type(tag) == list else str(tag))
             if path is None:
                 path = '.'
             if isinstance(format, str):
