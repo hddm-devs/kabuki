@@ -1,5 +1,3 @@
-
-
 import pickle
 import sys
 import string
@@ -10,11 +8,14 @@ import pandas as pd
 import pymc as pm
 from functools import reduce
 
+
 def flatten(l):
-    return reduce(lambda x, y: list(x)+list(y), l)
+    return reduce(lambda x, y: list(x) + list(y), l)
+
 
 def pretty_tag(tag):
-    return tag[0] if len(tag) == 1 else ', '.join(str(tag))
+    return tag[0] if len(tag) == 1 else ", ".join(str(tag))
+
 
 # COMMENT: ALEX --> Observed strange behavior of the pretty_tag() function that leads to excess commas in plot titles
 # Use this as alternative in some cases ?
@@ -27,15 +28,17 @@ def pretty_tag(tag):
 #             tag_list.append(str(tag_tmp))
 #         return '(' + ', '.join(tag_list) + ')'
 
+
 def load(fname):
     """Load a hierarchical model saved to file via
     model.save(fname)
 
     """
-    with open(fname, 'rb') as f:
+    with open(fname, "rb") as f:
         model = pickle.load(f)
-        
+
     return model
+
 
 def get_traces(model):
     """Returns recarray of all traces in the model.
@@ -64,19 +67,20 @@ def get_traces(model):
 
     return traces
 
+
 def logp_trace(model):
     """
     return a trace of logp for model
     """
 
-    #init
+    # init
     db = model.mc.db
-    n_samples = db.trace('deviance').length()
+    n_samples = db.trace("deviance").length()
     logp = np.empty(n_samples, np.double)
 
-    #loop over all samples
+    # loop over all samples
     for i_sample in range(n_samples):
-        #set the value of all stochastic to their 'i_sample' value
+        # set the value of all stochastic to their 'i_sample' value
         for stochastic in model.mc.stochastics:
             try:
                 value = db.trace(stochastic.__name__)[i_sample]
@@ -85,13 +89,13 @@ def logp_trace(model):
             except KeyError:
                 print("No trace available for %s. " % stochastic.__name__)
 
-        #get logp
+        # get logp
         logp[i_sample] = model.mc.logp
 
     return logp
 
 
-def interpolate_trace(x, trace, range=(-1,1), bins=100):
+def interpolate_trace(x, trace, range=(-1, 1), bins=100):
     """Interpolate distribution (from samples) at position x.
 
     :Arguments:
@@ -114,6 +118,7 @@ def interpolate_trace(x, trace, range=(-1,1), bins=100):
     interp = scipy.interpolate.InterpolatedUnivariateSpline(x_histo, histo)(x)
 
     return interp
+
 
 def save_csv(data, fname, *args, **kwargs):
     """Save record array to fname as csv.
@@ -148,17 +153,18 @@ def load_csv(*args, **kwargs):
     return pd.read_csv(*args, **kwargs)
 
 
-def set_proposal_sd(mc, tau=.1):
+def set_proposal_sd(mc, tau=0.1):
     for var in mc.variables:
-        if var.__name__.endswith('var'):
+        if var.__name__.endswith("var"):
             # Change proposal SD
-            mc.use_step_method(pm.Metropolis, var, proposal_sd = tau)
+            mc.use_step_method(pm.Metropolis, var, proposal_sd=tau)
 
     return
 
+
 def stochastic_from_dist(*args, **kwargs):
-    return pm.stochastic_from_dist(*args, dtype=np.dtype('O'),
-                                   mv=True, **kwargs)
+    return pm.stochastic_from_dist(*args, dtype=np.dtype("O"), mv=True, **kwargs)
+
 
 def concat_models(models, concat_traces=True):
     """Concatenate traces of multiple identical models into a new
@@ -172,11 +178,15 @@ def concat_models(models, concat_traces=True):
     for i, model in enumerate(models[1:]):
         stochs = model.get_stochastics()
         for node, target_node in zip(stochs.node, target_stochs.node):
-            assert node.__name__ == target_node.__name__, "Node names do not match. You have to pass identical models."
+            assert (
+                node.__name__ == target_node.__name__
+            ), "Node names do not match. You have to pass identical models."
             if concat_traces:
-                target_node.trace._trace[0] = np.concatenate([target_node.trace[:], node.trace[:]])
+                target_node.trace._trace[0] = np.concatenate(
+                    [target_node.trace[:], node.trace[:]]
+                )
             else:
-                target_node.trace._trace[i+1] = node.trace[:]
+                target_node.trace._trace[i + 1] = node.trace[:]
 
     target_model.gen_stats()
 
@@ -189,6 +199,7 @@ def concat_models(models, concat_traces=True):
 # For the license see:
 # http://twistedmatrix.com/trac/browser/trunk/LICENSE
 ###########################################################################
+
 
 class _NoModuleFound(Exception):
     """
@@ -215,6 +226,7 @@ class ObjectNotFound(InvalidName):
     imported.
     """
 
+
 def _importAndCheckStack(importName):
     """
     Import the given name as a module, then walk the stack to determine whether
@@ -236,8 +248,10 @@ def _importAndCheckStack(importName):
             excType, excValue, excTraceback = sys.exc_info()
             while excTraceback:
                 execName = excTraceback.tb_frame.f_globals["__name__"]
-                if (execName is None or # python 2.4+, post-cleanup
-                    execName == importName): # python 2.3, no cleanup
+                if (
+                    execName is None
+                    or execName == importName  # python 2.4+, post-cleanup
+                ):  # python 2.3, no cleanup
                     raise excType(excValue).with_traceback(excTraceback)
                 excTraceback = excTraceback.tb_next
             raise _NoModuleFound()
@@ -245,6 +259,7 @@ def _importAndCheckStack(importName):
         # Necessary for cleaning up modules in 2.3.
         sys.modules.pop(importName, None)
         raise
+
 
 def find_object(name):
     """
@@ -276,23 +291,24 @@ def find_object(name):
     """
 
     if not name:
-        raise InvalidName('Empty module name')
+        raise InvalidName("Empty module name")
 
-    names = name.split('.')
+    names = name.split(".")
 
     # if the name starts or ends with a '.' or contains '..', the __import__
     # will raise an 'Empty module name' error. This will provide a better error
     # message.
-    if '' in names:
+    if "" in names:
         raise InvalidName(
             "name must be a string giving a '.'-separated list of Python "
-            "identifiers, not %r" % (name,))
+            "identifiers, not %r" % (name,)
+        )
 
     topLevelPackage = None
     moduleNames = names[:]
     while not topLevelPackage:
         if moduleNames:
-            trialname = '.'.join(moduleNames)
+            trialname = ".".join(moduleNames)
             try:
                 topLevelPackage = _importAndCheckStack(trialname)
             except _NoModuleFound:
@@ -301,7 +317,7 @@ def find_object(name):
             if len(names) == 1:
                 raise ModuleNotFound("No module named %r" % (name,))
             else:
-                raise ObjectNotFound('%r does not name an object' % (name,))
+                raise ObjectNotFound("%r does not name an object" % (name,))
 
     obj = topLevelPackage
     for n in names[1:]:
@@ -309,25 +325,33 @@ def find_object(name):
 
     return obj
 
+
 ######################
 # END OF COPIED CODE #
 ######################
 
+
 def centered_half_cauchy_rand(S, size):
     """sample from a half Cauchy distribution with scale S"""
-    return abs(S * np.tan(np.pi * pm.random_number(size) - np.pi/2.0))
+    return abs(S * np.tan(np.pi * pm.random_number(size) - np.pi / 2.0))
+
 
 def centered_half_cauchy_logp(x, S):
     """logp of half Cauchy with scale S"""
     x = np.atleast_1d(x)
-    if sum(x<0): return -np.inf
+    if sum(x < 0):
+        return -np.inf
     return pm.flib.cauchy(x, 0, S) + len(x) * np.log(2)
 
-HalfCauchy = pm.stochastic_from_dist(name="Half Cauchy",
-                                     random=centered_half_cauchy_rand,
-                                     logp=centered_half_cauchy_logp,
-                                     dtype=np.double)
+
+HalfCauchy = pm.stochastic_from_dist(
+    name="Half Cauchy",
+    random=centered_half_cauchy_rand,
+    logp=centered_half_cauchy_logp,
+    dtype=np.double,
+)
 
 if __name__ == "__main__":
     import doctest
+
     doctest.testmod()

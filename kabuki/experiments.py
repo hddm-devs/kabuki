@@ -5,8 +5,10 @@ import os.path
 from copy import deepcopy
 import matplotlib.pyplot as plt
 
+
 def sort_dict(d):
     from operator import itemgetter
+
     return sorted(iter(d.items()), key=itemgetter(1))
 
 
@@ -20,23 +22,22 @@ def _model_type_to_class(model_type):
     elif isinstance(model_type, str):
         model_class = kabuki.utils.find_object(model_type)
     else:
-        raise TypeError('Model type %s not supported.' % type(model_type))
+        raise TypeError("Model type %s not supported." % type(model_type))
 
     return model_class
 
 
 def _parse_experiment(experiment):
-    data = experiment['data']
-    model_type = experiment['model_type']
+    data = experiment["data"]
+    model_type = experiment["model_type"]
 
-    if 'kwargs' in experiment:
-        kwargs = deepcopy(experiment['kwargs'])
+    if "kwargs" in experiment:
+        kwargs = deepcopy(experiment["kwargs"])
     else:
         kwargs = {}
 
-
-    if 'name' in experiment:
-        name = experiment['name']
+    if "name" in experiment:
+        name = experiment["name"]
     else:
         name = model_type + str(sort_dict(kwargs))
 
@@ -45,7 +46,9 @@ def _parse_experiment(experiment):
     return data, model_class, kwargs, name
 
 
-def run_experiment(experiment, db='sqlite', samples=10000, burn=5000, thin=3, subj_map_init=True):
+def run_experiment(
+    experiment, db="sqlite", samples=10000, burn=5000, thin=3, subj_map_init=True
+):
     """Run a single experiment: Builds the model, initializes,
     samples. See analyze_experiment() for how to generate output
     statistics of your finished model run.
@@ -84,12 +87,12 @@ def run_experiment(experiment, db='sqlite', samples=10000, burn=5000, thin=3, su
     if subj_map_init:
         m.subj_by_subj_map_init()
 
-    m.mcmc(db=db, dbname=os.path.join(name, 'traces.db'))
+    m.mcmc(db=db, dbname=os.path.join(name, "traces.db"))
     m.sample(samples, burn=burn, thin=thin)
 
     stats = kabuki.analyze.gen_stats(m.mc.stats())
 
-    with open('%s/stats.txt'%name, 'w') as f:
+    with open("%s/stats.txt" % name, "w") as f:
         f.write("%f\n" % m.mc.dic)
         f.write(stats)
 
@@ -117,6 +120,7 @@ def run_experiments(experiments, mpi=False, **kwargs):
     """
     if mpi:
         import mpi4py_map
+
         results = mpi4py_map.map(run_experiment, experiments, **kwargs)
     else:
         results = [run_experiment(experiment, **kwargs) for experiment in experiments]
@@ -124,7 +128,7 @@ def run_experiments(experiments, mpi=False, **kwargs):
     return results
 
 
-def load_experiment(experiment, dbname='traces.db', db='sqlite'):
+def load_experiment(experiment, dbname="traces.db", db="sqlite"):
     """Load specific experiment from a database file.
 
     :Arguments:
@@ -139,26 +143,31 @@ def load_experiment(experiment, dbname='traces.db', db='sqlite'):
         Same experiment with a new 'model' key linking to the loaded model.
     """
 
-    experiment['model'] = load_model(experiment, db=db, dbname=dbname)
+    experiment["model"] = load_model(experiment, db=db, dbname=dbname)
     return experiment
 
-def load_model(experiment, db='sqlite', dbname='traces.db'):
+
+def load_model(experiment, db="sqlite", dbname="traces.db"):
     data, model_class, kwargs, name = _parse_experiment(experiment)
     m = model_class(data, **kwargs)
 
-    m.load_db(os.path.join(name, dbname), db='sqlite')
+    m.load_db(os.path.join(name, dbname), db="sqlite")
 
     return m
 
+
 def load_ppc(experiment):
     import pandas as pd
+
     data, model_class, kwargs, name = _parse_experiment(experiment)
-    post_pred = pd.read_csv(os.path.join(name, 'post_pred.csv'))
+    post_pred = pd.read_csv(os.path.join(name, "post_pred.csv"))
 
     return post_pred
 
+
 def load_ppcs(experiments):
     import pandas as pd
+
     post_preds = []
     for experiment in experiments:
         try:
@@ -170,9 +179,17 @@ def load_ppcs(experiments):
     model_names = [_parse_experiment(experiment)[-1] for experiment in experiments]
     print(model_names)
     return (model_names, post_preds)
-    #return pd.concat(post_preds, keys=model_names, names=['model'])
+    # return pd.concat(post_preds, keys=model_names, names=['model'])
 
-def analyze_experiment(experiment, plot_groups=True, plot_traces=True, plot_post_pred=True, ppc=True, stats=None):
+
+def analyze_experiment(
+    experiment,
+    plot_groups=True,
+    plot_traces=True,
+    plot_post_pred=True,
+    ppc=True,
+    stats=None,
+):
     """Analyze a single experiment. Writes output statitics and various plots into a subdirectory.
 
     :Arguments:
@@ -195,10 +212,10 @@ def analyze_experiment(experiment, plot_groups=True, plot_traces=True, plot_post
     """
     data, model_class, kwargs, name = _parse_experiment(experiment)
 
-    if 'model' in experiment:
+    if "model" in experiment:
         # Model already loaded, use it
-        model = experiment['model']
-    else: # Load it
+        model = experiment["model"]
+    else:  # Load it
         model = load_model(experiment)
 
     print("Analyzing model: %s" % name)
@@ -210,12 +227,19 @@ def analyze_experiment(experiment, plot_groups=True, plot_traces=True, plot_post
 
     if plot_post_pred:
         print("Plotting posterior predictive")
-        kabuki.analyze.plot_posterior_predictive(model, np.linspace(-1.2, 1.2, 80), savefig=True, path=name, columns=7, figsize=(18,18))
+        kabuki.analyze.plot_posterior_predictive(
+            model,
+            np.linspace(-1.2, 1.2, 80),
+            savefig=True,
+            path=name,
+            columns=7,
+            figsize=(18, 18),
+        )
 
     if ppc:
         ppc = kabuki.analyze.post_pred_check(model, stats=stats)
         print(ppc)
-        ppc.to_csv(os.path.join(name, 'post_pred.csv'))
+        ppc.to_csv(os.path.join(name, "post_pred.csv"))
 
 
 def analyze_experiments(experiments, mpi=False, plot_dic=True, **kwargs):
@@ -243,31 +267,35 @@ def analyze_experiments(experiments, mpi=False, plot_dic=True, **kwargs):
 
     # Load models if necessary
     for experiment in experiments:
-        if 'model' not in experiment:
-            experiment['model'] = load_model(experiment)
+        if "model" not in experiment:
+            experiment["model"] = load_model(experiment)
 
     if mpi:
         import mpi4py_map
+
         results = mpi4py_map.map(analyze_experiment, experiments, **kwargs)
     else:
-        results = [analyze_experiment(experiment, **kwargs) for experiment in experiments]
+        results = [
+            analyze_experiment(experiment, **kwargs) for experiment in experiments
+        ]
 
     if plot_dic:
-        dics = [experiment['model'].mc.dic for experiment in experiments]
+        dics = [experiment["model"].mc.dic for experiment in experiments]
         names = [_parse_experiment(experiment)[-1] for experiment in experiments]
 
         fig = plt.figure()
         x = list(range(len(names)))
-        ax = plt.bar(x, dics, align='center')
+        ax = plt.bar(x, dics, align="center")
         plt.xticks(x, names)
-        plt.ylabel('DIC')
+        plt.ylabel("DIC")
         fig.autofmt_xdate()
-        fig.savefig('dic.png')
-        fig.savefig('dic.pdf')
+        fig.savefig("dic.png")
+        fig.savefig("dic.pdf")
 
     return results
 
-if __name__=='__main__':
+
+if __name__ == "__main__":
     from copy import copy
 
     # Example, requires HDDM
@@ -275,16 +303,33 @@ if __name__=='__main__':
 
     # Generate data
     params_single = hddm.generate.gen_rand_params()
-    params = {'cond1': copy(params_single), 'cond2': copy(params_single)}
-    params['cond2']['v'] = 0
-    data, subj_params = kabuki.generate.gen_rand_data(hddm.likelihoods.Wfpt,
-                                         params=params, samples=100, subjs=10, column_name='rt')[0]
+    params = {"cond1": copy(params_single), "cond2": copy(params_single)}
+    params["cond2"]["v"] = 0
+    data, subj_params = kabuki.generate.gen_rand_data(
+        hddm.likelihoods.Wfpt, params=params, samples=100, subjs=10, column_name="rt"
+    )[0]
 
     # Create different models to test our various hypotheses.
     experiments = [
-                   {'name': 'baseline', 'data': data, 'model_type': 'hddm.HDDM', 'kwargs': {'depends_on': {}}},
-                   {'name': 'condition_influences_drift', 'data': data, 'model_type': 'hddm.HDDM', 'kwargs': {'depends_on': {'v': 'condition'}}},
-                   {'name': 'condition_influences_threshold', 'data': data, 'model_type': 'hddm.HDDM', 'kwargs': {'depends_on': {'a': 'condition'}}}]
+        {
+            "name": "baseline",
+            "data": data,
+            "model_type": "hddm.HDDM",
+            "kwargs": {"depends_on": {}},
+        },
+        {
+            "name": "condition_influences_drift",
+            "data": data,
+            "model_type": "hddm.HDDM",
+            "kwargs": {"depends_on": {"v": "condition"}},
+        },
+        {
+            "name": "condition_influences_threshold",
+            "data": data,
+            "model_type": "hddm.HDDM",
+            "kwargs": {"depends_on": {"a": "condition"}},
+        },
+    ]
 
     print("Running experiments...")
     run_experiments(experiments)
@@ -293,5 +338,3 @@ if __name__=='__main__':
     analyze_experiments(experiments, ppc=False)
 
     print("Done! Check the newly created subdirectories.")
-
-

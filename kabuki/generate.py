@@ -1,38 +1,43 @@
-
-
 from copy import deepcopy
 
 import numpy as np
 import pandas as pd
 
 
-def _add_noise(params, check_valid_func=None, bounds=None, noise=.1, exclude_params=(), share_noise=()):
+def _add_noise(
+    params,
+    check_valid_func=None,
+    bounds=None,
+    noise=0.1,
+    exclude_params=(),
+    share_noise=(),
+):
     """Add individual noise to each parameter.
 
-        :Arguments:
-            params : dict
-                Parameters to use for data generation. should look like this
-                * {'condition1': {'param1': value, 'param2': value2},
-                   'condition2': {'param1': value3, 'param2': value4}}
-        :Optional:
-            check_valid_func : function <default lambda x: True>
-                Function that takes as input the parameters as kwds
-                and returns True if param values are admissable.
-            bounds : dict <default={}>
-                Dict containing parameter names and
-                (lower, upper) value for valid parameter
-                range.
-            noise : float <default=.1>
-                Standard deviation of random gaussian
-                variable to add to each parameter.
-            exclude_params : tuple <default=()>
-                Do not add noise to these parameters.
-            share_noise : tuple <default=()>
-                parameters in share_noise will share the noise across conditions
+    :Arguments:
+        params : dict
+            Parameters to use for data generation. should look like this
+            * {'condition1': {'param1': value, 'param2': value2},
+               'condition2': {'param1': value3, 'param2': value4}}
+    :Optional:
+        check_valid_func : function <default lambda x: True>
+            Function that takes as input the parameters as kwds
+            and returns True if param values are admissable.
+        bounds : dict <default={}>
+            Dict containing parameter names and
+            (lower, upper) value for valid parameter
+            range.
+        noise : float <default=.1>
+            Standard deviation of random gaussian
+            variable to add to each parameter.
+        exclude_params : tuple <default=()>
+            Do not add noise to these parameters.
+        share_noise : tuple <default=()>
+            parameters in share_noise will share the noise across conditions
 
-        :Returns:
-            params : dict
-                parameters with noise added.
+    :Returns:
+        params : dict
+            parameters with noise added.
 
     """
 
@@ -51,7 +56,10 @@ def _add_noise(params, check_valid_func=None, bounds=None, noise=.1, exclude_par
         if param in bounds:
             while True:
                 sampled_value = normal_rand(value, param_noise)
-                if sampled_value >= bounds[param][0] and sampled_value <= bounds[param][1]:
+                if (
+                    sampled_value >= bounds[param][0]
+                    and sampled_value <= bounds[param][1]
+                ):
                     return sampled_value
         else:
             return normal_rand(value, param_noise)
@@ -62,15 +70,14 @@ def _add_noise(params, check_valid_func=None, bounds=None, noise=.1, exclude_par
     if check_valid_func is None:
         check_valid_func = lambda **params: True
 
-
     # Sample parameters until accepted
     original_params = deepcopy(params)
-    params_noise= deepcopy(params)
+    params_noise = deepcopy(params)
     while True:
         params = deepcopy(original_params)
 
         # sample params only if not excluded and make sure they are shaared across condition if necessary
-        for (i_cond, (cond, cond_params)) in enumerate(original_params.items()):
+        for i_cond, (cond, cond_params) in enumerate(original_params.items()):
             if i_cond == 0:
                 cond0 = cond
             for param, value in cond_params.items():
@@ -93,8 +100,21 @@ def _add_noise(params, check_valid_func=None, bounds=None, noise=.1, exclude_par
         if valid:
             return params
 
-def gen_rand_data(gen_func, params, size=50, subjs=1, subj_noise=.1, exclude_params=(), share_noise=(),
-                  column_name='data', check_valid_func=None, bounds=None, seed=None, generate_data=True):
+
+def gen_rand_data(
+    gen_func,
+    params,
+    size=50,
+    subjs=1,
+    subj_noise=0.1,
+    exclude_params=(),
+    share_noise=(),
+    column_name="data",
+    check_valid_func=None,
+    bounds=None,
+    seed=None,
+    generate_data=True,
+):
     """Generate a random dataset using a user-defined random function.
 
     :Arguments:
@@ -143,13 +163,13 @@ def gen_rand_data(gen_func, params, size=50, subjs=1, subj_noise=.1, exclude_par
 
     """
 
-    #The value of generate_data affects the parameters generation
-    #so in the mean time we fix that, by completely ignoring the argument.
+    # The value of generate_data affects the parameters generation
+    # so in the mean time we fix that, by completely ignoring the argument.
     generate_data = True
 
     # Check if only dict of params was passed, i.e. no conditions
     if not isinstance(params[list(params.keys())[0]], dict):
-        params = {'none': params}
+        params = {"none": params}
     if seed is not None:
         np.random.seed(seed)
 
@@ -159,28 +179,32 @@ def gen_rand_data(gen_func, params, size=50, subjs=1, subj_noise=.1, exclude_par
 
     data = []
     for subj_idx in range(subjs):
-        #if it is a group model add noise to the parameters
+        # if it is a group model add noise to the parameters
         if subjs > 1:
             # Sample subject parameters from a normal around the specified parameters
-            subj_params = _add_noise(params, noise=subj_noise, share_noise=share_noise,
-                                     check_valid_func=check_valid_func,
-                                     bounds=bounds,
-                                     exclude_params=exclude_params)
+            subj_params = _add_noise(
+                params,
+                noise=subj_noise,
+                share_noise=share_noise,
+                check_valid_func=check_valid_func,
+                bounds=bounds,
+                exclude_params=exclude_params,
+            )
         else:
             subj_params = params.copy()
 
-        #sample for each condition
+        # sample for each condition
         for condition, params_cur in subj_params.items():
             final_params_set[condition].append(params_cur)
             if generate_data:
                 samples_from_dist = gen_func(size=size, **params_cur)
             else:
-                samples_from_dist = np.empty(size,dtype=np.float)
+                samples_from_dist = np.empty(size, dtype=np.float)
                 samples_from_dist[:] = np.nan
 
             samples_from_dist = pd.DataFrame(samples_from_dist)
-            samples_from_dist['subj_idx'] = subj_idx
-            samples_from_dist['condition'] = condition
+            samples_from_dist["subj_idx"] = subj_idx
+            samples_from_dist["condition"] = condition
             data.append(samples_from_dist)
 
     # Remove list around final_params_set if there is only 1 subject

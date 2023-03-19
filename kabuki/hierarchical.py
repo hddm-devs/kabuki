@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-#import ipdb
+# import ipdb
 import cloudpickle
 from copy import copy
 import pickle
@@ -18,16 +18,17 @@ import warnings
 from kabuki.utils import flatten
 from . import analyze
 
+
 class LnProb(object):
     def __init__(self, model):
         self.model = model
 
-    def lnprob(self, vals): # vals is a vector of parameter values to try
+    def lnprob(self, vals):  # vals is a vector of parameter values to try
         # Set each random variable of the pymc model to the value
         # suggested by emcee
         try:
             for val, (name, stoch) in zip(vals, self.model.iter_stochastics()):
-                stoch['node'].set_value(val)
+                stoch["node"].set_value(val)
             logp = self.model.mc.logp
             return logp
         except pm.ZeroProbability:
@@ -36,9 +37,19 @@ class LnProb(object):
     def __call__(self, *args, **kwargs):
         return self.lnprob(*args, **kwargs)
 
+
 class Knode(object):
-    def __init__(self, pymc_node, name, depends=(), col_name='',
-                 subj=False, hidden=False, pass_dataframe=True, **kwargs):
+    def __init__(
+        self,
+        pymc_node,
+        name,
+        depends=(),
+        col_name="",
+        subj=False,
+        hidden=False,
+        pass_dataframe=True,
+        **kwargs
+    ):
         self.pymc_node = pymc_node
         self.name = name
         self.kwargs = kwargs
@@ -52,21 +63,21 @@ class Knode(object):
 
         self.pass_dataframe = pass_dataframe
 
-        #create self.parents
+        # create self.parents
         self.parents = {}
-        for (name, value) in self.kwargs.items():
+        for name, value in self.kwargs.items():
             if isinstance(value, Knode):
                 self.parents[name] = value
 
         # Create depends set and update based on parents' depends
         depends = set(depends)
         if self.subj:
-            depends.add('subj_idx')
+            depends.add("subj_idx")
         depends.update(self.get_parent_depends())
 
         self.depends = sorted(list(depends))
 
-        self.observed = 'observed' in kwargs
+        self.observed = "observed" in kwargs
 
     def __repr__(self):
         return self.name
@@ -83,8 +94,17 @@ class Knode(object):
 
     def init_nodes_db(self):
         data_col_names = list(self.data.columns)
-        node_descriptors = ['knode_name', 'stochastic', 'observed', 'subj', 'node', 'tag', 'depends', 'hidden']
-        stats = ['mean', 'std', '2.5q', '25q', '50q', '75q', '97.5q', 'mc err']
+        node_descriptors = [
+            "knode_name",
+            "stochastic",
+            "observed",
+            "subj",
+            "node",
+            "tag",
+            "depends",
+            "hidden",
+        ]
+        stats = ["mean", "std", "2.5q", "25q", "50q", "75q", "97.5q", "mc err"]
 
         columns = node_descriptors + data_col_names + stats
 
@@ -92,23 +112,25 @@ class Knode(object):
         self.nodes_db = pd.DataFrame(columns=columns)
 
     def append_node_to_db(self, node, uniq_elem):
-        #create db entry for knode
+        # create db entry for knode
         row = {}
-        row['knode_name'] = self.name
-        row['observed'] = self.observed
-        row['stochastic'] = isinstance(node, pm.Stochastic) and not self.observed
-        row['subj'] = self.subj
-        row['node'] = node
-        row['tag'] = self.create_tag_and_subj_idx(self.depends, uniq_elem)[0]
-        row['depends'] = self.depends
-        row['hidden'] = self.hidden
+        row["knode_name"] = self.name
+        row["observed"] = self.observed
+        row["stochastic"] = isinstance(node, pm.Stochastic) and not self.observed
+        row["subj"] = self.subj
+        row["node"] = node
+        row["tag"] = self.create_tag_and_subj_idx(self.depends, uniq_elem)[0]
+        row["depends"] = self.depends
+        row["hidden"] = self.hidden
 
-        row = pd.DataFrame(data=[row], columns=self.nodes_db.columns, index=[node.__name__])
+        row = pd.DataFrame(
+            data=[row], columns=self.nodes_db.columns, index=[node.__name__]
+        )
 
         for dep, elem in zip(self.depends, uniq_elem):
             row[dep] = elem
 
-        #self.nodes_db = self.nodes_db.append(row)
+        # self.nodes_db = self.nodes_db.append(row)
         self.nodes_db = pd.concat([self.nodes_db, row])
 
     def create(self):
@@ -116,15 +138,14 @@ class Knode(object):
 
         self.init_nodes_db()
 
-        #group data
+        # group data
         if len(self.depends) == 0:
             grouped = [((), self.data)]
         else:
             grouped = self.data.groupby(self.depends)
 
-        #create all the pymc nodes
+        # create all the pymc nodes
         for uniq_elem, grouped_data in grouped:
-
             if not isinstance(uniq_elem, tuple):
                 uniq_elem = (uniq_elem,)
 
@@ -135,16 +156,20 @@ class Knode(object):
             for name, parent in self.parents.items():
                 kwargs[name] = parent.get_node(self.depends, uniq_elem)
 
-            #get node name
+            # get node name
             tag, subj_idx = self.create_tag_and_subj_idx(self.depends, uniq_elem)
             node_name = self.create_node_name(tag, subj_idx=subj_idx)
 
-            #get value for observed node
+            # get value for observed node
             if self.observed:
                 if self.pass_dataframe:
-                    kwargs['value'] = grouped_data[self.col_name] #.to_records(index=False)
+                    kwargs["value"] = grouped_data[
+                        self.col_name
+                    ]  # .to_records(index=False)
                 else:
-                    kwargs['value'] = grouped_data[self.col_name].values #.to_records(index=False)
+                    kwargs["value"] = grouped_data[
+                        self.col_name
+                    ].values  # .to_records(index=False)
 
             # Deterministic nodes require a parent argument that is a
             # dict mapping parent names to parent nodes. Knode wraps
@@ -157,16 +182,15 @@ class Knode(object):
                 for name, parent in self.parents.items():
                     parents_dict[name] = parent.get_node(self.depends, uniq_elem)
                     kwargs.pop(name)
-                kwargs['parents'] = parents_dict
+                kwargs["parents"] = parents_dict
 
                 if self.observed:
-                    kwargs['parents']['value'] = kwargs['value']
-
+                    kwargs["parents"]["value"] = kwargs["value"]
 
             # Deterministic nodes require a doc kwarg, we don't really
             # need that so if its not supplied, just use the name
-            if self.pymc_node is pm.Deterministic and 'doc' not in kwargs:
-                kwargs['doc'] = node_name
+            if self.pymc_node is pm.Deterministic and "doc" not in kwargs:
+                kwargs["doc"] = node_name
 
             node = self.create_node(node_name, kwargs, grouped_data)
 
@@ -178,27 +202,25 @@ class Knode(object):
         return self.pymc_node(name=node_name, **kwargs)
 
     def create_tag_and_subj_idx(self, cols, uniq_elem):
-        
         if len(uniq_elem) > 0:
             uniq_elem = pd.Series(uniq_elem, index=cols)
         else:
-            uniq_elem = pd.Series(uniq_elem, index=cols, dtype = np.float64)
+            uniq_elem = pd.Series(uniq_elem, index=cols, dtype=np.float64)
 
-        if 'subj_idx' in cols:
-            subj_idx = uniq_elem['subj_idx']
-            tag = uniq_elem.drop(['subj_idx']).values
+        if "subj_idx" in cols:
+            subj_idx = uniq_elem["subj_idx"]
+            tag = uniq_elem.drop(["subj_idx"]).values
         else:
             tag = uniq_elem.values
             subj_idx = None
 
         return tuple(tag), subj_idx
 
-
     def create_node_name(self, tag, subj_idx=None):
         # construct string that will become the node name
         s = self.name
         if len(tag) > 0:
-            elems_str = '.'.join([str(elem) for elem in tag])
+            elems_str = ".".join([str(elem) for elem in tag])
             s += "({elems})".format(elems=elems_str)
         if subj_idx is not None:
             s += ".{subj_idx}".format(subj_idx=subj_idx)
@@ -228,16 +250,18 @@ class Knode(object):
 
         return self.nodes[deps_on_elems]
 
+
 def intersect(t1, t2):
     # Preserves order, unlike set.
     return tuple([i for i in t2 if i in t1])
 
+
 def test_subset_tuple():
-    assert intersect(('a', 'b' , 'c'), ('a',)) == ('a',)
-    assert intersect(('a', 'b' , 'c'), ('a', 'b')) == ('a', 'b')
-    assert intersect(('a', 'b' , 'c'), ('a', 'c')) == ('a', 'c')
-    assert intersect(('a', 'b' , 'c'), ('b', 'c')) == ('b', 'c')
-    assert intersect(('c', 'b', 'a'), ('b', 'c')) == ('b', 'c')
+    assert intersect(("a", "b", "c"), ("a",)) == ("a",)
+    assert intersect(("a", "b", "c"), ("a", "b")) == ("a", "b")
+    assert intersect(("a", "b", "c"), ("a", "c")) == ("a", "c")
+    assert intersect(("a", "b", "c"), ("b", "c")) == ("b", "c")
+    assert intersect(("c", "b", "a"), ("b", "c")) == ("b", "c")
 
 
 class Hierarchical(object):
@@ -292,8 +316,16 @@ class Hierarchical(object):
 
     """
 
-    def __init__(self, data, is_group_model=None, depends_on=None, trace_subjs=True,
-                 plot_subjs=False, plot_var=False, group_only_nodes=()):
+    def __init__(
+        self,
+        data,
+        is_group_model=None,
+        depends_on=None,
+        trace_subjs=True,
+        plot_subjs=False,
+        plot_var=False,
+        group_only_nodes=(),
+    ):
         # Init
         self.plot_subjs = plot_subjs
         self.depends_on = depends_on
@@ -316,16 +348,14 @@ class Hierarchical(object):
                     if elem not in self.data.columns:
                         raise KeyError("Column named %s not found in data." % elem)
 
-
         self.depends = defaultdict(lambda: ())
         for key, value in depends_on.items():
             self.depends[key] = value
 
-
         # Determine if group model
         if is_group_model is None:
-            if 'subj_idx' in self.data.columns:
-                if len(np.unique(data['subj_idx'])) != 1:
+            if "subj_idx" in self.data.columns:
+                if len(np.unique(data["subj_idx"])) != 1:
                     self.is_group_model = True
                 else:
                     self.is_group_model = False
@@ -334,21 +364,23 @@ class Hierarchical(object):
 
         else:
             if is_group_model:
-                if 'subj_idx' not in data.columns:
-                    raise ValueError("Group models require 'subj_idx' column in input data.")
+                if "subj_idx" not in data.columns:
+                    raise ValueError(
+                        "Group models require 'subj_idx' column in input data."
+                    )
 
             self.is_group_model = is_group_model
 
         # Should the model incorporate multiple subjects
         if self.is_group_model:
-            self._subjs = np.unique(data['subj_idx'])
+            self._subjs = np.unique(data["subj_idx"])
             self._num_subjs = self._subjs.shape[0]
         else:
             self._num_subjs = 1
 
         self.num_subjs = self._num_subjs
         self.sampled = False
-        self.dbname = 'ram'
+        self.dbname = "ram"
         self.db = None
 
         self._setup_model()
@@ -357,7 +389,7 @@ class Hierarchical(object):
         # create knodes (does not build according pymc nodes)
         self.knodes = self.create_knodes()
 
-        #add data to knodes
+        # add data to knodes
         for knode in self.knodes:
             knode.set_data(self.data)
 
@@ -366,26 +398,29 @@ class Hierarchical(object):
 
     def __getstate__(self):
         from copy import deepcopy
+
         d = copy(self.__dict__)
-        d['nodes_db'] = deepcopy(d['nodes_db'].drop('node', axis=1))
-        d['depends'] = dict(d['depends'])
-        #d['model_type'] = self.__class__
+        d["nodes_db"] = deepcopy(d["nodes_db"].drop("node", axis=1))
+        d["depends"] = dict(d["depends"])
+        # d['model_type'] = self.__class__
 
         if self.sampled:
-            d['db'] = self.mc.db.__name__
+            d["db"] = self.mc.db.__name__
 
-            dbname = d['mc'].db.__name__
-            if (dbname == 'ram'):
-                    raise ValueError("db is 'ram'. Saving a model requires a database on disk.")
-            elif (dbname == 'pickle'):
-                    d['dbname'] = d['mc'].db.filename
-            elif (dbname == 'txt'):
-                    d['dbname'] = d['mc'].db._directory
-            else: # hdf5, sqlite
-                    d['dbname'] = d['mc'].db.dbname
+            dbname = d["mc"].db.__name__
+            if dbname == "ram":
+                raise ValueError(
+                    "db is 'ram'. Saving a model requires a database on disk."
+                )
+            elif dbname == "pickle":
+                d["dbname"] = d["mc"].db.filename
+            elif dbname == "txt":
+                d["dbname"] = d["mc"].db._directory
+            else:  # hdf5, sqlite
+                d["dbname"] = d["mc"].db.dbname
 
-        del d['mc']
-        del d['knodes']
+        del d["mc"]
+        del d["knodes"]
 
         return d
 
@@ -395,11 +430,11 @@ class Hierarchical(object):
         self.create_model()
 
         # backwards compat
-        if not hasattr(self, 'sampled'):
+        if not hasattr(self, "sampled"):
             self.sampled = True
 
         if self.sampled:
-            self.load_db(d['dbname'], db=d['db'])
+            self.load_db(d["dbname"], db=d["db"])
             self.gen_stats()
         else:
             self.mcmc()
@@ -415,9 +450,9 @@ class Hierarchical(object):
             * You have to save traces to db, not RAM.
             * Uses the pickle protocol internally.
         """
-        with open(fname, 'wb') as f:
+        with open(fname, "wb") as f:
             cloudpickle.dump(self, f)
-        #pickle.dump(self, open(fname, 'wb'))
+        # pickle.dump(self, open(fname, 'wb'))
 
     def create_knodes(self):
         raise NotImplementedError("create_knodes has to be overwritten")
@@ -443,14 +478,16 @@ class Hierarchical(object):
                 continue
             break
         else:
-            print("After %f retries, still no good fit found." %(tries))
+            print("After %f retries, still no good fit found." % (tries))
             _create()
 
         # create node container
         self.create_nodes_db()
 
         # Check whether all user specified column names (via depends_on) where used by the depends_on.
-        assert set(flatten(list(self.depends.values()))).issubset(set(flatten(self.nodes_db.depends))), "One of the column names specified via depends_on was not picked up. Check whether you specified the correct parameter value."
+        assert set(flatten(list(self.depends.values()))).issubset(
+            set(flatten(self.nodes_db.depends))
+        ), "One of the column names specified via depends_on was not picked up. Check whether you specified the correct parameter value."
 
     def create_nodes_db(self):
         self.nodes_db = pd.concat([knode.nodes_db for knode in self.knodes])
@@ -475,7 +512,7 @@ class Hierarchical(object):
 
         return draw
 
-    def map(self, runs=2, warn_crit=5, method='fmin_powell', **kwargs):
+    def map(self, runs=2, warn_crit=5, method="fmin_powell", **kwargs):
         """
         Find MAP and set optimized values to nodes.
 
@@ -500,14 +537,16 @@ class Hierarchical(object):
         # since we are not integrating we get a point estimation for each
         # subject which is not what we want.
         if self.is_group_model:
-            raise NotImplementedError("""Sorry, This method is not yet implemented for group models.
-            you might consider using the approximate_map method""")
+            raise NotImplementedError(
+                """Sorry, This method is not yet implemented for group models.
+            you might consider using the approximate_map method"""
+            )
 
         maps = []
 
         for i in range(runs):
             # (re)create nodes to get new initival values.
-            #nodes are not created for the first iteration if they already exist
+            # nodes are not created for the first iteration if they already exist
             self.mc = pm.MAP(self.nodes_db.node)
             if i != 0:
                 self.draw_from_prior()
@@ -519,7 +558,7 @@ class Hierarchical(object):
         self.mc = None
 
         # We want to use values of the best fitting model
-        sorted_maps = sorted(maps, key=attrgetter('logp'))
+        sorted_maps = sorted(maps, key=attrgetter("logp"))
         max_map = sorted_maps[-1]
 
         # If maximum logp values are not in the same range, there
@@ -527,14 +566,16 @@ class Hierarchical(object):
         if runs >= 2:
             abs_err = np.abs(sorted_maps[-1].logp - sorted_maps[-2].logp)
             if abs_err > warn_crit:
-                print("Warning! Two best fitting MAP estimates are %f apart. Consider using more runs to avoid local minima." % abs_err)
+                print(
+                    "Warning! Two best fitting MAP estimates are %f apart. Consider using more runs to avoid local minima."
+                    % abs_err
+                )
 
         # Set values of nodes
         for max_node in max_map.stochastics:
             self.nodes_db.node.loc[max_node.__name__].set_value(max_node.value)
 
         return max_map
-
 
     def mcmc(self, assign_step_methods=True, *args, **kwargs):
         """
@@ -555,7 +596,17 @@ class Hierarchical(object):
     def pre_sample(self):
         pass
 
-    def sample_emcee(self, nwalkers=500, samples=10, dispersion=.1, burn=5, thin=1, stretch_width=2., anneal_stretch=True, pool=None):
+    def sample_emcee(
+        self,
+        nwalkers=500,
+        samples=10,
+        dispersion=0.1,
+        burn=5,
+        thin=1,
+        stretch_width=2.0,
+        anneal_stretch=True,
+        pool=None,
+    ):
         import emcee
         import pymc.progressbar as pbar
 
@@ -567,7 +618,7 @@ class Hierarchical(object):
 
         # get current values
         stochs = self.get_stochastics()
-        start = [node_descr['node'].value for name, node_descr in stochs.iterrows()]
+        start = [node_descr["node"].value for name, node_descr in stochs.iterrows()]
         ndim = len(start)
 
         def init_from_priors():
@@ -577,25 +628,35 @@ class Hierarchical(object):
                 self.mc.draw_from_prior()
                 try:
                     self.mc.logp
-                    p0[i, :] = [node_descr['node'].value for name, node_descr in stochs.iterrows()]
+                    p0[i, :] = [
+                        node_descr["node"].value
+                        for name, node_descr in stochs.iterrows()
+                    ]
                     i += 1
                 except pm.ZeroProbability:
                     continue
             return p0
 
-        if hasattr(self, 'emcee_dispersions'):
+        if hasattr(self, "emcee_dispersions"):
             scale = np.empty_like(start)
             for i, (name, node_descr) in enumerate(stochs.iterrows()):
-                knode_name = node_descr['knode_name'].replace('_subj', '')
+                knode_name = node_descr["knode_name"].replace("_subj", "")
                 scale[i] = self.emcee_dispersions.get(knode_name, 0.1)
         else:
             scale = 0.1
 
-        p0 = np.random.randn(ndim * nwalkers).reshape((nwalkers, ndim)) * scale * dispersion + start
-        #p0 = init_from_priors()
+        p0 = (
+            np.random.randn(ndim * nwalkers).reshape((nwalkers, ndim))
+            * scale
+            * dispersion
+            + start
+        )
+        # p0 = init_from_priors()
 
         # instantiate sampler passing in the pymc likelihood function
-        sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, a=stretch_width, pool=pool)
+        sampler = emcee.EnsembleSampler(
+            nwalkers, ndim, lnprob, a=stretch_width, pool=pool
+        )
 
         bar = pbar.progress_bar(burn + samples)
         i = 0
@@ -609,28 +670,32 @@ class Hierarchical(object):
             i += 1
             bar.update(i)
 
-        #print("\nMean acceptance fraction during burn-in: {}".format(np.mean(sampler.acceptance_fraction)))
+        # print("\nMean acceptance fraction during burn-in: {}".format(np.mean(sampler.acceptance_fraction)))
         sampler.reset()
 
         # sample
         try:
-            for p, lnprob, lnlike in sampler.sample(pos,
-                                                    iterations=samples,
-                                                    thin=thin):
+            for p, lnprob, lnlike in sampler.sample(pos, iterations=samples, thin=thin):
                 i += 1
                 bar.update(i)
         except KeyboardInterrupt:
             pass
         finally:
-            print(("\nMean acceptance fraction during sampling: {}".format(np.mean(sampler.acceptance_fraction))))
+            print(
+                (
+                    "\nMean acceptance fraction during sampling: {}".format(
+                        np.mean(sampler.acceptance_fraction)
+                    )
+                )
+            )
             # restore state
             for val, (name, node_descr) in zip(start, stochs.iterrows()):
-                node_descr['node'].set_value(val)
+                node_descr["node"].set_value(val)
 
             # Save samples back to pymc model
-            self.mc.sample(1, progress_bar=False) # This call is to set up the chains
+            self.mc.sample(1, progress_bar=False)  # This call is to set up the chains
             for pos, (name, node) in enumerate(stochs.iterrows()):
-                node['node'].trace._trace[0] = sampler.flatchain[:, pos]
+                node["node"].trace._trace[0] = sampler.flatchain[:, pos]
 
             return sampler
 
@@ -643,17 +708,18 @@ class Hierarchical(object):
         """
 
         # Fetch out arguments for db backend
-        db = kwargs.pop('db', 'ram')
-        dbname = kwargs.pop('dbname', None)
+        db = kwargs.pop("db", "ram")
+        dbname = kwargs.pop("dbname", None)
 
         # init mc if needed
         if self.mc == None:
             self.mcmc(db=db, dbname=dbname)
 
         # suppress annoying warnings
-        if ('hdf5' in dir(pm.database)) and \
-           isinstance(self.mc.db, pm.database.hdf5.Database):
-            warnings.simplefilter('ignore', pm.database.hdf5.tables.NaturalNameWarning)
+        if ("hdf5" in dir(pm.database)) and isinstance(
+            self.mc.db, pm.database.hdf5.Database
+        ):
+            warnings.simplefilter("ignore", pm.database.hdf5.tables.NaturalNameWarning)
 
         # sample
         self.mc.sample(*args, **kwargs)
@@ -666,7 +732,7 @@ class Hierarchical(object):
     @property
     def logp(self):
         if self.mc is None:
-            raise AttributeError('self.mc not set. Call mcmc().')
+            raise AttributeError("self.mc not set. Call mcmc().")
         return self.mc.logp
 
     @property
@@ -675,41 +741,42 @@ class Hierarchical(object):
 
         info = {}
         try:
-            info['DIC'] = self.mc.DIC
-            info['deviance'] = np.mean(self.mc.db.trace('deviance')(), axis=0)
-            info['pD'] = info['DIC'] - info['deviance']
+            info["DIC"] = self.mc.DIC
+            info["deviance"] = np.mean(self.mc.db.trace("deviance")(), axis=0)
+            info["pD"] = info["DIC"] - info["deviance"]
         except pm.ZeroProbability:
-            info['DIC'] = np.nan
-            info['deviance'] = np.nan
-            info['pD'] = np.nan
+            info["DIC"] = np.nan
+            info["deviance"] = np.nan
+            info["pD"] = np.nan
 
         return info
 
     @property
     def dic(self):
-        """Deviance Information Criterion.
-        """
-        return self.dic_info['DIC']
+        """Deviance Information Criterion."""
+        return self.dic_info["DIC"]
 
     @property
     def aic(self):
-        """Akaike Information Criterion.
-        """
+        """Akaike Information Criterion."""
         if self.is_group_model:
-            raise NotImplementedError('AIC can only be computed for non-hierarchical models. See dic.')
+            raise NotImplementedError(
+                "AIC can only be computed for non-hierarchical models. See dic."
+            )
         k = len(self.get_stochastics())
-        logp = sum([x.logp for x in self.get_observeds()['node']])
+        logp = sum([x.logp for x in self.get_observeds()["node"]])
         return 2 * k - 2 * logp
 
     @property
     def bic(self):
-        """Bayesian Information Criterion.
-        """
+        """Bayesian Information Criterion."""
         if self.is_group_model:
-            raise NotImplementedError('BIC can only be computed for non-hierarchical models. See dic.')
+            raise NotImplementedError(
+                "BIC can only be computed for non-hierarchical models. See dic."
+            )
         k = len(self.get_stochastics())
         n = len(self.data)
-        logp = sum([x.logp for x in self.get_observeds()['node']])
+        logp = sum([x.logp for x in self.get_observeds()["node"]])
         return -2 * logp + k * np.log(n)
 
     def _output_stats(self, stats_str, fname=None):
@@ -720,16 +787,15 @@ class Hierarchical(object):
         info = self.dic_info
         if fname is None:
             print(stats_str)
-            print("DIC: %f" % info['DIC'])
-            print("deviance: %f" % info['deviance'])
-            print("pD: %f" % info['pD'])
+            print("DIC: %f" % info["DIC"])
+            print("deviance: %f" % info["deviance"])
+            print("pD: %f" % info["pD"])
         else:
-            with open(fname, 'w') as fd:
+            with open(fname, "w") as fd:
                 fd.write(stats_str)
-                fd.write("\nDIC: %f\n" % info['DIC'])
-                fd.write("deviance: %f\n" % info['deviance'])
-                fd.write("pD: %f" % info['pD'])
-
+                fd.write("\nDIC: %f\n" % info["DIC"])
+                fd.write("deviance: %f\n" % info["deviance"])
+                fd.write("pD: %f" % info["pD"])
 
     def gen_stats(self, fname=None, print_hidden=False, **kwargs):
         """print statistics of all variables
@@ -737,18 +803,20 @@ class Hierarchical(object):
             fname <string> - the output will be written to a file named fname
             print_hidden <bool>  - print statistics of hidden nodes
         """
-        
+
         self.append_stats_to_nodes_db()
 
         sliced_db = self.nodes_db.copy()
 
         # only print stats of stochastic, non-observed nodes
         if not print_hidden:
-            sliced_db = sliced_db[(sliced_db['observed'] == False) & (sliced_db['hidden'] == False)]
+            sliced_db = sliced_db[
+                (sliced_db["observed"] == False) & (sliced_db["hidden"] == False)
+            ]
         else:
-            sliced_db = sliced_db[(sliced_db['observed'] == False)]
+            sliced_db = sliced_db[(sliced_db["observed"] == False)]
 
-        stat_cols  = ['mean', 'std', '2.5q', '25q', '50q', '75q', '97.5q', 'mc err']
+        stat_cols = ["mean", "std", "2.5q", "25q", "50q", "75q", "97.5q", "mc err"]
 
         for node_property, value in kwargs.items():
             sliced_db = sliced_db[sliced_db[node_property] == value]
@@ -776,31 +844,30 @@ class Hierarchical(object):
         except AttributeError:
             raise ValueError("No model found.")
 
-        #check which chain is going to be "stat"
-        if 'chain' in kwargs:
-            i_chain = kwargs['chain']
+        # check which chain is going to be "stat"
+        if "chain" in kwargs:
+            i_chain = kwargs["chain"]
         else:
             i_chain = nchains
 
-        #update self._stats
+        # update self._stats
         self._stats = self.mc.stats(*args, **kwargs)
         self._stats_chain = i_chain
 
-        #add/overwrite stats to nodes_db
+        # add/overwrite stats to nodes_db
         for name, i_stats in self._stats.items():
-            if self.nodes_db.loc[name, 'hidden']:
+            if self.nodes_db.loc[name, "hidden"]:
                 continue
-            self.nodes_db.loc[name, 'mean']   = i_stats['mean']
-            self.nodes_db.loc[name, 'std']    = i_stats['standard deviation']
-            self.nodes_db.loc[name, '2.5q']   = i_stats['quantiles'][2.5]
-            self.nodes_db.loc[name, '25q']    = i_stats['quantiles'][25]
-            self.nodes_db.loc[name, '50q']    = i_stats['quantiles'][50]
-            self.nodes_db.loc[name, '75q']    = i_stats['quantiles'][75]
-            self.nodes_db.loc[name, '97.5q']  = i_stats['quantiles'][97.5]
-            self.nodes_db.loc[name, 'mc err'] = i_stats['mc error']
+            self.nodes_db.loc[name, "mean"] = i_stats["mean"]
+            self.nodes_db.loc[name, "std"] = i_stats["standard deviation"]
+            self.nodes_db.loc[name, "2.5q"] = i_stats["quantiles"][2.5]
+            self.nodes_db.loc[name, "25q"] = i_stats["quantiles"][25]
+            self.nodes_db.loc[name, "50q"] = i_stats["quantiles"][50]
+            self.nodes_db.loc[name, "75q"] = i_stats["quantiles"][75]
+            self.nodes_db.loc[name, "97.5q"] = i_stats["quantiles"][97.5]
+            self.nodes_db.loc[name, "mc err"] = i_stats["mc error"]
 
-
-    def load_db(self, dbname, verbose=0, db='sqlite'):
+    def load_db(self, dbname, verbose=0, db="sqlite"):
         """Load samples from a database created by an earlier model
         run (e.g. by calling .mcmc(dbname='test'))
 
@@ -814,18 +881,17 @@ class Hierarchical(object):
                 sqlite, pickle, hdf5, txt.
         """
 
-
-        if db == 'sqlite':
+        if db == "sqlite":
             db_loader = pm.database.sqlite.load
-        elif db == 'pickle':
+        elif db == "pickle":
             db_loader = pm.database.pickle.load
-        elif db == 'hdf5':
+        elif db == "hdf5":
             db_loader = pm.database.hdf5.load
-        elif db == 'txt':
+        elif db == "txt":
             db_loader = pm.database.txt.load
 
         # Ignore annoying sqlite warnings
-        warnings.simplefilter('ignore', UserWarning)
+        warnings.simplefilter("ignore", UserWarning)
 
         # Open database
         db = db_loader(dbname)
@@ -851,22 +917,28 @@ class Hierarchical(object):
         """
 
         # should we save the figures
-        kwargs.pop('last', None)
+        kwargs.pop("last", None)
 
         if isinstance(params, str):
-             params = [params]
+            params = [params]
 
         # loop over nodes and for each node if it
-        for (name, node) in self.iter_non_observeds():
-            if (params is None) or (node['knode_name'] in params): # plot params if its name was mentioned
-                if not node['hidden']: # plot it if it is not hidden
-                    plot_value = node['node'].plot
-                    if (plot_subjs and node['subj']): # plot if it is a subj node and plot_subjs==True
-                        node['node'].plot = True
-                    if (params is not None) and  (node['knode_name'] in params): # plot if it was sepecficily mentioned
-                        node['node'].plot = True
-                    pm.Matplot.plot(node['node'], last=save, **kwargs)
-                    node['node'].plot = plot_value
+        for name, node in self.iter_non_observeds():
+            if (params is None) or (
+                node["knode_name"] in params
+            ):  # plot params if its name was mentioned
+                if not node["hidden"]:  # plot it if it is not hidden
+                    plot_value = node["node"].plot
+                    if (
+                        plot_subjs and node["subj"]
+                    ):  # plot if it is a subj node and plot_subjs==True
+                        node["node"].plot = True
+                    if (params is not None) and (
+                        node["knode_name"] in params
+                    ):  # plot if it was sepecficily mentioned
+                        node["node"].plot = True
+                    pm.Matplot.plot(node["node"], last=save, **kwargs)
+                    node["node"].plot = plot_value
 
     def plot_posteriors_conditions(self, *args, **kwargs):
         """
@@ -879,7 +951,7 @@ class Hierarchical(object):
             nodes = group_nodes.loc[group_nodes.knode_name == dep]
             if all(nodes.hidden == True):
                 continue
-            analyze.plot_posterior_nodes(nodes['node'], *args, **kwargs)
+            analyze.plot_posterior_nodes(nodes["node"], *args, **kwargs)
 
     def get_observeds(self):
         return self.nodes_db[self.nodes_db.observed == True]
@@ -906,8 +978,9 @@ class Hierarchical(object):
         return self.nodes_db[self.nodes_db.stochastic == True]
 
     def get_subj_nodes(self, stochastic=True):
-        select = (self.nodes_db['subj'] == True) & \
-                 (self.nodes_db['stochastic'] == stochastic)
+        select = (self.nodes_db["subj"] == True) & (
+            self.nodes_db["stochastic"] == stochastic
+        )
 
         return self.nodes_db[select]
 
@@ -917,8 +990,9 @@ class Hierarchical(object):
             yield node
 
     def get_group_nodes(self, stochastic=True):
-        select = (self.nodes_db['subj'] == False) & \
-                 (self.nodes_db['stochastic'] == stochastic)
+        select = (self.nodes_db["subj"] == False) & (
+            self.nodes_db["stochastic"] == stochastic
+        )
 
         return self.nodes_db[select]
 
@@ -931,7 +1005,9 @@ class Hierarchical(object):
         """Returns a DataFrame containing traces of all stochastic
         group nodes in the model.
         """
-        return pd.DataFrame({i.__name__: i.trace() for i in self.get_group_nodes().node})
+        return pd.DataFrame(
+            {i.__name__: i.trace() for i in self.get_group_nodes().node}
+        )
 
     def get_traces(self):
         """Returns a DataFrame containing traces of all stochastic
@@ -940,29 +1016,33 @@ class Hierarchical(object):
         :Note: It is quite easy to then save this trace to csv by
         calling model.get_traces().to_csv('samples.csv')
         """
-        return pd.DataFrame({i.__name__: i.trace() for i in self.get_stochastics().node})
+        return pd.DataFrame(
+            {i.__name__: i.trace() for i in self.get_stochastics().node}
+        )
 
     def get_data_nodes(self, idx):
         data_nodes = []
         for name, node_descr in self.iter_observeds():
-            node = node_descr['node']
+            node = node_descr["node"]
             if set(idx).issubset(set(node.value.index)):
                 data_nodes.append(node)
 
         if len(data_nodes) != 1:
-            raise NotImplementedError("Supply a grouping so that at most 1 observed node codes for each group.")
+            raise NotImplementedError(
+                "Supply a grouping so that at most 1 observed node codes for each group."
+            )
 
         return data_nodes[0]
 
     def __getitem__(self, name):
-        return self.nodes_db.loc[name]['node']
+        return self.nodes_db.loc[name]["node"]
 
     @property
     def values(self):
         values = OrderedDict()
-        for (name, node) in self.iter_non_observeds():
-            if node['node'].value.shape == ():
-                values[name] = node['node'].value[()]
+        for name, node in self.iter_non_observeds():
+            if node["node"].value.shape == ():
+                values[name] = node["node"].value[()]
 
         return values
 
@@ -972,8 +1052,8 @@ class Hierarchical(object):
         Input:
             new_values <dict> - dictionary of the format {'node_name1': new_value1, ...}
         """
-        for (name, value) in new_values.items():
-            self.nodes_db.loc[name]['node'].set_value(value)
+        for name, value in new_values.items():
+            self.nodes_db.loc[name]["node"].set_value(value)
 
     def find_starting_values(self, *args, **kwargs):
         """Find good starting values for the different parameters by
@@ -986,7 +1066,17 @@ class Hierarchical(object):
         else:
             self.map(*args, **kwargs)
 
-    def _partial_optimize(self, optimize_nodes, evaluate_nodes, fall_to_simplex=True, minimizer='Powell', use_basin=False, debug=False, minimizer_kwargs=None, basin_kwargs=None):
+    def _partial_optimize(
+        self,
+        optimize_nodes,
+        evaluate_nodes,
+        fall_to_simplex=True,
+        minimizer="Powell",
+        use_basin=False,
+        debug=False,
+        minimizer_kwargs=None,
+        basin_kwargs=None,
+    ):
         """Optimize part of the model.
 
         :Arguments:
@@ -1004,29 +1094,50 @@ class Hierarchical(object):
 
         # define function to be optimized
         def opt(values):
-            if debug: print(values)
+            if debug:
+                print(values)
             for value, node in zip(values, optimize_nodes):
                 node.set_value(value)
             try:
                 logp_optimize = [node.logp for node in optimize_nodes]
                 logp_evaluate = [node.logp for node in evaluate_nodes]
                 neglogp = -np.sum(logp_optimize) - np.sum(logp_evaluate)
-                if debug: print(neglogp)
+                if debug:
+                    print(neglogp)
                 return neglogp
             except pm.ZeroProbability:
-                if debug: print('Outside support!')
+                if debug:
+                    print("Outside support!")
                 return np.inf
 
         # optimize
         if use_basin:
             try:
-                minimizer_kwargs_passed = {'method': minimizer, 'options': minimizer_kwargs}
-                basinhopping(opt, init_vals, minimizer_kwargs=minimizer_kwargs_passed, **basin_kwargs)
+                minimizer_kwargs_passed = {
+                    "method": minimizer,
+                    "options": minimizer_kwargs,
+                }
+                basinhopping(
+                    opt,
+                    init_vals,
+                    minimizer_kwargs=minimizer_kwargs_passed,
+                    **basin_kwargs
+                )
             except:
                 if fall_to_simplex:
-                    print("Warning: Powell optimization failed. Falling back to simplex.")
-                    minimizer_kwargs_passed = {'method': minimizer, 'options': minimizer_kwargs}
-                    basinhopping(opt, init_vals, minimizer_kwargs=minimizer_kwargs_passed, **basin_kwargs)
+                    print(
+                        "Warning: Powell optimization failed. Falling back to simplex."
+                    )
+                    minimizer_kwargs_passed = {
+                        "method": minimizer,
+                        "options": minimizer_kwargs,
+                    }
+                    basinhopping(
+                        opt,
+                        init_vals,
+                        minimizer_kwargs=minimizer_kwargs_passed,
+                        **basin_kwargs
+                    )
                 else:
                     raise
         else:
@@ -1034,20 +1145,55 @@ class Hierarchical(object):
                 minimize(opt, init_vals, method=minimizer, options=minimizer_kwargs)
             except:
                 if fall_to_simplex:
-                    print("Warning: Powell optimization failed. Falling back to simplex.")
-                    minimize(opt, init_vals, method='Nelder-Mead', options=minimizer_kwargs)
+                    print(
+                        "Warning: Powell optimization failed. Falling back to simplex."
+                    )
+                    minimize(
+                        opt, init_vals, method="Nelder-Mead", options=minimizer_kwargs
+                    )
                 else:
                     raise
 
-
-    def _approximate_map_subj(self, minimizer='Powell', use_basin=False, fall_to_simplex=True, debug=False, minimizer_kwargs=None, basin_kwargs=None):
+    def _approximate_map_subj(
+        self,
+        minimizer="Powell",
+        use_basin=False,
+        fall_to_simplex=True,
+        debug=False,
+        minimizer_kwargs=None,
+        basin_kwargs=None,
+    ):
         # Optimize subj nodes
         for subj_idx in self.nodes_db.subj_idx.dropna().unique():
-            stoch_nodes = self.nodes_db.loc[(self.nodes_db.subj_idx == subj_idx) & (self.nodes_db.stochastic == True)].node
-            obs_nodes = self.nodes_db.loc[(self.nodes_db.subj_idx == subj_idx) & (self.nodes_db.observed == True)].node
-            self._partial_optimize(stoch_nodes, obs_nodes, fall_to_simplex=fall_to_simplex, minimizer=minimizer, use_basin=use_basin, debug=debug, minimizer_kwargs=minimizer_kwargs, basin_kwargs=basin_kwargs)
+            stoch_nodes = self.nodes_db.loc[
+                (self.nodes_db.subj_idx == subj_idx)
+                & (self.nodes_db.stochastic == True)
+            ].node
+            obs_nodes = self.nodes_db.loc[
+                (self.nodes_db.subj_idx == subj_idx) & (self.nodes_db.observed == True)
+            ].node
+            self._partial_optimize(
+                stoch_nodes,
+                obs_nodes,
+                fall_to_simplex=fall_to_simplex,
+                minimizer=minimizer,
+                use_basin=use_basin,
+                debug=debug,
+                minimizer_kwargs=minimizer_kwargs,
+                basin_kwargs=basin_kwargs,
+            )
 
-    def approximate_map(self, individual_subjs=True, minimizer='Powell', use_basin=False, fall_to_simplex=True, cycles=1, debug=False, minimizer_kwargs=None, basin_kwargs=None):
+    def approximate_map(
+        self,
+        individual_subjs=True,
+        minimizer="Powell",
+        use_basin=False,
+        fall_to_simplex=True,
+        cycles=1,
+        debug=False,
+        minimizer_kwargs=None,
+        basin_kwargs=None,
+    ):
         """Set model to its approximate MAP.
 
         :Arguments:
@@ -1090,22 +1236,47 @@ class Hierarchical(object):
         # Sort generations according to order of nodes_db
         generations = []
         for gen in generations_unsorted:
-            generations.append([row.node for name, row in self.nodes_db.iterrows()
-                                if name in [node.__name__ for node in gen]])
+            generations.append(
+                [
+                    row.node
+                    for name, row in self.nodes_db.iterrows()
+                    if name in [node.__name__ for node in gen]
+                ]
+            )
 
         for cyc in range(cycles):
-            for i in range(len(generations)-1, 0, -1):
-                if self.is_group_model and individual_subjs and (i == len(generations) - 1):
-                    self._approximate_map_subj(fall_to_simplex=fall_to_simplex, minimizer=minimizer, use_basin=use_basin, debug=debug, minimizer_kwargs=minimizer_kwargs, basin_kwargs=basin_kwargs)
+            for i in range(len(generations) - 1, 0, -1):
+                if (
+                    self.is_group_model
+                    and individual_subjs
+                    and (i == len(generations) - 1)
+                ):
+                    self._approximate_map_subj(
+                        fall_to_simplex=fall_to_simplex,
+                        minimizer=minimizer,
+                        use_basin=use_basin,
+                        debug=debug,
+                        minimizer_kwargs=minimizer_kwargs,
+                        basin_kwargs=basin_kwargs,
+                    )
                     continue
                 # Optimize the generation at i-1 evaluated over the generation at i
-                self._partial_optimize(generations[i-1], generations[i], fall_to_simplex=fall_to_simplex, minimizer=minimizer, use_basin=use_basin, debug=debug, minimizer_kwargs=minimizer_kwargs, basin_kwargs=basin_kwargs)
+                self._partial_optimize(
+                    generations[i - 1],
+                    generations[i],
+                    fall_to_simplex=fall_to_simplex,
+                    minimizer=minimizer,
+                    use_basin=use_basin,
+                    debug=debug,
+                    minimizer_kwargs=minimizer_kwargs,
+                    basin_kwargs=basin_kwargs,
+                )
 
-        #update map in nodes_db
-        self.nodes_db['map'] = np.NaN
+        # update map in nodes_db
+        self.nodes_db["map"] = np.NaN
         for name, value in self.values.items():
             try:
-                self.nodes_db.loc[name, 'map'] = value
+                self.nodes_db.loc[name, "map"] = value
             # Some values can be series which we'll just ignore
             except (AttributeError, ValueError):
                 pass
